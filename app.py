@@ -63,19 +63,35 @@ with app.app_context():
 
 
 # ---------------------------------------------------------------- courses (static content)
+# `slug` and `start` map each course to the embedded reader (static/viewer.html):
+# the landing card deep-links to `/learn#<slug>/<start>`. Keep these in sync with
+# the viewer's course ids if you rebuild it.
 COURSES = [
+    {"code": "LANGMDL", "title": "Language Modeling from Scratch",
+     "blurb": "Build a modern LLM end to end — tokenizer, transformer, kernels, "
+              "parallelism, scaling, inference, alignment. Four interview banks included.",
+     "hours": "48 hours", "level": "Advanced", "tag": "LLMs & Systems", "modules": 19,
+     "accent": "#c6a04e", "slug": "language-modeling", "start": "00-README"},
+    {"code": "LLMVLM", "title": "LLM · VLM · RAG · Agents",
+     "blurb": "Foundations through frontier: attention, KV cache, RAG, and agents, "
+              "with the tradeoffs behind each. Senior-level throughout.",
+     "hours": "36 hours", "level": "Foundations", "tag": "Generative AI", "modules": 11,
+     "accent": "#6ea8fe", "slug": "vlm-guide", "start": "00_README_and_roadmap"},
+    {"code": "MLSYS", "title": "ML System Design",
+     "blurb": "Design ML systems the way a staff engineer does: data platforms, "
+              "training and serving infra, RAG, agents, recsys, and the interview playbook.",
+     "hours": "40 hours", "level": "Advanced", "tag": "System Design", "modules": 11,
+     "accent": "#7ee0b8", "slug": "ml-system-design", "start": "00_README_syllabus"},
     {"code": "MLOPS", "title": "MLOps: Production Machine Learning Systems",
      "blurb": "Serving, monitoring, CI/CD for models, and the failure modes nobody "
-              "warns you about. Ends in a proctored exam.",
-     "hours": "40 hours", "level": "Advanced"},
-    {"code": "ONDEV", "title": "On-Device Inference & Quantization",
-     "blurb": "Ship models to phones and edge boxes. MLX, ONNX, CoreML, and "
-              "quantization-aware training that survives real hardware.",
-     "hours": "32 hours", "level": "Advanced"},
-    {"code": "LLMVLM", "title": "LLM & VLM Systems Design",
-     "blurb": "Architecture to inference: attention, KV cache, RAG, agents, and "
-              "the tradeoffs behind each. Senior-level throughout.",
-     "hours": "36 hours", "level": "Expert"},
+              "warns you about. Beginner to architect track.",
+     "hours": "40 hours", "level": "Intermediate → Advanced", "tag": "MLOps", "modules": 13,
+     "accent": "#d08bd0", "slug": "mlops", "start": "00-overview-and-prereqs"},
+    {"code": "DATAENG", "title": "Data Engineering",
+     "blurb": "Pipelines, warehouses, and the architecture behind them — from first "
+              "principles to Fortune-100 scale and the data-architect track.",
+     "hours": "36 hours", "level": "Beginner → Advanced", "tag": "Data", "modules": 9,
+     "accent": "#e6a366", "slug": "data-engineering", "start": "00-overview-and-prereqs"},
 ]
 
 
@@ -111,6 +127,14 @@ def inject_globals():
 def index():
     return render_template("index.html", courses=COURSES,
                            issued=Certificate.query.count())
+
+
+@app.route("/learn")
+def learn():
+    # The reader is a single self-contained file (all course content + the
+    # gamified viewer inline). Client-side hash routing (#course/doc) handles
+    # deep links, so one route serving the file is enough.
+    return app.send_static_file("viewer.html")
 
 
 @app.route("/verify", methods=["GET"])

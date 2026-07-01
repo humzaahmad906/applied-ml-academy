@@ -3,47 +3,61 @@
 <div class="wrap">
 
   <section class="hero">
-    <img class="mark" src="{{ url_for('static', filename='img/icon-dark.svg') }}" alt="">
-    <div class="tag">Free courses <b>·</b> pass mark <b>{{ PASS_MARK }}%</b></div>
+    <div class="tag">Free · practitioner-grade · pass mark {{ PASS_MARK }}%</div>
     <h1>Machine learning,<br>taught to a <span>real bar</span>.</h1>
-    <p>Every course here is free. None of them are easy. You finish by passing a
-       proctored exam at {{ PASS_MARK }}% or better, and you walk away with a
-       certificate anyone can verify.</p>
+    <p>Self-paced courses built around what actually breaks in production — from
+       language models to data pipelines. Learn free, prove it on a hard exam, and
+       earn a certificate anyone can verify.</p>
     <div class="btns">
-      <a class="btn" href="#courses">Browse courses</a>
-      <a class="btn ghost" href="{{ url_for('verify') }}">Verify a certificate</a>
+      <a class="btn" href="{{ url_for('learn') }}">Start learning</a>
+      <a class="btn ghost" href="#courses">Browse the catalog</a>
+    </div>
+  </section>
+
+  <section class="statbar">
+    <div class="stat"><div class="k">{{ courses|length }}</div><div class="s">Courses</div></div>
+    <div class="stat"><div class="k">{{ courses|sum(attribute='modules') }}</div><div class="s">Modules</div></div>
+    <div class="stat"><div class="k">$0</div><div class="s">To enroll</div></div>
+    <div class="stat"><div class="k">{{ PASS_MARK }}%</div><div class="s">Pass mark</div></div>
+  </section>
+
+  <section id="courses">
+    <div class="eyebrow">Catalog</div>
+    <h2 class="section">Courses</h2>
+    <p class="lead">Every course is free and self-paced. Open one and start reading —
+       your progress, notes, and streak are saved as you go.</p>
+    <div class="courses">
+      {% for c in courses %}
+      <a class="course" href="{{ url_for('learn') }}#{{ c.slug }}/{{ c.start }}">
+        <div class="thumb" style="--accent:{{ c.accent }}">
+          <span class="cat">{{ c.tag }}</span>
+          <span class="mono glyph">{{ c.code }}</span>
+        </div>
+        <div class="body">
+          <h3>{{ c.title }}</h3>
+          <p>{{ c.blurb }}</p>
+          <div class="meta">
+            <span><b>{{ c.modules }}</b> modules</span>
+            <span><b>{{ c.hours.split(' ')[0] }}</b> hrs</span>
+            <span class="lvl">{{ c.level }}</span>
+          </div>
+        </div>
+        <div class="foot"><span class="free">Free</span><span class="go">Read the course →</span></div>
+      </a>
+      {% endfor %}
     </div>
   </section>
 
   <section>
-    <div class="eyebrow">Why it's different</div>
-    <h2 class="section">No paywall. No participation trophies.</h2>
-    <p class="lead">Most "certificates" are proof you clicked through videos. Ours
-       are proof you cleared a hard bar, and the code on each one confirms it.</p>
+    <div class="eyebrow">How it works</div>
+    <h2 class="section">Learn free. Earn it hard.</h2>
     <div class="pillars">
-      <div class="pillar"><div class="k">$0</div><h3>Free to enroll</h3>
-        <p>Full curriculum, labs, and exam at no cost. The rigor is the price.</p></div>
-      <div class="pillar"><div class="k">{{ PASS_MARK }}%</div><h3>A pass mark that means it</h3>
+      <div class="pillar"><div class="k">01</div><h3>Learn at your pace</h3>
+        <p>Full curriculum, labs, and interview banks in the reader — no paywall, no login.</p></div>
+      <div class="pillar"><div class="k">02</div><h3>Clear a real bar</h3>
         <p>Below {{ PASS_MARK }}%, no certificate is issued. The credential stays scarce on purpose.</p></div>
-      <div class="pillar"><div class="k">✓</div><h3>Publicly verifiable</h3>
-        <p>Each certificate carries a unique code. Employers check it in seconds, no login.</p></div>
-    </div>
-  </section>
-
-  <section id="courses">
-    <div class="eyebrow">Curriculum</div>
-    <h2 class="section">Courses</h2>
-    <p class="lead">Practitioner-grade, built around what actually breaks in
-       production. More on the way.</p>
-    <div class="courses">
-      {% for c in courses %}
-      <div class="course">
-        <div class="row"><span class="lvl">{{ c.level }}</span><span class="free">Free</span></div>
-        <h3>{{ c.title }}</h3>
-        <p>{{ c.blurb }}</p>
-        <div class="meta"><span><b>{{ c.hours }}</b> coursework</span><span>Exam at <b>{{ PASS_MARK }}%</b></span></div>
-      </div>
-      {% endfor %}
+      <div class="pillar"><div class="k">03</div><h3>Prove it anywhere</h3>
+        <p>Each certificate carries a unique code. Employers verify it in seconds, no login.</p></div>
     </div>
   </section>
 

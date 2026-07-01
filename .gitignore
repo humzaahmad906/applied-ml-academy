@@ -1,0 +1,11 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Flask instance folder (local SQLite db, secrets)
+instance/
+
+# OS
+.DS_Store
