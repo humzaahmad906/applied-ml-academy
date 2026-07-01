@@ -108,6 +108,7 @@ COURSES = [
      "blurb": "Build a modern LLM end to end — tokenizer, transformer, kernels, "
               "parallelism, scaling, inference, alignment. Four interview banks included.",
      "hours": "48", "level": "Advanced", "tag": "LLMs & Systems", "accent": "#c6a04e",
+     "order": 4, "path_note": "Go deep — build a modern LLM end to end. The hardest track.",
      "slug": "language-modeling",
      "outcomes": ["Implement a BPE tokenizer, transformer, and training loop from scratch",
                   "Reason about FLOPs, memory, and parallelism for real training runs",
@@ -118,6 +119,7 @@ COURSES = [
      "blurb": "Foundations through frontier: attention, KV cache, RAG, and agents, "
               "with the tradeoffs behind each. Senior-level throughout.",
      "hours": "36", "level": "Foundations", "tag": "Generative AI", "accent": "#8b5cf6",
+     "order": 1, "path_note": "Start here — the vocabulary and mental models the rest build on.",
      "slug": "vlm-guide",
      "outcomes": ["Explain attention, KV cache, and modern decoder design",
                   "Design retrieval-augmented generation pipelines",
@@ -127,6 +129,7 @@ COURSES = [
      "blurb": "Design ML systems the way a staff engineer does: data platforms, "
               "training and serving infra, RAG, agents, recsys, and the interview playbook.",
      "hours": "40", "level": "Advanced", "tag": "System Design", "accent": "#0ea5e9",
+     "order": 5, "path_note": "Capstone — design end-to-end systems and prep for interviews.",
      "slug": "ml-system-design",
      "outcomes": ["Frame any ML system-design interview with a repeatable structure",
                   "Design feature platforms and training/serving infrastructure",
@@ -136,6 +139,7 @@ COURSES = [
      "blurb": "Serving, monitoring, CI/CD for models, and the failure modes nobody "
               "warns you about. Beginner to architect track.",
      "hours": "40", "level": "Intermediate → Advanced", "tag": "MLOps", "accent": "#ec4899",
+     "order": 3, "path_note": "Take models to production: serving, monitoring, CI/CD.",
      "slug": "mlops",
      "outcomes": ["Serve, monitor, and version models in production",
                   "Build CI/CD pipelines for ML",
@@ -145,6 +149,7 @@ COURSES = [
      "blurb": "Pipelines, warehouses, and the architecture behind them — from first "
               "principles to Fortune-100 scale and the data-architect track.",
      "hours": "36", "level": "Beginner → Advanced", "tag": "Data", "accent": "#f59e0b",
+     "order": 2, "path_note": "The data layer every model and system sits on top of.",
      "slug": "data-engineering",
      "outcomes": ["Build reliable batch and streaming data pipelines",
                   "Model data warehouses and lakehouses",
@@ -250,7 +255,8 @@ def mint_code(course, year):
 # ---------------------------------------------------------------- public
 @app.route("/")
 def index():
-    cards = [course_view(c["slug"]) for c in COURSES]
+    cards = sorted((course_view(c["slug"]) for c in COURSES),
+                   key=lambda c: c["order"])
     total_modules = sum(c["module_count"] for c in cards)
     return render_template("index.html", courses=cards,
                            total_modules=total_modules)

@@ -37,6 +37,28 @@
 </section>
 
 <div class="wrap">
+  <section id="path">
+    <div class="eyebrow">Recommended path</div>
+    <h2 class="section">Not sure where to start? Follow the path.</h2>
+    <p class="lead">The courses stand alone, but this is the order we'd take them —
+       a steady ramp from foundations to a capstone.</p>
+    <ol class="path">
+      {% for c in courses %}
+      <li class="path-step" style="--accent:{{ c.accent }}">
+        <span class="ps-num">{{ c.order }}</span>
+        <a class="ps-body" href="{{ url_for('course_detail', slug=c.slug) }}">
+          <div class="ps-head">
+            <h3>{{ c.title }}</h3>
+            <span class="ps-lvl">{{ c.level }}</span>
+          </div>
+          <p>{{ c.path_note }}</p>
+          <div class="ps-meta">{{ c.module_count }} modules · {{ c.hours }} hrs</div>
+        </a>
+      </li>
+      {% endfor %}
+    </ol>
+  </section>
+
   <section id="courses">
     <h2 class="section">Course catalog</h2>
     <p class="lead">Every course is free and self-paced. Enroll to unlock the modules,
