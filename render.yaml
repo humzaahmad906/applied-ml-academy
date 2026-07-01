@@ -12,3 +12,7 @@ services:
         sync: false
       - key: PASS_MARK
         value: "80"
+      # Firebase service-account JSON (paste the whole file contents as the value
+      # in the Render dashboard — sync:false means it is NOT stored in this repo).
+      - key: FIREBASE_CREDENTIALS
+        sync: false
