@@ -9,10 +9,11 @@
     <h1>{{ course.title }}</h1>
     <p class="ch-blurb">{{ course.blurb }}</p>
     <div class="ch-meta">
-      <span><b>{{ course.module_count }}</b> modules</span>
+      <span><b>{{ course.module_count }}</b> {{ 'lessons' if course.foundation else 'modules' }}</span>
       <span><b>{{ course.hours }}</b> hours</span>
       <span><b>{{ course.level }}</b></span>
-      <span class="free">Free</span>
+      {% if course.foundation %}<span class="free open">Open · no certificate</span>
+      {% else %}<span class="free">Free</span>{% endif %}
     </div>
   </div>
 </section>
@@ -29,7 +30,8 @@
     {% endif %}
 
     <div class="panel">
-      <h2>Curriculum <span class="muted">· {{ course.module_count }} modules</span></h2>
+      <h2>Curriculum <span class="muted">· {{ course.module_count }} {{ 'lessons' if course.foundation else 'modules' }}</span></h2>
+      {% if course.has_content %}
       <ol class="curriculum">
         {% for m in course.modules %}
         <li>
@@ -43,6 +45,18 @@
         </li>
         {% endfor %}
       </ol>
+      {% else %}
+      <ol class="curriculum">
+        {% for m in course.syllabus %}
+        <li>
+          <span class="num">{{ "%02d"|format(loop.index) }}</span>
+          <span class="mt">{{ m.title }}<br><small class="muted">{{ m.desc }}</small></span>
+          <span class="lock">soon</span>
+        </li>
+        {% endfor %}
+      </ol>
+      <p class="muted" style="margin-top:14px">Full lessons for this course are being written — enroll and they'll appear here.</p>
+      {% endif %}
     </div>
   </div>
 
@@ -54,10 +68,10 @@
       <div class="ec-body">
         <div class="price">Free</div>
         <div class="ec-meta">
-          <div><span>Modules</span><b>{{ course.module_count }}</b></div>
+          <div><span>{{ 'Lessons' if course.foundation else 'Modules' }}</span><b>{{ course.module_count }}</b></div>
           <div><span>Est. time</span><b>{{ course.hours }} hrs</b></div>
           <div><span>Level</span><b>{{ course.level }}</b></div>
-          <div><span>Certificate</span><b>On exam pass</b></div>
+          <div><span>Certificate</span><b>{{ 'None — open course' if course.foundation else 'On exam pass' }}</b></div>
         </div>
         {% if enrollment %}
           <a class="btn full" href="{{ url_for('module', slug=course.slug, module_id=(enrollment.last_module or course.modules[0].id)) }}">Continue learning</a>

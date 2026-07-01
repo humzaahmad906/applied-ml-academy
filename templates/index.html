@@ -19,7 +19,7 @@
       </div>
     </div>
     <div class="hero-stats">
-      <div class="hs"><b>{{ courses|length }}</b><span>Courses</span></div>
+      <div class="hs"><b>{{ n_courses }}</b><span>Courses</span></div>
       <div class="hs"><b>{{ total_modules }}</b><span>Modules</span></div>
       <div class="hs"><b>$0</b><span>To enroll</span></div>
       <div class="hs"><b>{{ PASS_MARK }}%</b><span>Pass mark</span></div>
@@ -37,11 +37,39 @@
 </section>
 
 <div class="wrap">
+  <section id="foundations">
+    <div class="eyebrow">Free &amp; open · no certificate</div>
+    <h2 class="section">New to this? Start with the foundations.</h2>
+    <p class="lead">Twelve open courses that build the prerequisites the certificate
+       track assumes — programming, math, data, and the ML→deep-learning spine.
+       No exam, no certificate — just the groundwork, in order.</p>
+    <div class="courses">
+      {% for c in foundations %}
+      <a class="course found" href="{{ url_for('course_detail', slug=c.slug) }}">
+        <div class="thumb" style="--accent:{{ c.accent }}">
+          <span class="cat">{{ c.tag }}</span>
+          <span class="mono glyph">{{ "%02d"|format(c.order) }}</span>
+        </div>
+        <div class="body">
+          <h3>{{ c.title }}</h3>
+          <p>{{ c.blurb }}</p>
+          <div class="meta">
+            <span><b>{{ c.module_count }}</b> lessons</span>
+            <span><b>{{ c.hours }}</b> hrs</span>
+            <span class="lvl">{{ c.level }}</span>
+          </div>
+        </div>
+        <div class="foot"><span class="free open">Open</span><span class="go">Start →</span></div>
+      </a>
+      {% endfor %}
+    </div>
+  </section>
+
   <section id="path">
-    <div class="eyebrow">Recommended path</div>
-    <h2 class="section">Not sure where to start? Follow the path.</h2>
-    <p class="lead">The courses stand alone, but this is the order we'd take them —
-       a steady ramp from foundations to a capstone.</p>
+    <div class="eyebrow">Recommended path · certificate track</div>
+    <h2 class="section">Then follow the certificate path.</h2>
+    <p class="lead">The five certificate courses stand alone, but this is the order we'd
+       take them — a steady ramp from foundations to a capstone.</p>
     <ol class="path">
       {% for c in courses %}
       <li class="path-step" style="--accent:{{ c.accent }}">

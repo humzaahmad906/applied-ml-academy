@@ -156,7 +156,162 @@ COURSES = [
                   "Design data architecture at Fortune-100 scale",
                   "Follow the path to data architect"]},
 ]
-COURSE_BY_SLUG = {c["slug"]: c for c in COURSES}
+# Open foundation track: free, login required (so notes/progress work), no certificate.
+# Content is authored course-by-course; until a course has content files its syllabus
+# is shown as "lessons coming soon". `order` is the recommended beginner sequence.
+def _syl(*pairs):
+    return [{"title": t, "desc": d} for t, d in pairs]
+
+
+FOUNDATIONS = [
+    {"code": "PY", "title": "Python for Data & ML", "slug": "python-foundations",
+     "tag": "Programming", "accent": "#3776ab", "level": "Beginner", "hours": "12", "order": 1,
+     "foundation": True, "certificate": False,
+     "blurb": "Start from zero: Python syntax through NumPy, the language every other course assumes.",
+     "syllabus": _syl(
+        ("Setup and the REPL", "Install Python, run code, use a notebook and an editor."),
+        ("Variables, types, and control flow", "Numbers, strings, booleans, if/for/while."),
+        ("Data structures", "Lists, dicts, sets, tuples and when to use each."),
+        ("Functions and modules", "Write reusable functions; organize code into modules."),
+        ("Files and error handling", "Read/write files; handle exceptions cleanly."),
+        ("Object-oriented basics", "Classes, methods, and when objects help."),
+        ("Comprehensions and iterators", "Pythonic loops, generators, and lazy iteration."),
+        ("NumPy and vectorized math", "Arrays, broadcasting, and why loops are slow."))},
+    {"code": "LINALG", "title": "Linear Algebra for ML", "slug": "linear-algebra",
+     "tag": "Math", "accent": "#16a34a", "level": "Beginner", "hours": "10", "order": 2,
+     "foundation": True, "certificate": False,
+     "blurb": "Vectors, matrices, and matrix multiplication — the language tensors are written in.",
+     "syllabus": _syl(
+        ("Vectors and geometry", "What a vector is; addition, scaling, and intuition."),
+        ("Matrices and operations", "Shapes, transpose, and basic operations."),
+        ("Matrix multiplication", "The one operation that dominates ML compute."),
+        ("Norms and distances", "Measuring size and similarity."),
+        ("Dot products and projections", "Similarity, angles, and why attention uses them."),
+        ("Eigenvalues and SVD", "Decompositions, intuitively, and where they show up."),
+        ("Linear algebra in NumPy", "Do all of the above in code."))},
+    {"code": "CALC", "title": "Calculus & Gradients", "slug": "calculus-gradients",
+     "tag": "Math", "accent": "#0d9488", "level": "Beginner", "hours": "9", "order": 3,
+     "foundation": True, "certificate": False,
+     "blurb": "Derivatives, the chain rule, and gradient descent — how models actually learn.",
+     "syllabus": _syl(
+        ("Functions and limits", "The setup you need, no more."),
+        ("Derivatives", "Slope, rate of change, and notation."),
+        ("The chain rule", "Composing functions — the heart of backprop."),
+        ("Partial derivatives and gradients", "Slopes in many dimensions."),
+        ("Gradient descent", "Follow the slope downhill to minimize loss."),
+        ("Backprop intuition", "How the chain rule trains a network."))},
+    {"code": "PROB", "title": "Probability & Statistics for ML", "slug": "probability-stats",
+     "tag": "Math", "accent": "#7c3aed", "level": "Beginner", "hours": "11", "order": 4,
+     "foundation": True, "certificate": False,
+     "blurb": "Distributions, Bayes, and estimation — the reasoning under every metric and loss.",
+     "syllabus": _syl(
+        ("Probability basics", "Events, conditional probability, independence."),
+        ("Random variables and distributions", "Discrete and continuous; the common ones."),
+        ("Expectation and variance", "Averages, spread, and what they tell you."),
+        ("Bayes' theorem", "Updating beliefs from evidence."),
+        ("Sampling and the CLT", "Why sample means behave nicely."),
+        ("Estimation and maximum likelihood", "Fitting parameters to data."),
+        ("Hypothesis testing basics", "p-values and what they do and don't mean."))},
+    {"code": "CLI", "title": "Command Line & Git", "slug": "cli-git",
+     "tag": "Tooling", "accent": "#475569", "level": "Beginner", "hours": "8", "order": 5,
+     "foundation": True, "certificate": False,
+     "blurb": "The terminal, shell, and version control — the daily workflow of every engineer.",
+     "syllabus": _syl(
+        ("The terminal and shell", "Where work happens; navigating the filesystem."),
+        ("Files and text tools", "cat, grep, pipes, and redirection."),
+        ("Bash scripting basics", "Variables, loops, and small automations."),
+        ("Git fundamentals", "Commits, history, and the staging area."),
+        ("Branching and merging", "Work in parallel without chaos."),
+        ("GitHub and pull requests", "Collaborate and review changes."))},
+    {"code": "SQL", "title": "SQL & Databases", "slug": "sql-databases",
+     "tag": "Data", "accent": "#0891b2", "level": "Beginner", "hours": "10", "order": 6,
+     "foundation": True, "certificate": False,
+     "blurb": "Query and model relational data — the backbone of data engineering and analytics.",
+     "syllabus": _syl(
+        ("The relational model", "Tables, rows, keys, and relationships."),
+        ("SELECT and filtering", "Get exactly the rows you want."),
+        ("Joins", "Combine tables the right way."),
+        ("Aggregation and GROUP BY", "Summarize data."),
+        ("Subqueries and CTEs", "Compose complex queries readably."),
+        ("Indexing and performance", "Why some queries are slow."),
+        ("Schema design basics", "Model a domain without pain later."))},
+    {"code": "PANDAS", "title": "Data Analysis with Pandas", "slug": "pandas-analysis",
+     "tag": "Data", "accent": "#db2777", "level": "Beginner", "hours": "10", "order": 7,
+     "foundation": True, "certificate": False,
+     "blurb": "Load, clean, and explore real data with DataFrames — the analyst's core tool.",
+     "syllabus": _syl(
+        ("Series and DataFrames", "The two objects everything is built on."),
+        ("Loading and inspecting data", "CSV, JSON, and a first look."),
+        ("Selection and filtering", "Slice data by label and condition."),
+        ("Cleaning and missing data", "Handle nulls, types, and duplicates."),
+        ("GroupBy and aggregation", "Split-apply-combine."),
+        ("Merging and reshaping", "Join, pivot, and melt."),
+        ("Plotting and EDA", "See the data before you model it."))},
+    {"code": "MLF", "title": "Machine Learning Foundations", "slug": "ml-foundations",
+     "tag": "Machine Learning", "accent": "#ea580c", "level": "Beginner → Intermediate", "hours": "14", "order": 8,
+     "foundation": True, "certificate": False,
+     "blurb": "Classical ML end to end: regression, trees, evaluation, and the traps that fool beginners.",
+     "syllabus": _syl(
+        ("What machine learning is", "Supervised, unsupervised, and the workflow."),
+        ("Data splits and leakage", "Train/validation/test done right."),
+        ("Linear and logistic regression", "The workhorse models."),
+        ("Decision trees and ensembles", "Trees, random forests, gradient boosting."),
+        ("Evaluation metrics", "Accuracy, precision/recall, ROC, and when each lies."),
+        ("Overfitting and regularization", "Bias, variance, and controlling them."),
+        ("Cross-validation", "Trustworthy estimates of performance."),
+        ("A first end-to-end project", "From raw data to an evaluated model."))},
+    {"code": "DLF", "title": "Deep Learning & Neural Nets", "slug": "deep-learning-foundations",
+     "tag": "Deep Learning", "accent": "#6366f1", "level": "Beginner → Intermediate", "hours": "14", "order": 9,
+     "foundation": True, "certificate": False,
+     "blurb": "From a single neuron to a trained network: forward pass, backprop, and optimization.",
+     "syllabus": _syl(
+        ("From linear models to neurons", "Why stack and nonlinearize."),
+        ("Activation functions", "ReLU and friends, and what they do."),
+        ("The forward pass", "How a network computes an output."),
+        ("Backpropagation", "Gradients through the whole network."),
+        ("Loss functions and optimizers", "What you minimize and how."),
+        ("Training loops and batching", "Epochs, mini-batches, learning rate."),
+        ("Regularization", "Dropout, weight decay, early stopping."),
+        ("Your first neural network", "Train one end to end."))},
+    {"code": "PYT", "title": "PyTorch Essentials", "slug": "pytorch-essentials",
+     "tag": "Deep Learning", "accent": "#ee4c2c", "level": "Beginner → Intermediate", "hours": "10", "order": 10,
+     "foundation": True, "certificate": False,
+     "blurb": "The framework the deep courses assume: tensors, autograd, modules, and a real training loop.",
+     "syllabus": _syl(
+        ("Tensors", "Creation, shapes, and operations."),
+        ("Autograd", "Automatic differentiation, demystified."),
+        ("nn.Module and layers", "Build models from components."),
+        ("Datasets and DataLoaders", "Feed data efficiently."),
+        ("The training loop", "Forward, loss, backward, step."),
+        ("Saving and loading", "Checkpoints and inference."),
+        ("Devices and GPUs", "Move work to the accelerator."))},
+    {"code": "DOCK", "title": "Docker & Containers for ML", "slug": "docker-containers",
+     "tag": "Ops", "accent": "#2496ed", "level": "Beginner", "hours": "8", "order": 11,
+     "foundation": True, "certificate": False,
+     "blurb": "Package anything to run anywhere — the unit of deployment for modern ML.",
+     "syllabus": _syl(
+        ("Why containers", "The 'works on my machine' problem, solved."),
+        ("Images vs containers", "The two core concepts."),
+        ("Dockerfile basics", "Build a reproducible image."),
+        ("Running: ports and volumes", "Talk to a container and persist data."),
+        ("Docker Compose", "Run multi-service stacks."),
+        ("Packaging an ML model", "Containerize an inference service."),
+        ("Registries and sharing", "Push, pull, and deploy."))},
+    {"code": "CLOUD", "title": "Cloud & Linux Fundamentals", "slug": "cloud-linux",
+     "tag": "Ops", "accent": "#d97706", "level": "Beginner", "hours": "10", "order": 12,
+     "foundation": True, "certificate": False,
+     "blurb": "Linux and cloud building blocks — compute, storage, networking, and IAM — without the jargon.",
+     "syllabus": _syl(
+        ("Linux essentials", "The filesystem, shell, and packages."),
+        ("Users, permissions, processes", "Who can do what, and what's running."),
+        ("Compute: virtual machines", "Rent a computer in the cloud."),
+        ("Storage and object stores", "Disks, buckets, and when to use each."),
+        ("Networking basics", "IPs, ports, DNS, and firewalls."),
+        ("IAM and security", "Identities, roles, and least privilege."),
+        ("Cost and trade-offs", "Pick the right service without overspending."))},
+]
+
+COURSE_BY_SLUG = {c["slug"]: c for c in COURSES + FOUNDATIONS}
 
 CONTENT_DIR = Path(__file__).parent / "content"
 
@@ -170,7 +325,7 @@ def _title_of(md_path):
 
 def load_modules():
     mods = {}
-    for c in COURSES:
+    for c in COURSES + FOUNDATIONS:
         folder = CONTENT_DIR / c["slug"]
         items = []
         if folder.is_dir():
@@ -199,7 +354,11 @@ def course_view(slug):
         return None
     v = dict(c)
     v["modules"] = MODULES.get(slug, [])
-    v["module_count"] = len(v["modules"])
+    v["certificate"] = c.get("certificate", True)
+    v["foundation"] = c.get("foundation", False)
+    v["syllabus"] = c.get("syllabus", [])
+    v["has_content"] = bool(v["modules"])
+    v["module_count"] = len(v["modules"]) if v["modules"] else len(v["syllabus"])
     return v
 
 
@@ -257,8 +416,11 @@ def mint_code(course, year):
 def index():
     cards = sorted((course_view(c["slug"]) for c in COURSES),
                    key=lambda c: c["order"])
-    total_modules = sum(c["module_count"] for c in cards)
-    return render_template("index.html", courses=cards,
+    foundations = sorted((course_view(c["slug"]) for c in FOUNDATIONS),
+                         key=lambda c: c["order"])
+    total_modules = sum(len(MODULES.get(c["slug"], [])) for c in COURSES + FOUNDATIONS)
+    return render_template("index.html", courses=cards, foundations=foundations,
+                           n_courses=len(COURSES) + len(FOUNDATIONS),
                            total_modules=total_modules)
 
 
@@ -285,6 +447,7 @@ def enroll(slug):
     first = c["modules"][0]["id"] if c["modules"] else None
     if first:
         return redirect(url_for("module", slug=slug, module_id=first))
+    flash("Lessons for this course are coming soon — you'll find them here when ready.")
     return redirect(url_for("course_detail", slug=slug))
 
 
