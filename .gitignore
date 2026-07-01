@@ -9,3 +9,9 @@ instance/
 
 # OS
 .DS_Store
+
+# Secrets — Firebase service-account keys and env files (NEVER commit these)
+*serviceAccount*.json
+*-firebase-adminsdk-*.json
+firebase-key.json
+.env
