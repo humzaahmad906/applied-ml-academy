@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}Verify · {{ BRAND }}{% endblock %}
+{% block body %}
+<div class="wrap">
+  <section>
+    <div class="narrow">
+      <div class="eyebrow">Verify</div>
+      <h2 class="section">Check a certificate</h2>
+      <p class="lead">Enter the code printed on the certificate. Valid codes return
+         the holder, course, and score exactly as issued.</p>
+
+      <div class="card">
+        <form method="get" action="{{ url_for('verify') }}" onsubmit="return go(event)">
+          <div class="field">
+            <label for="code">Verification code</label>
+            <input id="code" name="code" class="mono" value="{{ code }}"
+                   placeholder="AMLA-MLOPS-2026-7F3A" autocomplete="off" autofocus>
+          </div>
+          <button class="btn full" type="submit">Check code</button>
+        </form>
+      </div>
+
+      {% if result %}
+        {% if result.status == 'valid' %}
+        <div class="result valid">
+          <div class="head"><div class="ic">✓</div>
+            <div><div class="t">Valid certificate</div>
+                 <div class="s">Issued by {{ BRAND }}.</div></div></div>
+          <div class="vrow"><span class="k">Recipient</span><span class="v">{{ result.cert.name }}</span></div>
+          <div class="vrow"><span class="k">Course</span><span class="v">{{ result.cert.course }}</span></div>
+          <div class="vrow"><span class="k">Result</span><span class="v">{{ result.cert.score }}% · {{ result.cert.band }}</span></div>
+          <div class="vrow"><span class="k">Date of issue</span><span class="v">{{ result.cert.issued_display }}</span></div>
+          <div class="vrow"><span class="k">Code</span><span class="v mono" style="font-size:12px">{{ result.cert.code }}</span></div>
+          <div style="margin-top:18px"><a class="btn ghost" href="{{ url_for('certificate', code=result.cert.code) }}">View certificate</a></div>
+        </div>
+        {% elif result.status == 'revoked' %}
+        <div class="result revoked">
+          <div class="head"><div class="ic">!</div>
+            <div><div class="t">Revoked</div>
+                 <div class="s">This certificate was issued but later revoked, and is no longer valid.</div></div></div>
+          <div class="vrow"><span class="k">Recipient</span><span class="v">{{ result.cert.name }}</span></div>
+          <div class="vrow"><span class="k">Course</span><span class="v">{{ result.cert.course }}</span></div>
+          <div class="vrow"><span class="k">Code</span><span class="v mono" style="font-size:12px">{{ result.cert.code }}</span></div>
+        </div>
+        {% else %}
+        <div class="result invalid">
+          <div class="head"><div class="ic">✕</div>
+            <div><div class="t">No match found</div>
+                 <div class="s">No certificate with code <span class="mono">{{ code }}</span> was issued by {{ BRAND }}.</div></div></div>
+        </div>
+        {% endif %}
+      {% endif %}
+    </div>
+  </section>
+</div>
+<script>
+function go(e){
+  e.preventDefault();
+  var v=document.getElementById('code').value.trim().toUpperCase();
+  if(!v) return false;
+  window.location.href="{{ url_for('verify') }}/"+encodeURIComponent(v);
+  return false;
+}
+</script>
+{% endblock %}

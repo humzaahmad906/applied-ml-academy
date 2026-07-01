@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Certificate · {{ cert.name }}</title>
+<link rel="icon" href="{{ url_for('static', filename='img/app-icon.svg') }}">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=EB+Garamond:ital@0;1&family=Outfit:wght@300;400;500&family=JetBrains+Mono:wght@400;700&family=Great+Vibes&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<style>
+:root{--gold:#c6a04e;--gold-d:#b08d3f}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+body{background:#0e1524;color:#e7ecf6;font-family:'Outfit',sans-serif;min-height:100vh;
+  display:flex;flex-direction:column;align-items:center;padding:26px}
+.bar{width:100%;max-width:1100px;display:flex;align-items:center;gap:14px;margin-bottom:20px;flex-wrap:wrap}
+.bar a.home{margin-right:auto}
+.bar a.home img{height:30px;display:block}
+.bar .vtag{font-family:'JetBrains Mono';font-size:12px;color:#9ee6bf;background:#12321f;
+  border:1px solid #1e5136;padding:7px 13px;border-radius:20px}
+.bar button{border:1px solid var(--gold);background:transparent;color:var(--gold);
+  padding:10px 18px;border-radius:10px;font-family:inherit;font-size:14px;cursor:pointer}
+.bar button.solid{background:var(--gold);color:#0e1524;font-weight:500}
+.bar button:hover{background:var(--gold);color:#0e1524}
+.stage{width:100%;max-width:1100px;overflow:auto}
+
+#cert{position:relative;width:1100px;height:850px;
+  background:radial-gradient(120% 130% at 50% 0%,#fdfaf3 0%,#f8f2e5 55%,#f3ebd8 100%);
+  overflow:hidden;font-family:'Cormorant Garamond',serif}
+#cert .bg{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:900px;height:900px;opacity:.9}
+#cert .fo{position:absolute;inset:34px;border:2.4px solid var(--gold-d)}
+#cert .fm{position:absolute;inset:40px;border:.8px solid var(--gold-d)}
+#cert .fi{position:absolute;inset:52px;border:1px solid #c9a24e;box-shadow:inset 0 0 0 3px rgba(176,141,63,.16)}
+#cert .cor{position:absolute;width:58px;height:58px}
+#cert .cor.tl{top:40px;left:40px}
+#cert .cor.tr{top:40px;right:40px;transform:scaleX(-1)}
+#cert .cor.bl{bottom:40px;left:40px;transform:scaleY(-1)}
+#cert .cor.br{bottom:40px;right:40px;transform:scale(-1,-1)}
+#cert .body{position:absolute;inset:52px;display:flex;flex-direction:column;align-items:center;text-align:center;padding:44px 76px 34px}
+#cert .crest{width:46px;height:46px;margin-bottom:9px}
+#cert .issuer{font-family:'Outfit';font-size:16px;letter-spacing:.42em;color:#1b2b45;text-indent:.42em;font-weight:500}
+#cert .rl{width:150px;height:1px;background:linear-gradient(90deg,transparent,var(--gold-d),transparent);margin:9px 0 4px}
+#cert .prog{font-family:'EB Garamond';font-style:italic;font-size:14px;color:#7a6a3e}
+#cert .kind{font-family:'Playfair Display';font-weight:700;font-size:50px;color:#16233c;line-height:1;margin-top:20px}
+#cert .pres{font-family:'Outfit';font-weight:300;font-size:11px;letter-spacing:.34em;color:#8a7748;text-indent:.34em;margin-top:15px;text-transform:uppercase}
+#cert .name{font-family:'Playfair Display';font-weight:700;font-size:62px;color:#1b2b45;line-height:1;margin-top:8px}
+#cert .nr{width:360px;height:1px;background:linear-gradient(90deg,transparent,var(--gold-d) 20%,var(--gold-d) 80%,transparent);margin-top:12px}
+#cert .lead{font-family:'Outfit';font-weight:300;font-size:11px;letter-spacing:.3em;color:#8a7748;text-indent:.3em;margin-top:16px;text-transform:uppercase}
+#cert .course{font-family:'EB Garamond';font-style:italic;font-size:25px;color:#16233c;margin-top:10px;max-width:760px;line-height:1.28}
+#cert .blurb{font-family:'EB Garamond';font-size:15px;line-height:1.7;color:#41455a;max-width:640px;margin-top:14px}
+#cert .meta{display:flex;gap:34px;margin-top:18px}
+#cert .chip{display:flex;flex-direction:column;align-items:center;gap:3px}
+#cert .chip .lab{font-family:'Outfit';font-size:9px;letter-spacing:.22em;color:#9a8752;text-transform:uppercase;text-indent:.22em}
+#cert .chip .val{font-family:'EB Garamond';font-size:15px;color:#1b2b45;font-weight:600}
+#cert .chd{width:1px;height:30px;background:#cdbf98;align-self:center}
+#cert .footer{position:absolute;left:60px;right:60px;bottom:92px;display:flex;align-items:flex-end;justify-content:space-between}
+#cert .sig{width:240px;display:flex;flex-direction:column;align-items:center}
+#cert .sig .ink{font-family:'Great Vibes';font-size:38px;color:#1b2b45;line-height:.7;height:38px}
+#cert .sig .sl{width:100%;height:1px;background:#3a3f52;margin:6px 0 8px}
+#cert .sig .who{font-family:'Outfit';font-size:11px;letter-spacing:.16em;color:#16233c;text-transform:uppercase;text-indent:.16em;font-weight:500}
+#cert .sig .role{font-family:'EB Garamond';font-style:italic;font-size:12px;color:#7a6a3e;margin-top:3px}
+#cert .seal{position:relative;width:150px;height:150px;display:flex;align-items:center;justify-content:center;margin-bottom:-2px}
+#cert .seal .rose{position:absolute;inset:0}
+#cert .seal .disc{position:relative;width:84px;height:84px;border-radius:50%;
+  background:radial-gradient(circle at 38% 32%,#e7cb7f,#c6a04e 55%,#9c7b2e 100%);
+  box-shadow:0 1px 3px rgba(90,64,15,.4),inset 0 0 7px rgba(255,255,255,.4);
+  display:flex;flex-direction:column;align-items:center;justify-content:center}
+#cert .seal .disc .m{font-family:'Playfair Display';font-weight:700;font-size:30px;color:#fbf4dd;line-height:.85;text-shadow:0 1px 1px rgba(80,55,10,.55)}
+#cert .seal .disc .y{font-family:'JetBrains Mono';font-weight:700;font-size:7px;letter-spacing:.14em;color:#4a370e;margin-top:2px}
+#cert .seal .ring{position:absolute;width:84px;height:84px;border-radius:50%;border:1px dashed rgba(90,64,15,.4)}
+#cert .verify{position:absolute;left:0;right:0;bottom:58px;text-align:center;font-family:'JetBrains Mono';font-size:9px;letter-spacing:.06em;color:#8a7d5c}
+#cert .verify b{color:#5c4f2e}
+
+@media print{
+  @page{size:11in 8.5in;margin:0}
+  body{background:#fff;padding:0}
+  .bar{display:none}
+  .stage{max-width:none;overflow:visible}
+  #cert{box-shadow:none}
+}
+</style>
+</head>
+<body>
+<div class="bar">
+  <a class="home" href="{{ url_for('index') }}"><img src="{{ url_for('static', filename='img/logo-horizontal-dark.svg') }}" alt="{{ brand }}"></a>
+  {% if not cert.revoked %}<span class="vtag">✓ Verified</span>{% else %}<span class="vtag" style="background:#2a2410;border-color:#5c4d1c;color:#f0dc9e">Revoked</span>{% endif %}
+  <button class="solid" onclick="window.print()">Print / Save PDF</button>
+  <button id="png">Download PNG</button>
+</div>
+
+<div class="stage">
+  <div id="cert">
+    <div class="bg">{{ art_bg | safe }}</div>
+    <div class="fo"></div><div class="fm"></div><div class="fi"></div>
+    <div class="cor tl">{{ art_corner | safe }}</div>
+    <div class="cor tr">{{ art_corner | safe }}</div>
+    <div class="cor bl">{{ art_corner | safe }}</div>
+    <div class="cor br">{{ art_corner | safe }}</div>
+    <div class="body">
+      <div class="crest">{{ art_crest | safe }}</div>
+      <div class="issuer">{{ brand }}</div>
+      <div class="rl"></div>
+      <div class="prog">{{ program }}</div>
+      <div class="kind">Certificate of Completion</div>
+      <div class="pres">This is to certify that</div>
+      <div class="name" id="nm">{{ cert.name }}</div>
+      <div class="nr"></div>
+      <div class="lead">has successfully completed the course</div>
+      <div class="course">{{ cert.course }}</div>
+      <div class="blurb">has successfully completed all coursework, laboratory exercises, and the final proctored examination, meeting the program&rsquo;s rigorous standard of mastery with a passing score of no less than {{ PASS_MARK }}%.</div>
+      <div class="meta">
+        <div class="chip"><div class="lab">Date of Issue</div><div class="val">{{ cert.issued_display }}</div></div>
+        <div class="chd"></div>
+        <div class="chip"><div class="lab">Coursework</div><div class="val">{{ cert.hours or '—' }}</div></div>
+        <div class="chd"></div>
+        <div class="chip"><div class="lab">Result</div><div class="val">{{ cert.score }}% · {{ cert.band }}</div></div>
+      </div>
+    </div>
+    <div class="footer">
+      <div class="sig"><div class="ink">{{ instructor }}</div><div class="sl"></div>
+        <div class="who">{{ instructor }}</div><div class="role">{{ instructor_title }}</div></div>
+      <div class="seal"><div class="rose">{{ art_seal | safe }}</div><div class="ring"></div>
+        <div class="disc"><div class="m">{{ monogram }}</div><div class="y">EST. {{ est }}</div></div></div>
+      <div class="sig"><div class="ink">{{ cosigner }}</div><div class="sl"></div>
+        <div class="who">{{ cosigner }}</div><div class="role">{{ cosigner_title }}</div></div>
+    </div>
+    <div class="verify">CERTIFICATE ID&nbsp; <b>{{ cert.code }}</b> &nbsp;·&nbsp; Verify at {{ verify_url }} &nbsp;·&nbsp; Issued digitally</div>
+  </div>
+</div>
+
+<script>
+(function(){
+  var n=document.getElementById('nm'), t=n.textContent.trim();
+  n.style.fontSize = t.length>26 ? '46px' : t.length>18 ? '54px' : '62px';
+})();
+document.getElementById('png').onclick=async function(){
+  this.textContent='Rendering…';
+  try{ await (document.fonts?document.fonts.ready:Promise.resolve());
+    var c=await html2canvas(document.getElementById('cert'),{scale:2,backgroundColor:null,useCORS:true,width:1100,height:850});
+    var a=document.createElement('a'); a.download='certificate-{{ cert.code }}.png'; a.href=c.toDataURL('image/png'); a.click();
+  }catch(e){ alert('Could not render image.'); }
+  this.textContent='Download PNG';
+};
+</script>
+</body>
+</html>

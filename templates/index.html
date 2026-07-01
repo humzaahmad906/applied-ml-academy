@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block body %}
+<div class="wrap">
+
+  <section class="hero">
+    <img class="mark" src="{{ url_for('static', filename='img/icon-dark.svg') }}" alt="">
+    <div class="tag">Free courses <b>·</b> pass mark <b>{{ PASS_MARK }}%</b></div>
+    <h1>Machine learning,<br>taught to a <span>real bar</span>.</h1>
+    <p>Every course here is free. None of them are easy. You finish by passing a
+       proctored exam at {{ PASS_MARK }}% or better, and you walk away with a
+       certificate anyone can verify.</p>
+    <div class="btns">
+      <a class="btn" href="#courses">Browse courses</a>
+      <a class="btn ghost" href="{{ url_for('verify') }}">Verify a certificate</a>
+    </div>
+  </section>
+
+  <section>
+    <div class="eyebrow">Why it's different</div>
+    <h2 class="section">No paywall. No participation trophies.</h2>
+    <p class="lead">Most "certificates" are proof you clicked through videos. Ours
+       are proof you cleared a hard bar, and the code on each one confirms it.</p>
+    <div class="pillars">
+      <div class="pillar"><div class="k">$0</div><h3>Free to enroll</h3>
+        <p>Full curriculum, labs, and exam at no cost. The rigor is the price.</p></div>
+      <div class="pillar"><div class="k">{{ PASS_MARK }}%</div><h3>A pass mark that means it</h3>
+        <p>Below {{ PASS_MARK }}%, no certificate is issued. The credential stays scarce on purpose.</p></div>
+      <div class="pillar"><div class="k">✓</div><h3>Publicly verifiable</h3>
+        <p>Each certificate carries a unique code. Employers check it in seconds, no login.</p></div>
+    </div>
+  </section>
+
+  <section id="courses">
+    <div class="eyebrow">Curriculum</div>
+    <h2 class="section">Courses</h2>
+    <p class="lead">Practitioner-grade, built around what actually breaks in
+       production. More on the way.</p>
+    <div class="courses">
+      {% for c in courses %}
+      <div class="course">
+        <div class="row"><span class="lvl">{{ c.level }}</span><span class="free">Free</span></div>
+        <h3>{{ c.title }}</h3>
+        <p>{{ c.blurb }}</p>
+        <div class="meta"><span><b>{{ c.hours }}</b> coursework</span><span>Exam at <b>{{ PASS_MARK }}%</b></span></div>
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+
+  <section>
+    <div class="card narrow" style="text-align:center">
+      <div class="eyebrow" style="margin-bottom:10px">The credential</div>
+      <h2 class="section" style="margin-bottom:12px">Got a certificate to check?</h2>
+      <p class="lead" style="margin:0 auto 22px">Paste the code printed on any
+         {{ BRAND }} certificate to confirm the holder, the course, and the score.</p>
+      <a class="btn" href="{{ url_for('verify') }}">Verify a certificate</a>
+    </div>
+  </section>
+
+</div>
+{% endblock %}

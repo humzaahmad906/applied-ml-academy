@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}Not found · {{ BRAND }}{% endblock %}
+{% block body %}
+<div class="wrap">
+  <section style="text-align:center;padding:100px 0">
+    <div class="eyebrow" style="text-align:center">404</div>
+    <h2 class="section">Nothing here.</h2>
+    <p class="lead" style="margin:0 auto 26px">That page or certificate doesn't exist.</p>
+    <a class="btn" href="{{ url_for('index') }}">Back home</a>
+  </section>
+</div>
+{% endblock %}

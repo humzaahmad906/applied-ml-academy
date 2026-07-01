@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 116" width="320" height="320"><circle cx="60" cy="58" r="54" fill="none" stroke="#d8b463" stroke-width="2"/>
+<circle cx="60" cy="58" r="49.5" fill="none" stroke="#d8b463" stroke-width="0.6" opacity="0.55"/>
+<line x1="60" y1="20" x2="30" y2="96" stroke="#d8b463" stroke-width="3.2" stroke-linecap="round" opacity="1.0"/>
+<line x1="60" y1="20" x2="90" y2="96" stroke="#d8b463" stroke-width="3.2" stroke-linecap="round" opacity="1.0"/>
+<line x1="40.26315789473684" y1="70.0" x2="79.73684210526315" y2="70.0" stroke="#e6c56e" stroke-width="3.2" stroke-linecap="round" opacity="1.0"/>
+<circle cx="30" cy="96" r="5.0" fill="#0e1524" stroke="#d8b463" stroke-width="3"/>
+<circle cx="90" cy="96" r="5.0" fill="#0e1524" stroke="#d8b463" stroke-width="3"/>
+<circle cx="40.26315789473684" cy="70.0" r="4.2" fill="#0e1524" stroke="#d8b463" stroke-width="2.6"/>
+<circle cx="79.73684210526315" cy="70.0" r="4.2" fill="#0e1524" stroke="#d8b463" stroke-width="2.6"/>
+<circle cx="60" cy="20" r="5.6" fill="#d8b463"/>
+<circle cx="60" cy="70" r="6.2" fill="#e6c56e"/>
+<circle cx="60" cy="70" r="2.4" fill="#0e1524"/></svg>

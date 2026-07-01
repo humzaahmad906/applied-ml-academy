@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Admin · {{ BRAND }}{% endblock %}
+{% block body %}
+<div class="wrap">
+  <section>
+    <div class="narrow" style="max-width:420px">
+      <div class="eyebrow">Admin</div>
+      <h2 class="section">Sign in</h2>
+      <p class="lead">Issue and manage certificates.</p>
+      {% with msgs = get_flashed_messages() %}
+        {% for m in msgs %}<div class="notice">{{ m }}</div>{% endfor %}
+      {% endwith %}
+      <div class="card">
+        <form method="post" action="{{ url_for('admin_login') }}">
+          <div class="field">
+            <label for="password">Password</label>
+            <input id="password" name="password" type="password" autofocus>
+          </div>
+          <button class="btn full" type="submit">Sign in</button>
+        </form>
+      </div>
+    </div>
+  </section>
+</div>
+{% endblock %}

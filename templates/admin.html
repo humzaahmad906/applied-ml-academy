@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block title %}Admin · {{ BRAND }}{% endblock %}
+{% block body %}
+<div class="wrap">
+  <section>
+    <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:8px">
+      <div class="eyebrow" style="margin:0">Admin</div>
+      <a class="tact" href="{{ url_for('admin_logout') }}" style="margin-left:auto">Sign out</a>
+    </div>
+    <h2 class="section">Issue a certificate</h2>
+
+    {% if default_pw %}
+      <div class="notice">You're using the default admin password. Set an
+        <span class="mono">ADMIN_PASSWORD</span> environment variable on Render before going live.</div>
+    {% endif %}
+    {% with msgs = get_flashed_messages() %}
+      {% for m in msgs %}<div class="flash">{{ m }}</div>{% endfor %}
+    {% endwith %}
+
+    <div class="card" style="margin-bottom:34px">
+      <form method="post" action="{{ url_for('admin_issue') }}">
+        <div class="field">
+          <label for="name">Recipient name</label>
+          <input id="name" name="name" placeholder="Jane Doe" autocomplete="off" required>
+        </div>
+        <div class="field">
+          <label for="course">Course</label>
+          <input id="course" name="course" list="courselist"
+                 placeholder="MLOps: Production Machine Learning Systems" required>
+          <datalist id="courselist">
+            {% for c in courses %}<option value="{{ c.title }}">{% endfor %}
+          </datalist>
+        </div>
+        <div class="row2">
+          <div class="field">
+            <label for="score">Final score (%)</label>
+            <input id="score" name="score" type="number" min="0" max="100" placeholder="91" required>
+            <div class="hint">Below {{ PASS_MARK }}% will not issue.</div>
+          </div>
+          <div class="field">
+            <label for="issued_on">Date of issue</label>
+            <input id="issued_on" name="issued_on" type="date" value="{{ today }}">
+          </div>
+        </div>
+        <div class="field">
+          <label for="hours">Coursework</label>
+          <input id="hours" name="hours" placeholder="40 Contact Hours">
+        </div>
+        <button class="btn full" type="submit">Mint certificate</button>
+      </form>
+    </div>
+
+    <h2 class="section" style="font-size:22px">Registry
+      <span class="mono" style="color:var(--txt3);font-size:14px">
+        {{ valid }} valid / {{ certs|length }} issued</span></h2>
+
+    {% if certs %}
+    <table>
+      <thead><tr><th>Recipient</th><th>Course</th><th>Result</th><th>Date</th><th>Code</th><th>Status</th><th></th></tr></thead>
+      <tbody>
+        {% for c in certs %}
+        <tr>
+          <td>{{ c.name }}</td>
+          <td style="color:var(--txt2)">{{ c.course }}</td>
+          <td>{{ c.score }}% · {{ c.band }}</td>
+          <td style="color:var(--txt2)">{{ c.issued_display }}</td>
+          <td><a class="code" href="{{ url_for('certificate', code=c.code) }}">{{ c.code }}</a></td>
+          <td>{% if c.revoked %}<span class="badge r">Revoked</span>{% else %}<span class="badge v">Valid</span>{% endif %}</td>
+          <td style="text-align:right;white-space:nowrap">
+            <form method="post" action="{{ url_for('admin_toggle', code=c.code) }}" style="display:inline">
+              <button class="tact" type="submit">{{ 'Restore' if c.revoked else 'Revoke' }}</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="card empty">No certificates issued yet. Mint your first one above.</div>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

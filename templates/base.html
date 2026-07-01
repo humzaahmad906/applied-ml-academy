@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}{{ BRAND }}{% endblock %}</title>
+<link rel="icon" href="{{ url_for('static', filename='img/app-icon.svg') }}">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/site.css') }}">
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <a class="logo" href="{{ url_for('index') }}">
+      <img src="{{ url_for('static', filename='img/logo-horizontal-dark.svg') }}" alt="{{ BRAND }}">
+    </a>
+    <nav>
+      <a href="{{ url_for('index') }}#courses">Courses</a>
+      <a href="{{ url_for('verify') }}">Verify</a>
+      <a class="cta" href="{{ url_for('verify') }}">Verify a certificate</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+{% block body %}{% endblock %}
+</main>
+
+<footer>
+  <div class="wrap">
+    <div class="mono">{{ BRAND | upper }}</div>
+    <div>Free to learn. Hard to earn. &nbsp;·&nbsp; &copy; {{ YEAR }}</div>
+  </div>
+</footer>
+</body>
+</html>
