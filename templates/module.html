@@ -18,7 +18,7 @@
   </aside>
 
   <div class="reader-main">
-    <article class="md">{{ body|safe }}</article>
+    <article class="md" id="mdbody">{{ body|safe }}</article>
 
     <section class="notes" id="notes">
       <div class="notes-head">
@@ -40,6 +40,130 @@
     </nav>
   </div>
 </div>
+
+<!-- text-selection highlight toolbar + note popup -->
+<div id="hlbar">
+  <span class="sw hl-y" data-c="y" title="Yellow"></span>
+  <span class="sw hl-g" data-c="g" title="Green"></span>
+  <span class="sw hl-b" data-c="b" title="Blue"></span>
+  <span class="sw hl-p" data-c="p" title="Pink"></span>
+  <button data-c="note">+ Note</button>
+</div>
+<div id="hlnote">
+  <div class="q"></div>
+  <textarea placeholder="Add a note to this highlight…"></textarea>
+  <div class="row">
+    <button class="del" id="hlDel">Delete</button>
+    <span><button id="hlCancel">Cancel</button><button class="primary" id="hlSave">Save</button></span>
+  </div>
+</div>
+
+<script>
+/* ---------- per-user text-anchored highlights ---------- */
+(function(){
+  var art = document.getElementById('mdbody');
+  var bar = document.getElementById('hlbar'), pop = document.getElementById('hlnote');
+  var hlUrl = "{{ url_for('save_highlights', slug=course.slug, module_id=current.id) }}";
+  var items = {{ note_highlights|safe }};      // [{id,start,end,text,color,note}]
+  var pending = null, editing = null, saveTimer = null;
+
+  function persist(){
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(function(){
+      fetch(hlUrl, {method:'POST', headers:{'Content-Type':'application/json'},
+                    body: JSON.stringify({highlights: items})});
+    }, 500);
+  }
+  function newId(){ return 'h' + Date.now().toString(36) + Math.floor(Math.random()*1e4).toString(36); }
+
+  function offsetOf(node, off){
+    var w = document.createTreeWalker(art, NodeFilter.SHOW_TEXT), total = 0, n;
+    while ((n = w.nextNode())){ if (n === node) return total + off; total += n.nodeValue.length; }
+    return total;
+  }
+  function selRange(){
+    var s = window.getSelection(); if (!s.rangeCount || s.isCollapsed) return null;
+    var r = s.getRangeAt(0); if (!art.contains(r.commonAncestorContainer)) return null;
+    var start = offsetOf(r.startContainer, r.startOffset), end = offsetOf(r.endContainer, r.endOffset);
+    if (end <= start) return null;
+    return {start:start, end:end, text:s.toString()};
+  }
+  function wrapRange(start, end, h){
+    var w = document.createTreeWalker(art, NodeFilter.SHOW_TEXT), segs = [], pos = 0, n;
+    while ((n = w.nextNode())){
+      var len = n.nodeValue.length, a = Math.max(start, pos), b = Math.min(end, pos + len);
+      if (a < b && !/MARK/.test(n.parentNode.nodeName)) segs.push({n:n, from:a-pos, to:b-pos});
+      pos += len;
+    }
+    for (var i = 0; i < segs.length; i++){
+      var seg = segs[i], rg = document.createRange();
+      rg.setStart(seg.n, seg.from); rg.setEnd(seg.n, seg.to);
+      var m = document.createElement('mark');
+      m.className = 'hl hl-' + (h.color || 'y') + (h.note ? ' has-note' : '');
+      m.dataset.hid = h.id; if (h.note) m.title = h.note;
+      try { rg.surroundContents(m); } catch(e){}
+    }
+  }
+  function applyAll(){ items.forEach(function(h){ wrapRange(h.start, h.end, h); }); }
+
+  function placeAt(el, x, y){
+    el.style.left = Math.max(8, Math.min(x, window.innerWidth - el.offsetWidth - 8)) + 'px';
+    el.style.top = (y + window.scrollY) + 'px';
+  }
+  function hideBar(){ bar.classList.remove('on'); }
+  function commit(range, color, noteText){
+    var h = {id:newId(), start:range.start, end:range.end, text:range.text, color:color, note:noteText||''};
+    items.push(h); wrapRange(h.start, h.end, h); persist(); return h;
+  }
+  function openNote(hid, anchorEl){
+    editing = hid; var h = items.find(function(x){ return x.id === hid; }); if (!h) return;
+    pop.querySelector('.q').textContent = '“' + h.text.slice(0,140) + '”';
+    pop.querySelector('textarea').value = h.note || ''; pop.classList.add('on');
+    var rect = (anchorEl || art).getBoundingClientRect(); placeAt(pop, rect.left, rect.bottom + 6);
+    pop.querySelector('textarea').focus();
+  }
+  function closeNote(){ pop.classList.remove('on'); editing = null; }
+
+  document.addEventListener('mouseup', function(e){
+    if (bar.contains(e.target) || pop.contains(e.target)) return;
+    setTimeout(function(){
+      var r = selRange(); if (!r){ hideBar(); return; }
+      pending = r;
+      var rect = window.getSelection().getRangeAt(0).getBoundingClientRect();
+      bar.classList.add('on'); placeAt(bar, rect.left, rect.top - 46);
+    }, 0);
+  });
+  bar.addEventListener('mousedown', function(e){ e.preventDefault(); });
+  bar.addEventListener('click', function(e){
+    var c = e.target.dataset.c; if (!c || !pending) return;
+    if (c === 'note'){ var h = commit(pending, 'y', ''); hideBar();
+      openNote(h.id, art.querySelector('.hl[data-hid="'+h.id+'"]')); }
+    else { commit(pending, c, ''); hideBar(); window.getSelection().removeAllRanges(); }
+    pending = null;
+  });
+  art.addEventListener('click', function(e){ var m = e.target.closest('.hl'); if (m) openNote(m.dataset.hid, m); });
+  document.getElementById('hlSave').onclick = function(){
+    var h = items.find(function(x){ return x.id === editing; });
+    if (h){ h.note = pop.querySelector('textarea').value.trim();
+      art.querySelectorAll('.hl[data-hid="'+editing+'"]').forEach(function(el){
+        el.classList.toggle('has-note', !!h.note); if (h.note) el.title = h.note; else el.removeAttribute('title'); });
+      persist(); }
+    closeNote();
+  };
+  document.getElementById('hlCancel').onclick = closeNote;
+  document.getElementById('hlDel').onclick = function(){
+    items = items.filter(function(x){ return x.id !== editing; });
+    art.querySelectorAll('.hl[data-hid="'+editing+'"]').forEach(function(el){
+      el.replaceWith(document.createTextNode(el.textContent)); });
+    art.normalize(); persist(); closeNote();
+  };
+  document.addEventListener('mousedown', function(e){
+    if (!pop.contains(e.target) && !e.target.closest('.hl') && !bar.contains(e.target)) closeNote();
+  });
+
+  applyAll();
+})();
+</script>
 
 <script>
 (function(){

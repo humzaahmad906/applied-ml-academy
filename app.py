@@ -1,5 +1,6 @@
 import os
 import re
+import json
 import secrets
 import hmac
 from functools import wraps
@@ -85,16 +86,32 @@ class Enrollment(db.Model):
 
 
 class Note(db.Model):
-    """A private, per-user note attached to one module of one course."""
+    """A private, per-user note attached to one module of one course.
+
+    `body` is the free-text note; `highlights` is a JSON array of text-anchored
+    highlights (each: id, start, end, text, color, note) into the rendered
+    module content.
+    """
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
     course_slug = db.Column(db.String(80), nullable=False)
     module_id = db.Column(db.String(120), nullable=False)
     body = db.Column(db.Text, default="")
+    highlights = db.Column(db.Text, default="[]")
     updated_at = db.Column(db.DateTime, default=datetime.utcnow,
                            onupdate=datetime.utcnow)
     __table_args__ = (db.UniqueConstraint("user_id", "course_slug", "module_id",
                                           name="uq_user_course_module"),)
+
+
+def _get_or_make_note(user_id, slug, module_id):
+    note = Note.query.filter_by(user_id=user_id, course_slug=slug,
+                                module_id=module_id).first()
+    if not note:
+        note = Note(user_id=user_id, course_slug=slug, module_id=module_id,
+                    body="", highlights="[]")
+        db.session.add(note)
+    return note
 
 
 with app.app_context():
@@ -476,28 +493,55 @@ def module(slug, module_id):
                                 module_id=module_id).first()
     return render_template("module.html", course=c, current=c["modules"][idx],
                            body=html, prev_m=prev_m, next_m=next_m, index=idx,
-                           note_body=(note.body if note else ""))
+                           note_body=(note.body if note else ""),
+                           note_highlights=(note.highlights if note else "[]"))
+
+
+def _module_guard(user, slug, module_id):
+    if not enrollment_of(user, slug):
+        abort(403)
+    if slug not in COURSE_BY_SLUG or module_id not in [m["id"] for m in MODULES.get(slug, [])]:
+        abort(404)
 
 
 @app.route("/course/<slug>/<module_id>/note", methods=["POST"])
 @login_required
 def save_note(slug, module_id):
     user = current_user()
-    if not enrollment_of(user, slug):
-        abort(403)
-    if slug not in COURSE_BY_SLUG or module_id not in [m["id"] for m in MODULES.get(slug, [])]:
-        abort(404)
+    _module_guard(user, slug, module_id)
     data = request.get_json(silent=True) or {}
-    body = (data.get("body") or "")[:20000]
-    note = Note.query.filter_by(user_id=user.id, course_slug=slug,
-                                module_id=module_id).first()
-    if note:
-        note.body = body
-    else:
-        db.session.add(Note(user_id=user.id, course_slug=slug,
-                            module_id=module_id, body=body))
+    note = _get_or_make_note(user.id, slug, module_id)
+    note.body = (data.get("body") or "")[:20000]
     db.session.commit()
     return {"ok": True}
+
+
+@app.route("/course/<slug>/<module_id>/highlights", methods=["POST"])
+@login_required
+def save_highlights(slug, module_id):
+    user = current_user()
+    _module_guard(user, slug, module_id)
+    data = request.get_json(silent=True) or {}
+    items = data.get("highlights")
+    if not isinstance(items, list):
+        return {"ok": False, "error": "highlights must be a list"}, 400
+    # keep only the fields we expect, cap size defensively
+    clean = []
+    for h in items[:500]:
+        if not isinstance(h, dict):
+            continue
+        clean.append({
+            "id": str(h.get("id", ""))[:40],
+            "start": int(h.get("start", 0)),
+            "end": int(h.get("end", 0)),
+            "text": str(h.get("text", ""))[:2000],
+            "color": (h.get("color") if h.get("color") in ("y", "g", "b", "p") else "y"),
+            "note": str(h.get("note", ""))[:4000],
+        })
+    note = _get_or_make_note(user.id, slug, module_id)
+    note.highlights = json.dumps(clean)
+    db.session.commit()
+    return {"ok": True, "count": len(clean)}
 
 
 @app.route("/dashboard")
