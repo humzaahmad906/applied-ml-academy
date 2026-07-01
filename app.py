@@ -10,10 +10,10 @@ from pathlib import Path
 import markdown as md
 from flask import (Flask, render_template, request, redirect, url_for,
                    session, abort, flash)
-from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
 
 import art
+import data
 
 # ---------------------------------------------------------------- config
 BRAND = "Applied ML Academy"
@@ -31,91 +31,8 @@ ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "change-me")
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", secrets.token_hex(32))
 
-# Render's free Postgres hands out postgres:// ; SQLAlchemy wants postgresql://
-db_url = os.environ.get("DATABASE_URL", "sqlite:///academy.db")
-if db_url.startswith("postgres://"):
-    db_url = db_url.replace("postgres://", "postgresql://", 1)
-app.config["SQLALCHEMY_DATABASE_URI"] = db_url
-app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-db = SQLAlchemy(app)
-
-
-# ---------------------------------------------------------------- models
-class Certificate(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    code = db.Column(db.String(48), unique=True, nullable=False, index=True)
-    name = db.Column(db.String(160), nullable=False)
-    course = db.Column(db.String(200), nullable=False)
-    score = db.Column(db.Integer, nullable=False)
-    hours = db.Column(db.String(80), default="")
-    issued_on = db.Column(db.String(10), nullable=False)   # YYYY-MM-DD
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    revoked = db.Column(db.Boolean, default=False)
-
-    @property
-    def band(self):
-        return "Distinction" if self.score >= 90 else "Pass"
-
-    @property
-    def issued_display(self):
-        try:
-            return datetime.strptime(self.issued_on, "%Y-%m-%d").strftime("%d %B %Y")
-        except ValueError:
-            return self.issued_on
-
-
-class User(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    email = db.Column(db.String(200), unique=True, nullable=False, index=True)
-    name = db.Column(db.String(160), nullable=False)
-    password_hash = db.Column(db.String(255), nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-
-    enrollments = db.relationship("Enrollment", backref="user",
-                                  cascade="all, delete-orphan")
-
-
-class Enrollment(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
-    course_slug = db.Column(db.String(80), nullable=False)
-    last_module = db.Column(db.String(120), default="")
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    __table_args__ = (db.UniqueConstraint("user_id", "course_slug",
-                                          name="uq_user_course"),)
-
-
-class Note(db.Model):
-    """A private, per-user note attached to one module of one course.
-
-    `body` is the free-text note; `highlights` is a JSON array of text-anchored
-    highlights (each: id, start, end, text, color, note) into the rendered
-    module content.
-    """
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
-    course_slug = db.Column(db.String(80), nullable=False)
-    module_id = db.Column(db.String(120), nullable=False)
-    body = db.Column(db.Text, default="")
-    highlights = db.Column(db.Text, default="[]")
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow,
-                           onupdate=datetime.utcnow)
-    __table_args__ = (db.UniqueConstraint("user_id", "course_slug", "module_id",
-                                          name="uq_user_course_module"),)
-
-
-def _get_or_make_note(user_id, slug, module_id):
-    note = Note.query.filter_by(user_id=user_id, course_slug=slug,
-                                module_id=module_id).first()
-    if not note:
-        note = Note(user_id=user_id, course_slug=slug, module_id=module_id,
-                    body="", highlights="[]")
-        db.session.add(note)
-    return note
-
-
-with app.app_context():
-    db.create_all()
+# Data lives in Firestore (see data.py) so it survives redeploys. Credentials come
+# from FIREBASE_CREDENTIALS / GOOGLE_APPLICATION_CREDENTIALS / FIRESTORE_EMULATOR_HOST.
 
 
 # ---------------------------------------------------------------- courses
@@ -328,7 +245,53 @@ FOUNDATIONS = [
         ("Cost and trade-offs", "Pick the right service without overspending."))},
 ]
 
-COURSE_BY_SLUG = {c["slug"]: c for c in COURSES + FOUNDATIONS}
+# Cloud provider deep-dives: detailed, certificate-eligible, in the Cloud category
+# (not part of the 5-step recommended path). Ordered after the core certificate track.
+CLOUD = [
+    {"code": "AWS", "title": "AWS for ML Engineers", "slug": "aws-for-ml",
+     "tag": "Cloud", "accent": "#ff9900", "level": "Beginner → Advanced", "hours": "34", "order": 6,
+     "certificate": True,
+     "blurb": "Amazon Web Services from first principles to building and shipping ML systems — "
+              "IAM, compute, storage, containers, SageMaker AI, and Bedrock.",
+     "outcomes": ["Navigate AWS core services (IAM, EC2, S3, VPC) confidently",
+                  "Train and deploy models with Amazon SageMaker AI",
+                  "Serve models with real-time, serverless, and batch inference",
+                  "Architect a production ML system on AWS end to end"]},
+    {"code": "AZURE", "title": "Azure for ML Engineers", "slug": "azure-for-ml",
+     "tag": "Cloud", "accent": "#0078d4", "level": "Beginner → Advanced", "hours": "34", "order": 7,
+     "certificate": True,
+     "blurb": "Microsoft Azure end to end for ML — Entra ID, compute, storage, AKS, "
+              "Azure Machine Learning, and Azure AI Foundry / OpenAI.",
+     "outcomes": ["Work with Azure core services and Entra ID securely",
+                  "Train and deploy with Azure Machine Learning",
+                  "Use Azure AI Foundry and Azure OpenAI for GenAI systems",
+                  "Architect a production ML system on Azure end to end"]},
+    {"code": "GCP", "title": "GCP for ML Engineers", "slug": "gcp-for-ml",
+     "tag": "Cloud", "accent": "#34a853", "level": "Beginner → Advanced", "hours": "34", "order": 8,
+     "certificate": True,
+     "blurb": "Google Cloud from fundamentals to production ML — IAM, Compute Engine, "
+              "Cloud Storage, BigQuery, GKE, and Vertex AI with Gemini.",
+     "outcomes": ["Navigate GCP core services (IAM, Compute Engine, Cloud Storage)",
+                  "Use BigQuery and Vertex AI for data and training",
+                  "Deploy models and Gemini-based GenAI on Vertex AI",
+                  "Architect a production ML system on GCP end to end"]},
+]
+
+ALL_COURSES = COURSES + CLOUD + FOUNDATIONS
+COURSE_BY_SLUG = {c["slug"]: c for c in ALL_COURSES}
+
+# ---------------------------------------------------------------- categories
+# Browse-by-category taxonomy across every course. Order = display order.
+CATEGORIES = [
+    ("Programming & Tools", ["python-foundations", "cli-git"]),
+    ("Mathematics", ["linear-algebra", "calculus-gradients", "probability-stats"]),
+    ("Data & Analytics", ["sql-databases", "pandas-analysis", "data-engineering"]),
+    ("Machine Learning", ["ml-foundations", "deep-learning-foundations", "pytorch-essentials"]),
+    ("LLMs & Systems", ["vlm-guide", "language-modeling", "ml-system-design"]),
+    ("Cloud & Infrastructure",
+     ["cloud-linux", "docker-containers", "aws-for-ml", "azure-for-ml", "gcp-for-ml", "mlops"]),
+]
+CATEGORY_OF = {slug: name for name, slugs in CATEGORIES for slug in slugs}
 
 CONTENT_DIR = Path(__file__).parent / "content"
 
@@ -342,7 +305,7 @@ def _title_of(md_path):
 
 def load_modules():
     mods = {}
-    for c in COURSES + FOUNDATIONS:
+    for c in ALL_COURSES:
         folder = CONTENT_DIR / c["slug"]
         items = []
         if folder.is_dir():
@@ -374,6 +337,7 @@ def course_view(slug):
     v["certificate"] = c.get("certificate", True)
     v["foundation"] = c.get("foundation", False)
     v["syllabus"] = c.get("syllabus", [])
+    v["category"] = CATEGORY_OF.get(slug, "Other")
     v["has_content"] = bool(v["modules"])
     v["module_count"] = len(v["modules"]) if v["modules"] else len(v["syllabus"])
     return v
@@ -382,7 +346,7 @@ def course_view(slug):
 # ---------------------------------------------------------------- auth
 def current_user():
     uid = session.get("uid")
-    return db.session.get(User, uid) if uid else None
+    return data.get_user(uid) if uid else None
 
 
 def login_required(f):
@@ -397,7 +361,7 @@ def login_required(f):
 def enrollment_of(user, slug):
     if not user:
         return None
-    return Enrollment.query.filter_by(user_id=user.id, course_slug=slug).first()
+    return data.get_enrollment(user.id, slug)
 
 
 def logged_in():
@@ -423,7 +387,7 @@ def mint_code(course, year):
     for _ in range(30):
         rnd = secrets.token_hex(2).upper()
         code = f"{BRAND_CODE}-{course_slug_code(course)}-{year}-{rnd}"
-        if not Certificate.query.filter_by(code=code).first():
+        if not data.certificate_exists(code):
             return code
     return f"{BRAND_CODE}-{course_slug_code(course)}-{year}-{secrets.token_hex(3).upper()}"
 
@@ -431,13 +395,14 @@ def mint_code(course, year):
 # ---------------------------------------------------------------- public
 @app.route("/")
 def index():
-    cards = sorted((course_view(c["slug"]) for c in COURSES),
-                   key=lambda c: c["order"])
+    path_cards = sorted((course_view(c["slug"]) for c in COURSES),
+                        key=lambda c: c["order"])
     foundations = sorted((course_view(c["slug"]) for c in FOUNDATIONS),
                          key=lambda c: c["order"])
-    total_modules = sum(len(MODULES.get(c["slug"], [])) for c in COURSES + FOUNDATIONS)
-    return render_template("index.html", courses=cards, foundations=foundations,
-                           n_courses=len(COURSES) + len(FOUNDATIONS),
+    grouped = [(name, [course_view(s) for s in slugs]) for name, slugs in CATEGORIES]
+    total_modules = sum(len(MODULES.get(c["slug"], [])) for c in ALL_COURSES)
+    return render_template("index.html", courses=path_cards, foundations=foundations,
+                           grouped=grouped, n_courses=len(ALL_COURSES),
                            total_modules=total_modules)
 
 
@@ -458,8 +423,7 @@ def enroll(slug):
         abort(404)
     user = current_user()
     if not enrollment_of(user, slug):
-        db.session.add(Enrollment(user_id=user.id, course_slug=slug))
-        db.session.commit()
+        data.create_enrollment(user.id, slug)
         flash(f"You're enrolled in {c['title']}.")
     first = c["modules"][0]["id"] if c["modules"] else None
     if first:
@@ -487,14 +451,12 @@ def module(slug, module_id):
     prev_m = c["modules"][idx - 1] if idx > 0 else None
     next_m = c["modules"][idx + 1] if idx < len(ids) - 1 else None
     # remember last position for "continue"
-    enr.last_module = module_id
-    db.session.commit()
-    note = Note.query.filter_by(user_id=user.id, course_slug=slug,
-                                module_id=module_id).first()
+    data.set_last_module(user.id, slug, module_id)
+    note = data.get_note(user.id, slug, module_id)
     return render_template("module.html", course=c, current=c["modules"][idx],
                            body=html, prev_m=prev_m, next_m=next_m, index=idx,
                            note_body=(note.body if note else ""),
-                           note_highlights=(note.highlights if note else "[]"))
+                           note_highlights=json.dumps(note.highlights if note else []))
 
 
 def _module_guard(user, slug, module_id):
@@ -509,10 +471,8 @@ def _module_guard(user, slug, module_id):
 def save_note(slug, module_id):
     user = current_user()
     _module_guard(user, slug, module_id)
-    data = request.get_json(silent=True) or {}
-    note = _get_or_make_note(user.id, slug, module_id)
-    note.body = (data.get("body") or "")[:20000]
-    db.session.commit()
+    payload = request.get_json(silent=True) or {}
+    data.save_note_body(user.id, slug, module_id, (payload.get("body") or "")[:20000])
     return {"ok": True}
 
 
@@ -521,8 +481,8 @@ def save_note(slug, module_id):
 def save_highlights(slug, module_id):
     user = current_user()
     _module_guard(user, slug, module_id)
-    data = request.get_json(silent=True) or {}
-    items = data.get("highlights")
+    payload = request.get_json(silent=True) or {}
+    items = payload.get("highlights")
     if not isinstance(items, list):
         return {"ok": False, "error": "highlights must be a list"}, 400
     # keep only the fields we expect, cap size defensively
@@ -538,9 +498,7 @@ def save_highlights(slug, module_id):
             "color": (h.get("color") if h.get("color") in ("y", "g", "b", "p") else "y"),
             "note": str(h.get("note", ""))[:4000],
         })
-    note = _get_or_make_note(user.id, slug, module_id)
-    note.highlights = json.dumps(clean)
-    db.session.commit()
+    data.save_highlights(user.id, slug, module_id, clean)
     return {"ok": True, "count": len(clean)}
 
 
@@ -549,8 +507,7 @@ def save_highlights(slug, module_id):
 def dashboard():
     user = current_user()
     enrolled = []
-    for e in Enrollment.query.filter_by(user_id=user.id).order_by(
-            Enrollment.created_at.desc()).all():
+    for e in data.list_enrollments(user.id):
         c = course_view(e.course_slug)
         if not c:
             continue
@@ -574,13 +531,11 @@ def register():
         if not name or not EMAIL_RE.match(email) or len(pw) < 8:
             flash("Enter a name, a valid email, and a password of at least 8 characters.")
             return render_template("register.html", name=name, email=email)
-        if User.query.filter_by(email=email).first():
+        if data.get_user_by_email(email):
             flash("That email is already registered. Try logging in.")
             return render_template("register.html", name=name, email=email)
-        u = User(email=email, name=name, password_hash=generate_password_hash(pw))
-        db.session.add(u)
-        db.session.commit()
-        session["uid"] = u.id
+        uid = data.create_user(email, name, generate_password_hash(pw))
+        session["uid"] = uid
         nxt = request.args.get("next")
         return redirect(nxt or url_for("dashboard"))
     return render_template("register.html", name="", email="")
@@ -593,7 +548,7 @@ def login():
     if request.method == "POST":
         email = request.form.get("email", "").strip().lower()
         pw = request.form.get("password", "")
-        u = User.query.filter_by(email=email).first()
+        u = data.get_user_by_email(email)
         if u and check_password_hash(u.password_hash, pw):
             session["uid"] = u.id
             nxt = request.args.get("next")
@@ -619,7 +574,7 @@ def verify():
 @app.route("/c/<code>")
 def verify_code(code):
     code = code.strip().upper()
-    cert = Certificate.query.filter_by(code=code).first()
+    cert = data.get_certificate(code)
     if not cert:
         result = {"status": "invalid"}
     elif cert.revoked:
@@ -631,7 +586,7 @@ def verify_code(code):
 
 @app.route("/certificate/<code>")
 def certificate(code):
-    cert = Certificate.query.filter_by(code=code.strip().upper()).first()
+    cert = data.get_certificate(code.strip().upper())
     if not cert:
         abort(404)
     verify_url = request.host_url.rstrip("/") + url_for("verify_code", code=cert.code)
@@ -667,14 +622,14 @@ def admin_logout():
 def admin():
     if not logged_in():
         return redirect(url_for("admin_login"))
-    certs = Certificate.query.order_by(Certificate.created_at.desc()).all()
+    certs = data.list_certificates()
     valid = sum(1 for c in certs if not c.revoked)
     default_pw = ADMIN_PASSWORD == "change-me"
     return render_template("admin.html", certs=certs, valid=valid,
                            courses=COURSES, today=date.today().isoformat(),
                            default_pw=default_pw,
-                           students=User.query.count(),
-                           enrollments=Enrollment.query.count())
+                           students=data.count_users(),
+                           enrollments=data.count_enrollments())
 
 
 @app.route("/admin/issue", methods=["POST"])
@@ -700,10 +655,7 @@ def admin_issue():
 
     year = issued_on[:4]
     code = mint_code(course, year)
-    cert = Certificate(code=code, name=name, course=course, score=score,
-                       hours=hours, issued_on=issued_on)
-    db.session.add(cert)
-    db.session.commit()
+    data.create_certificate(code, name, course, score, hours, issued_on)
     flash(f"Issued {code} to {name}.")
     return redirect(url_for("admin"))
 
@@ -712,9 +664,9 @@ def admin_issue():
 def admin_toggle(code):
     if not logged_in():
         abort(403)
-    cert = Certificate.query.filter_by(code=code).first_or_404()
-    cert.revoked = not cert.revoked
-    db.session.commit()
+    cert = data.toggle_certificate(code)
+    if not cert:
+        abort(404)
     flash(("Revoked " if cert.revoked else "Restored ") + code + ".")
     return redirect(url_for("admin"))
 

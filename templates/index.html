@@ -88,29 +88,38 @@
   </section>
 
   <section id="courses">
-    <h2 class="section">Course catalog</h2>
-    <p class="lead">Every course is free and self-paced. Enroll to unlock the modules,
-       then learn right in your browser — progress is saved to your account.</p>
-    <div class="courses">
-      {% for c in courses %}
-      <a class="course" href="{{ url_for('course_detail', slug=c.slug) }}">
-        <div class="thumb" style="--accent:{{ c.accent }}">
-          <span class="cat">{{ c.tag }}</span>
-          <span class="mono glyph">{{ c.code }}</span>
-        </div>
-        <div class="body">
-          <h3>{{ c.title }}</h3>
-          <p>{{ c.blurb }}</p>
-          <div class="meta">
-            <span><b>{{ c.module_count }}</b> modules</span>
-            <span><b>{{ c.hours }}</b> hrs</span>
-            <span class="lvl">{{ c.level }}</span>
+    <h2 class="section">Browse by category</h2>
+    <p class="lead">Every course, grouped by topic — from math and programming to data,
+       machine learning, and each major cloud. Free and self-paced.</p>
+    {% for name, group in grouped %}
+    <div class="cat-group" id="cat-{{ loop.index }}">
+      <h3 class="cat-title">{{ name }} <span class="cat-count">{{ group|length }} courses</span></h3>
+      <div class="courses">
+        {% for c in group %}
+        <a class="course" href="{{ url_for('course_detail', slug=c.slug) }}">
+          <div class="thumb" style="--accent:{{ c.accent }}">
+            <span class="cat">{{ c.tag }}</span>
+            <span class="mono glyph">{{ "%02d"|format(c.order) if c.foundation else c.code }}</span>
           </div>
-        </div>
-        <div class="foot"><span class="free">Free</span><span class="go">View course →</span></div>
-      </a>
-      {% endfor %}
+          <div class="body">
+            <h3>{{ c.title }}</h3>
+            <p>{{ c.blurb }}</p>
+            <div class="meta">
+              <span><b>{{ c.module_count }}</b> {{ 'lessons' if c.foundation else 'modules' }}</span>
+              <span><b>{{ c.hours }}</b> hrs</span>
+              <span class="lvl">{{ c.level }}</span>
+            </div>
+          </div>
+          <div class="foot">
+            {% if c.foundation %}<span class="free open">Open</span>
+            {% else %}<span class="free">Certificate</span>{% endif %}
+            <span class="go">View →</span>
+          </div>
+        </a>
+        {% endfor %}
+      </div>
     </div>
+    {% endfor %}
   </section>
 
   <section class="how">

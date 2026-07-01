@@ -1,0 +1,128 @@
+# 02 — Identity and RBAC (Entra ID)
+
+Every action in Azure is an authenticated, authorized API call. Before a training job can read a dataset, before an endpoint can pull a model, before a pipeline can write to the data lake, the platform asks two questions: *who are you* (authentication) and *are you allowed to do this* (authorization). Get identity right and the rest of your system composes cleanly and securely; get it wrong and you end up with hard-coded keys leaking through code, over-privileged jobs, and a security review that blocks your launch. In an end-to-end ML solution — where a dozen services (storage, registry, endpoints, Key Vault, Functions, Fabric) all talk to each other — identity is the connective tissue that lets those services trust one another without secrets.
+
+## Microsoft Entra ID: the identity plane
+
+**Microsoft Entra ID** is Azure's cloud identity and access management service. It was renamed from Azure Active Directory (Azure AD); you will still see "Azure AD" in old blog posts and some SDK class names, but the service, the portal blade, and current documentation all say Entra ID. It holds the **identities** in your tenant: human users, groups, and — critically for ML automation — non-human principals.
+
+The identity types you will actually work with:
+
+- **Users** — humans, backed by the org's directory, ideally protected by multi-factor authentication and conditional access.
+- **Groups** — collections of users (and other groups). Assign access to groups, not individuals, so onboarding and offboarding is a membership change rather than an access-control rewrite.
+- **Service principals** — an identity for an application or automation. When you register an app or a CI/CD pipeline needs to deploy, it acts as a service principal. Historically these authenticated with a client secret or certificate.
+- **Managed identities** — a service principal that Azure creates and rotates for you, with no secret you ever see or store. This is the single most important identity concept for ML on Azure.
+
+## Managed identities: the end of hard-coded credentials
+
+A **managed identity** gives an Azure resource — a VM, an Azure Machine Learning compute cluster, a Function app, an endpoint — its own identity in Entra ID, with credentials that Azure provisions and rotates automatically. The resource requests a token from a local endpoint at runtime and uses it to call other Azure services. You never see, store, or rotate a secret. This is how you eliminate the classic anti-pattern of a storage account key pasted into a training script or a `.env` file.
+
+There are two flavors:
+
+- **System-assigned** — tied one-to-one to a single resource; created and deleted with it. Good for a resource that only it needs to authenticate as.
+- **User-assigned** — a standalone resource you create once and attach to *many* other resources. This is the right choice for an ML platform, because your training compute, batch endpoints, and Functions can all share one identity with a consistent, auditable set of permissions.
+
+```bash
+# Create a user-assigned managed identity for the whole ML platform
+az identity create \
+  --name id-mlplatform \
+  --resource-group rg-mlx-dev
+
+# Capture its principal ID and client ID for later role assignments and code
+PRINCIPAL_ID=$(az identity show -n id-mlplatform -g rg-mlx-dev --query principalId -o tsv)
+```
+
+In Python, the SDK "just works" because it uses a credential that tries managed identity, then developer login, transparently:
+
+```python
+from azure.identity import DefaultAzureCredential
+from azure.storage.blob import BlobServiceClient
+
+# Locally this uses your `az login`; on an Azure compute it uses the
+# managed identity. No keys, no connection strings, no code change.
+credential = DefaultAzureCredential()
+blob = BlobServiceClient(
+    account_url="https://stmlxdata.blob.core.windows.net",
+    credential=credential,
+)
+```
+
+`DefaultAzureCredential` is the pattern to standardize on across every service in your solution: the same three lines authenticate your laptop during development and your production endpoint at runtime.
+
+## Azure RBAC: roles, scopes, and assignments
+
+Authorization is **role-based access control (RBAC)**. An **assignment** is a triple: a **security principal** (who) gets a **role definition** (what actions) at a **scope** (where). Scope is hierarchical — management group, subscription, resource group, or a single resource — and permissions inherit downward. An assignment at the resource-group level applies to every resource inside it.
+
+A role definition is a set of allowed `Actions` (control-plane operations, like "create a VM") and `DataActions` (data-plane operations, like "read a blob"). This control-plane / data-plane split trips people up constantly: the built-in **Owner** and **Contributor** roles let you *manage* a storage account but do **not** grant permission to read the blobs inside it. To read data you need a data-plane role such as **Storage Blob Data Reader**.
+
+Roles you will use in an ML solution:
+
+- **Storage Blob Data Reader / Contributor** — read or read-write datasets and artifacts in Blob and Data Lake Gen2.
+- **AzureML Data Scientist** — full authoring inside an Azure Machine Learning workspace (jobs, endpoints, models) without control over the workspace resource itself.
+- **AzureML Compute Operator** — manage compute in a workspace.
+- **Key Vault Secrets User / Officer** — read secrets, or manage them.
+- **AcrPull / AcrPush** — pull or push container images (your endpoints need AcrPull).
+- **Cognitive Services OpenAI User** — call model deployments in Azure AI Foundry / Azure OpenAI.
+
+```bash
+# Grant the platform identity data-plane read on a storage account, scoped tightly
+STORAGE_ID=$(az storage account show -n stmlxdata -g rg-mlx-dev --query id -o tsv)
+
+az role assignment create \
+  --assignee-object-id "$PRINCIPAL_ID" \
+  --assignee-principal-type ServicePrincipal \
+  --role "Storage Blob Data Reader" \
+  --scope "$STORAGE_ID"
+
+# Let the same identity pull container images for serving
+ACR_ID=$(az acr show -n acrmlx -g rg-mlx-dev --query id -o tsv)
+az role assignment create --assignee-object-id "$PRINCIPAL_ID" \
+  --assignee-principal-type ServicePrincipal \
+  --role "AcrPull" --scope "$ACR_ID"
+```
+
+## Least privilege as a design principle
+
+A newly created managed identity starts with **zero** permissions and inherits nothing until you assign a role. Keep it that way as long as possible and grant the narrowest role at the tightest scope that lets the job succeed. Concretely, for ML work: give a training identity read on the *dataset* container, not Contributor on the *subscription*; give an inference endpoint AcrPull on the *one* registry it serves from, not on all of them; give a scoring Function `Cognitive Services OpenAI User`, not `Contributor`, on the AI resource.
+
+Assign roles to **groups** for humans and to **user-assigned managed identities** for automation, both at **resource-group scope** where practical, so the number of assignments stays small and auditable. When someone needs elevated rights briefly (say, an on-call engineer debugging prod), prefer **Privileged Identity Management (PIM)** for just-in-time, time-boxed elevation over a standing assignment.
+
+## Key Vault: the secret and key store
+
+Some secrets are unavoidable — a third-party API token, a database password for a legacy system, a signing key. **Azure Key Vault** is the managed store for secrets, keys, and certificates. It integrates with managed identities so an application fetches a secret at runtime with its own identity and no bootstrapping credential.
+
+Key Vault has the same control-plane/data-plane split. Modern vaults use **Azure RBAC** for data-plane access, and as of the current API version RBAC is the default for newly created vaults; the legacy per-vault "access policies" model is discouraged because it lacks PIM support and fine-grained auditing. Grant **Key Vault Secrets User** to the identities that read secrets and **Key Vault Secrets Officer** only to the small set that manages them.
+
+```bash
+# Create an RBAC-mode vault and store a secret
+az keyvault create -n kv-mlx-dev -g rg-mlx-dev --enable-rbac-authorization true
+az keyvault secret set --vault-name kv-mlx-dev --name external-api-token --value "s3cr3t"
+
+# Let the platform identity read (not manage) secrets
+KV_ID=$(az keyvault show -n kv-mlx-dev -g rg-mlx-dev --query id -o tsv)
+az role assignment create --assignee-object-id "$PRINCIPAL_ID" \
+  --assignee-principal-type ServicePrincipal \
+  --role "Key Vault Secrets User" --scope "$KV_ID"
+```
+
+```python
+from azure.identity import DefaultAzureCredential
+from azure.keyvault.secrets import SecretClient
+
+client = SecretClient("https://kv-mlx-dev.vault.azure.net", DefaultAzureCredential())
+token = client.get_secret("external-api-token").value  # no secret bootstrapping needed
+```
+
+An Azure Machine Learning workspace can be attached to a Key Vault so that connection strings and datastore credentials it manages live there rather than in your code. In the end-to-end solution, Key Vault is the one place a human-set secret enters the system; everything internal uses managed identity.
+
+## Key takeaways
+
+- **Entra ID** (formerly Azure AD) is the identity plane; the identities that matter for ML automation are **managed identities** — service principals with no secret you ever handle.
+- Prefer a **user-assigned managed identity** shared across your ML platform's compute, endpoints, and Functions, and authenticate everywhere with `DefaultAzureCredential`.
+- **RBAC** is (principal, role, scope). Remember the **control-plane vs data-plane** split: Owner/Contributor does *not* grant blob reads — you need a `Data` role.
+- Practice **least privilege**: narrowest role, tightest scope, assign to groups and shared identities, use **PIM** for temporary elevation.
+- **Key Vault** (RBAC mode) holds the rare human-set secrets; managed identities read them at runtime so nothing sensitive lands in code.
+
+## Try it
+
+Create a user-assigned managed identity `id-mlplatform` and a storage account. Assign the identity **Storage Blob Data Reader** scoped to that storage account, then try to assign it **only** Reader on the resource group and observe that it can *see* the account but not *read* the blobs — proving the control-plane/data-plane distinction to yourself. Finally, create an RBAC-mode Key Vault, store a secret, grant the identity `Key Vault Secrets User`, and confirm you did all of this without ever copying an access key into a file.

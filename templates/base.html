@@ -14,8 +14,9 @@
 <body>
 <header>
   <div class="wrap">
-    <a class="logo" href="{{ url_for('index') }}">
-      <img src="{{ url_for('static', filename='img/logo-horizontal-light.svg') }}" alt="{{ BRAND }}">
+    <a class="logo" href="{{ url_for('index') }}" aria-label="{{ BRAND }}">
+      <img class="logo-icon" src="{{ url_for('static', filename='img/icon-dark.svg') }}" alt="" aria-hidden="true">
+      <span class="logo-word"><b>Applied&nbsp;ML</b><i>ACADEMY</i></span>
     </a>
     <nav>
       <a href="{{ url_for('index') }}#courses">Courses</a>

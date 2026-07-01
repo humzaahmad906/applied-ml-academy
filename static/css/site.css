@@ -22,7 +22,12 @@ a:hover{color:var(--gold-d)}
 header{border-bottom:1px solid var(--line);position:sticky;top:0;z-index:30;
   background:rgba(255,255,255,.9);backdrop-filter:blur(10px)}
 header .wrap{display:flex;align-items:center;gap:18px;height:68px}
-header .logo img{height:30px;display:block}
+.logo{display:flex;align-items:center;gap:10px}
+.logo-icon{height:38px;width:38px;display:block}
+.logo-mark svg{display:block}
+.logo-word{display:flex;flex-direction:column;line-height:1}
+.logo-word b{font-size:18px;font-weight:700;color:var(--ink);letter-spacing:-.01em}
+.logo-word i{font-style:normal;font-size:9.5px;font-weight:600;letter-spacing:.24em;color:var(--gold-d);margin-top:3px}
 header nav{margin-left:auto;display:flex;gap:6px;align-items:center}
 header nav a{color:var(--ink);font-size:14.5px;font-weight:500;padding:8px 13px;border-radius:9px}
 header nav a:hover{background:var(--bg2);color:var(--ink)}
@@ -94,6 +99,12 @@ h2.section{font-size:30px;font-weight:700;letter-spacing:-.01em;color:var(--ink)
 .ps-lvl{font-size:11.5px;color:var(--faint);white-space:nowrap;font-family:'JetBrains Mono'}
 .ps-body p{color:var(--muted);font-size:14px;margin:4px 0 6px}
 .ps-meta{font-size:12.5px;color:var(--faint);font-family:'JetBrains Mono'}
+
+/* category groups */
+.cat-group{margin-bottom:40px}
+.cat-title{font-size:19px;font-weight:700;color:var(--ink);margin-bottom:16px;
+  display:flex;align-items:baseline;gap:10px;padding-bottom:10px;border-bottom:1px solid var(--line)}
+.cat-count{font-size:12.5px;font-weight:500;color:var(--faint);font-family:'JetBrains Mono'}
 
 /* course catalog */
 .courses{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:24px}
