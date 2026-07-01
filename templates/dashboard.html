@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}My learning · {{ BRAND }}{% endblock %}
+{% block body %}
+<div class="wrap">
+  <section>
+    <div class="eyebrow">My learning</div>
+    <h2 class="section">Welcome back, {{ user.name.split(' ')[0] }}.</h2>
+
+    {% if enrolled %}
+    <p class="lead">Pick up where you left off, or enroll in something new from the
+       <a href="{{ url_for('index') }}#courses">catalog</a>.</p>
+    <div class="courses">
+      {% for e in enrolled %}
+      <a class="course" href="{{ url_for('module', slug=e.course.slug, module_id=e.resume) }}">
+        <div class="thumb" style="--accent:{{ e.course.accent }}">
+          <span class="cat">{{ e.course.tag }}</span>
+          <span class="mono glyph">{{ e.course.code }}</span>
+        </div>
+        <div class="body">
+          <h3>{{ e.course.title }}</h3>
+          <p>{{ e.course.module_count }} modules · {{ e.course.hours }} hrs · {{ e.course.level }}</p>
+          <div class="meta"><span>Enrolled {{ e.enrollment.created_at.strftime('%d %b %Y') }}</span></div>
+        </div>
+        <div class="foot"><span class="free">Enrolled</span><span class="go">Continue →</span></div>
+      </a>
+      {% endfor %}
+    </div>
+    {% else %}
+    <p class="lead">You haven't enrolled in anything yet.</p>
+    <div class="empty">
+      <p>Browse the catalog and enroll in your first course — it's free.</p>
+      <a class="btn" href="{{ url_for('index') }}#courses">Browse courses</a>
+    </div>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

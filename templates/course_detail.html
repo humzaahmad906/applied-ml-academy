@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block title %}{{ course.title }} · {{ BRAND }}{% endblock %}
+{% block body %}
+
+<section class="course-head" style="--accent:{{ course.accent }}">
+  <div class="wrap">
+    <a class="crumb" href="{{ url_for('index') }}#courses">← All courses</a>
+    <div class="ch-tag">{{ course.tag }}</div>
+    <h1>{{ course.title }}</h1>
+    <p class="ch-blurb">{{ course.blurb }}</p>
+    <div class="ch-meta">
+      <span><b>{{ course.module_count }}</b> modules</span>
+      <span><b>{{ course.hours }}</b> hours</span>
+      <span><b>{{ course.level }}</b></span>
+      <span class="free">Free</span>
+    </div>
+  </div>
+</section>
+
+<div class="wrap detail-grid">
+  <div class="detail-main">
+    {% if course.outcomes %}
+    <div class="panel">
+      <h2>What you'll learn</h2>
+      <ul class="outcomes">
+        {% for o in course.outcomes %}<li>{{ o }}</li>{% endfor %}
+      </ul>
+    </div>
+    {% endif %}
+
+    <div class="panel">
+      <h2>Curriculum <span class="muted">· {{ course.module_count }} modules</span></h2>
+      <ol class="curriculum">
+        {% for m in course.modules %}
+        <li>
+          <span class="num">{{ "%02d"|format(loop.index) }}</span>
+          <span class="mt">{{ m.title }}</span>
+          {% if enrollment %}
+          <a class="open" href="{{ url_for('module', slug=course.slug, module_id=m.id) }}">Open →</a>
+          {% else %}
+          <span class="lock">🔒</span>
+          {% endif %}
+        </li>
+        {% endfor %}
+      </ol>
+    </div>
+  </div>
+
+  <aside class="detail-side">
+    <div class="enroll-card">
+      <div class="ec-thumb" style="--accent:{{ course.accent }}">
+        <span class="mono">{{ course.code }}</span>
+      </div>
+      <div class="ec-body">
+        <div class="price">Free</div>
+        <div class="ec-meta">
+          <div><span>Modules</span><b>{{ course.module_count }}</b></div>
+          <div><span>Est. time</span><b>{{ course.hours }} hrs</b></div>
+          <div><span>Level</span><b>{{ course.level }}</b></div>
+          <div><span>Certificate</span><b>On exam pass</b></div>
+        </div>
+        {% if enrollment %}
+          <a class="btn full" href="{{ url_for('module', slug=course.slug, module_id=(enrollment.last_module or course.modules[0].id)) }}">Continue learning</a>
+          <div class="enrolled-note">✓ You're enrolled</div>
+        {% elif user %}
+          <form method="post" action="{{ url_for('enroll', slug=course.slug) }}">
+            <button class="btn full" type="submit">Enroll for free</button>
+          </form>
+        {% else %}
+          <a class="btn full" href="{{ url_for('register', next=url_for('course_detail', slug=course.slug)) }}">Sign up to enroll</a>
+          <div class="enrolled-note"><a href="{{ url_for('login', next=url_for('course_detail', slug=course.slug)) }}">Already have an account? Log in</a></div>
+        {% endif %}
+      </div>
+    </div>
+  </aside>
+</div>
+
+{% endblock %}

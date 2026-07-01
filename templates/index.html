@@ -1,34 +1,49 @@
 {% extends "base.html" %}
 {% block body %}
-<div class="wrap">
 
-  <section class="hero">
-    <div class="tag">Free · practitioner-grade · pass mark {{ PASS_MARK }}%</div>
-    <h1>Machine learning,<br>taught to a <span>real bar</span>.</h1>
-    <p>Self-paced courses built around what actually breaks in production — from
-       language models to data pipelines. Learn free, prove it on a hard exam, and
-       earn a certificate anyone can verify.</p>
-    <div class="btns">
-      <a class="btn" href="{{ url_for('learn') }}">Start learning</a>
-      <a class="btn ghost" href="#courses">Browse the catalog</a>
+<section class="hero">
+  <div class="wrap hero-grid">
+    <div class="hero-copy">
+      <div class="pill">Free · practitioner-grade · pass mark {{ PASS_MARK }}%</div>
+      <h1>Machine learning, taught to a <span>real bar</span>.</h1>
+      <p>Self-paced courses built around what actually breaks in production — from
+         language models to data pipelines. Enroll free, learn in the browser, and
+         earn a certificate anyone can verify.</p>
+      <div class="btns">
+        {% if user %}
+        <a class="btn" href="{{ url_for('dashboard') }}">Go to my learning</a>
+        {% else %}
+        <a class="btn" href="{{ url_for('register') }}">Sign up — it's free</a>
+        {% endif %}
+        <a class="btn ghost" href="#courses">Browse courses</a>
+      </div>
     </div>
-  </section>
+    <div class="hero-stats">
+      <div class="hs"><b>{{ courses|length }}</b><span>Courses</span></div>
+      <div class="hs"><b>{{ total_modules }}</b><span>Modules</span></div>
+      <div class="hs"><b>$0</b><span>To enroll</span></div>
+      <div class="hs"><b>{{ PASS_MARK }}%</b><span>Pass mark</span></div>
+    </div>
+  </div>
+</section>
 
-  <section class="statbar">
-    <div class="stat"><div class="k">{{ courses|length }}</div><div class="s">Courses</div></div>
-    <div class="stat"><div class="k">{{ courses|sum(attribute='modules') }}</div><div class="s">Modules</div></div>
-    <div class="stat"><div class="k">$0</div><div class="s">To enroll</div></div>
-    <div class="stat"><div class="k">{{ PASS_MARK }}%</div><div class="s">Pass mark</div></div>
-  </section>
+<section class="band">
+  <div class="wrap cats">
+    {% for c in courses %}
+    <a class="cat-chip" href="{{ url_for('course_detail', slug=c.slug) }}"
+       style="--accent:{{ c.accent }}">{{ c.tag }}</a>
+    {% endfor %}
+  </div>
+</section>
 
+<div class="wrap">
   <section id="courses">
-    <div class="eyebrow">Catalog</div>
-    <h2 class="section">Courses</h2>
-    <p class="lead">Every course is free and self-paced. Open one and start reading —
-       your progress, notes, and streak are saved as you go.</p>
+    <h2 class="section">Course catalog</h2>
+    <p class="lead">Every course is free and self-paced. Enroll to unlock the modules,
+       then learn right in your browser — progress is saved to your account.</p>
     <div class="courses">
       {% for c in courses %}
-      <a class="course" href="{{ url_for('learn') }}#{{ c.slug }}/{{ c.start }}">
+      <a class="course" href="{{ url_for('course_detail', slug=c.slug) }}">
         <div class="thumb" style="--accent:{{ c.accent }}">
           <span class="cat">{{ c.tag }}</span>
           <span class="mono glyph">{{ c.code }}</span>
@@ -37,39 +52,42 @@
           <h3>{{ c.title }}</h3>
           <p>{{ c.blurb }}</p>
           <div class="meta">
-            <span><b>{{ c.modules }}</b> modules</span>
-            <span><b>{{ c.hours.split(' ')[0] }}</b> hrs</span>
+            <span><b>{{ c.module_count }}</b> modules</span>
+            <span><b>{{ c.hours }}</b> hrs</span>
             <span class="lvl">{{ c.level }}</span>
           </div>
         </div>
-        <div class="foot"><span class="free">Free</span><span class="go">Read the course →</span></div>
+        <div class="foot"><span class="free">Free</span><span class="go">View course →</span></div>
       </a>
       {% endfor %}
     </div>
   </section>
 
-  <section>
-    <div class="eyebrow">How it works</div>
-    <h2 class="section">Learn free. Earn it hard.</h2>
-    <div class="pillars">
-      <div class="pillar"><div class="k">01</div><h3>Learn at your pace</h3>
-        <p>Full curriculum, labs, and interview banks in the reader — no paywall, no login.</p></div>
-      <div class="pillar"><div class="k">02</div><h3>Clear a real bar</h3>
-        <p>Below {{ PASS_MARK }}%, no certificate is issued. The credential stays scarce on purpose.</p></div>
-      <div class="pillar"><div class="k">03</div><h3>Prove it anywhere</h3>
-        <p>Each certificate carries a unique code. Employers verify it in seconds, no login.</p></div>
+  <section class="how">
+    <h2 class="section">How it works</h2>
+    <div class="steps">
+      <div class="step"><div class="n">1</div><h3>Create a free account</h3>
+        <p>Sign up in seconds. No card, no paywall — the rigor is the price.</p></div>
+      <div class="step"><div class="n">2</div><h3>Enroll & learn</h3>
+        <p>Enroll in any course to unlock its modules and read them in the browser,
+           with your place saved as you go.</p></div>
+      <div class="step"><div class="n">3</div><h3>Pass the bar</h3>
+        <p>Score {{ PASS_MARK }}%+ on the exam and earn a certificate with a unique,
+           publicly verifiable code.</p></div>
     </div>
   </section>
 
   <section>
-    <div class="card narrow" style="text-align:center">
-      <div class="eyebrow" style="margin-bottom:10px">The credential</div>
-      <h2 class="section" style="margin-bottom:12px">Got a certificate to check?</h2>
-      <p class="lead" style="margin:0 auto 22px">Paste the code printed on any
-         {{ BRAND }} certificate to confirm the holder, the course, and the score.</p>
+    <div class="cta-card">
+      <div>
+        <div class="eyebrow">The credential</div>
+        <h2 class="section" style="margin:6px 0 8px">Got a certificate to check?</h2>
+        <p class="lead" style="margin:0">Paste the code on any {{ BRAND }} certificate to
+           confirm the holder, course, and score — no login.</p>
+      </div>
       <a class="btn" href="{{ url_for('verify') }}">Verify a certificate</a>
     </div>
   </section>
-
 </div>
+
 {% endblock %}

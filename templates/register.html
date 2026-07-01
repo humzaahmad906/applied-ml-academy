@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Sign up · {{ BRAND }}{% endblock %}
+{% block body %}
+<div class="wrap">
+  <section>
+    <div class="auth">
+      <div class="eyebrow">Create your free account</div>
+      <h2 class="section">Sign up</h2>
+      <p class="lead">Free forever. One account unlocks every course.</p>
+      <div class="card">
+        <form method="post" action="{{ url_for('register') }}{% if request.args.get('next') %}?next={{ request.args.get('next') }}{% endif %}">
+          <div class="field"><label for="name">Full name</label>
+            <input id="name" name="name" value="{{ name }}" autocomplete="name" autofocus></div>
+          <div class="field"><label for="email">Email</label>
+            <input id="email" name="email" type="email" value="{{ email }}" autocomplete="email"></div>
+          <div class="field"><label for="password">Password</label>
+            <input id="password" name="password" type="password" autocomplete="new-password"
+                   placeholder="At least 8 characters"></div>
+          <button class="btn full" type="submit">Create account</button>
+        </form>
+      </div>
+      <p class="auth-alt">Already have an account?
+        <a href="{{ url_for('login', next=request.args.get('next')) }}">Log in</a></p>
+    </div>
+  </section>
+</div>
+{% endblock %}

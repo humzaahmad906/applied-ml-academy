@@ -1,11 +1,16 @@
 import os
+import re
 import secrets
 import hmac
+from functools import wraps
 from datetime import datetime, date
+from pathlib import Path
 
+import markdown as md
 from flask import (Flask, render_template, request, redirect, url_for,
                    session, abort, flash)
 from flask_sqlalchemy import SQLAlchemy
+from werkzeug.security import generate_password_hash, check_password_hash
 
 import art
 
@@ -34,7 +39,7 @@ app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 db = SQLAlchemy(app)
 
 
-# ---------------------------------------------------------------- model
+# ---------------------------------------------------------------- models
 class Certificate(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     code = db.Column(db.String(48), unique=True, nullable=False, index=True)
@@ -58,59 +63,160 @@ class Certificate(db.Model):
             return self.issued_on
 
 
+class User(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    email = db.Column(db.String(200), unique=True, nullable=False, index=True)
+    name = db.Column(db.String(160), nullable=False)
+    password_hash = db.Column(db.String(255), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    enrollments = db.relationship("Enrollment", backref="user",
+                                  cascade="all, delete-orphan")
+
+
+class Enrollment(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    course_slug = db.Column(db.String(80), nullable=False)
+    last_module = db.Column(db.String(120), default="")
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    __table_args__ = (db.UniqueConstraint("user_id", "course_slug",
+                                          name="uq_user_course"),)
+
+
+class Note(db.Model):
+    """A private, per-user note attached to one module of one course."""
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    course_slug = db.Column(db.String(80), nullable=False)
+    module_id = db.Column(db.String(120), nullable=False)
+    body = db.Column(db.Text, default="")
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow,
+                           onupdate=datetime.utcnow)
+    __table_args__ = (db.UniqueConstraint("user_id", "course_slug", "module_id",
+                                          name="uq_user_course_module"),)
+
+
 with app.app_context():
     db.create_all()
 
 
-# ---------------------------------------------------------------- courses (static content)
-# `slug` and `start` map each course to the embedded reader (static/viewer.html):
-# the landing card deep-links to `/learn#<slug>/<start>`. Keep these in sync with
-# the viewer's course ids if you rebuild it.
+# ---------------------------------------------------------------- courses
+# Static metadata per course; module lists are loaded from content/<slug>/*.md.
 COURSES = [
     {"code": "LANGMDL", "title": "Language Modeling from Scratch",
      "blurb": "Build a modern LLM end to end — tokenizer, transformer, kernels, "
               "parallelism, scaling, inference, alignment. Four interview banks included.",
-     "hours": "48 hours", "level": "Advanced", "tag": "LLMs & Systems", "modules": 19,
-     "accent": "#c6a04e", "slug": "language-modeling", "start": "00-README"},
+     "hours": "48", "level": "Advanced", "tag": "LLMs & Systems", "accent": "#c6a04e",
+     "slug": "language-modeling",
+     "outcomes": ["Implement a BPE tokenizer, transformer, and training loop from scratch",
+                  "Reason about FLOPs, memory, and parallelism for real training runs",
+                  "Optimize inference: KV cache, quantization, speculative decoding",
+                  "Align a base model with SFT, DPO, and GRPO",
+                  "Answer frontier-lab interview questions across four banks"]},
     {"code": "LLMVLM", "title": "LLM · VLM · RAG · Agents",
      "blurb": "Foundations through frontier: attention, KV cache, RAG, and agents, "
               "with the tradeoffs behind each. Senior-level throughout.",
-     "hours": "36 hours", "level": "Foundations", "tag": "Generative AI", "modules": 11,
-     "accent": "#6ea8fe", "slug": "vlm-guide", "start": "00_README_and_roadmap"},
+     "hours": "36", "level": "Foundations", "tag": "Generative AI", "accent": "#8b5cf6",
+     "slug": "vlm-guide",
+     "outcomes": ["Explain attention, KV cache, and modern decoder design",
+                  "Design retrieval-augmented generation pipelines",
+                  "Build and reason about agentic systems",
+                  "Read papers and speak the vocabulary fluently"]},
     {"code": "MLSYS", "title": "ML System Design",
      "blurb": "Design ML systems the way a staff engineer does: data platforms, "
               "training and serving infra, RAG, agents, recsys, and the interview playbook.",
-     "hours": "40 hours", "level": "Advanced", "tag": "System Design", "modules": 11,
-     "accent": "#7ee0b8", "slug": "ml-system-design", "start": "00_README_syllabus"},
+     "hours": "40", "level": "Advanced", "tag": "System Design", "accent": "#0ea5e9",
+     "slug": "ml-system-design",
+     "outcomes": ["Frame any ML system-design interview with a repeatable structure",
+                  "Design feature platforms and training/serving infrastructure",
+                  "Architect retrieval, agents, recsys, search, and fraud systems",
+                  "Handle evaluation, observability, and MLOps at scale"]},
     {"code": "MLOPS", "title": "MLOps: Production Machine Learning Systems",
      "blurb": "Serving, monitoring, CI/CD for models, and the failure modes nobody "
               "warns you about. Beginner to architect track.",
-     "hours": "40 hours", "level": "Intermediate → Advanced", "tag": "MLOps", "modules": 13,
-     "accent": "#d08bd0", "slug": "mlops", "start": "00-overview-and-prereqs"},
+     "hours": "40", "level": "Intermediate → Advanced", "tag": "MLOps", "accent": "#ec4899",
+     "slug": "mlops",
+     "outcomes": ["Serve, monitor, and version models in production",
+                  "Build CI/CD pipelines for ML",
+                  "Diagnose the failure modes that break deployed models",
+                  "Grow from practitioner to ML architect"]},
     {"code": "DATAENG", "title": "Data Engineering",
      "blurb": "Pipelines, warehouses, and the architecture behind them — from first "
               "principles to Fortune-100 scale and the data-architect track.",
-     "hours": "36 hours", "level": "Beginner → Advanced", "tag": "Data", "modules": 9,
-     "accent": "#e6a366", "slug": "data-engineering", "start": "00-overview-and-prereqs"},
+     "hours": "36", "level": "Beginner → Advanced", "tag": "Data", "accent": "#f59e0b",
+     "slug": "data-engineering",
+     "outcomes": ["Build reliable batch and streaming data pipelines",
+                  "Model data warehouses and lakehouses",
+                  "Design data architecture at Fortune-100 scale",
+                  "Follow the path to data architect"]},
 ]
+COURSE_BY_SLUG = {c["slug"]: c for c in COURSES}
+
+CONTENT_DIR = Path(__file__).parent / "content"
 
 
-# ---------------------------------------------------------------- helpers
-BRAND_CODE = "AMLA"   # prefix on every verification code
+def _title_of(md_path):
+    for line in md_path.read_text(encoding="utf-8").splitlines():
+        if line.startswith("# "):
+            return line[2:].strip()
+    return md_path.stem.replace("_", " ").replace("-", " ").title()
 
 
-def course_slug(title):
-    s = "".join(c for c in title.upper() if c.isalnum())
-    return s[:5] or "CERT"
+def load_modules():
+    mods = {}
+    for c in COURSES:
+        folder = CONTENT_DIR / c["slug"]
+        items = []
+        if folder.is_dir():
+            for p in sorted(folder.glob("*.md")):
+                items.append({"id": p.stem, "file": p.name, "title": _title_of(p)})
+        mods[c["slug"]] = items
+    return mods
 
 
-def mint_code(course, year):
-    for _ in range(30):
-        rnd = secrets.token_hex(2).upper()
-        code = f"{BRAND_CODE}-{course_slug(course)}-{year}-{rnd}"
-        if not Certificate.query.filter_by(code=code).first():
-            return code
-    return f"{BRAND_CODE}-{course_slug(course)}-{year}-{secrets.token_hex(3).upper()}"
+MODULES = load_modules()
+
+MD_EXT = ["fenced_code", "tables", "sane_lists", "toc", "attr_list"]
+
+
+def render_markdown(slug, module_id):
+    path = CONTENT_DIR / slug / f"{module_id}.md"
+    if not path.is_file():
+        return None
+    return md.markdown(path.read_text(encoding="utf-8"), extensions=MD_EXT)
+
+
+def course_view(slug):
+    """Meta dict augmented with its module list and count."""
+    c = COURSE_BY_SLUG.get(slug)
+    if not c:
+        return None
+    v = dict(c)
+    v["modules"] = MODULES.get(slug, [])
+    v["module_count"] = len(v["modules"])
+    return v
+
+
+# ---------------------------------------------------------------- auth
+def current_user():
+    uid = session.get("uid")
+    return db.session.get(User, uid) if uid else None
+
+
+def login_required(f):
+    @wraps(f)
+    def wrapper(*a, **kw):
+        if not current_user():
+            return redirect(url_for("login", next=request.path))
+        return f(*a, **kw)
+    return wrapper
+
+
+def enrollment_of(user, slug):
+    if not user:
+        return None
+    return Enrollment.query.filter_by(user_id=user.id, course_slug=slug).first()
 
 
 def logged_in():
@@ -119,24 +225,178 @@ def logged_in():
 
 @app.context_processor
 def inject_globals():
-    return {"BRAND": BRAND, "PASS_MARK": PASS_MARK, "YEAR": datetime.utcnow().year}
+    return {"BRAND": BRAND, "PASS_MARK": PASS_MARK, "YEAR": datetime.utcnow().year,
+            "user": current_user()}
 
 
-# ---------------------------------------------------------------- public routes
+# ---------------------------------------------------------------- helpers
+BRAND_CODE = "AMLA"
+
+
+def course_slug_code(title):
+    s = "".join(c for c in title.upper() if c.isalnum())
+    return s[:5] or "CERT"
+
+
+def mint_code(course, year):
+    for _ in range(30):
+        rnd = secrets.token_hex(2).upper()
+        code = f"{BRAND_CODE}-{course_slug_code(course)}-{year}-{rnd}"
+        if not Certificate.query.filter_by(code=code).first():
+            return code
+    return f"{BRAND_CODE}-{course_slug_code(course)}-{year}-{secrets.token_hex(3).upper()}"
+
+
+# ---------------------------------------------------------------- public
 @app.route("/")
 def index():
-    return render_template("index.html", courses=COURSES,
-                           issued=Certificate.query.count())
+    cards = [course_view(c["slug"]) for c in COURSES]
+    total_modules = sum(c["module_count"] for c in cards)
+    return render_template("index.html", courses=cards,
+                           total_modules=total_modules)
 
 
-@app.route("/learn")
-def learn():
-    # The reader is a single self-contained file (all course content + the
-    # gamified viewer inline). Client-side hash routing (#course/doc) handles
-    # deep links, so one route serving the file is enough.
-    return app.send_static_file("viewer.html")
+@app.route("/course/<slug>")
+def course_detail(slug):
+    c = course_view(slug)
+    if not c:
+        abort(404)
+    enr = enrollment_of(current_user(), slug)
+    return render_template("course_detail.html", course=c, enrollment=enr)
 
 
+@app.route("/course/<slug>/enroll", methods=["POST"])
+@login_required
+def enroll(slug):
+    c = course_view(slug)
+    if not c:
+        abort(404)
+    user = current_user()
+    if not enrollment_of(user, slug):
+        db.session.add(Enrollment(user_id=user.id, course_slug=slug))
+        db.session.commit()
+        flash(f"You're enrolled in {c['title']}.")
+    first = c["modules"][0]["id"] if c["modules"] else None
+    if first:
+        return redirect(url_for("module", slug=slug, module_id=first))
+    return redirect(url_for("course_detail", slug=slug))
+
+
+@app.route("/course/<slug>/<module_id>")
+@login_required
+def module(slug, module_id):
+    c = course_view(slug)
+    if not c:
+        abort(404)
+    user = current_user()
+    enr = enrollment_of(user, slug)
+    if not enr:
+        flash("Enroll in this course to read its modules.")
+        return redirect(url_for("course_detail", slug=slug))
+    ids = [m["id"] for m in c["modules"]]
+    if module_id not in ids:
+        abort(404)
+    html = render_markdown(slug, module_id)
+    idx = ids.index(module_id)
+    prev_m = c["modules"][idx - 1] if idx > 0 else None
+    next_m = c["modules"][idx + 1] if idx < len(ids) - 1 else None
+    # remember last position for "continue"
+    enr.last_module = module_id
+    db.session.commit()
+    note = Note.query.filter_by(user_id=user.id, course_slug=slug,
+                                module_id=module_id).first()
+    return render_template("module.html", course=c, current=c["modules"][idx],
+                           body=html, prev_m=prev_m, next_m=next_m, index=idx,
+                           note_body=(note.body if note else ""))
+
+
+@app.route("/course/<slug>/<module_id>/note", methods=["POST"])
+@login_required
+def save_note(slug, module_id):
+    user = current_user()
+    if not enrollment_of(user, slug):
+        abort(403)
+    if slug not in COURSE_BY_SLUG or module_id not in [m["id"] for m in MODULES.get(slug, [])]:
+        abort(404)
+    data = request.get_json(silent=True) or {}
+    body = (data.get("body") or "")[:20000]
+    note = Note.query.filter_by(user_id=user.id, course_slug=slug,
+                                module_id=module_id).first()
+    if note:
+        note.body = body
+    else:
+        db.session.add(Note(user_id=user.id, course_slug=slug,
+                            module_id=module_id, body=body))
+    db.session.commit()
+    return {"ok": True}
+
+
+@app.route("/dashboard")
+@login_required
+def dashboard():
+    user = current_user()
+    enrolled = []
+    for e in Enrollment.query.filter_by(user_id=user.id).order_by(
+            Enrollment.created_at.desc()).all():
+        c = course_view(e.course_slug)
+        if not c:
+            continue
+        resume = e.last_module or (c["modules"][0]["id"] if c["modules"] else None)
+        enrolled.append({"course": c, "enrollment": e, "resume": resume})
+    return render_template("dashboard.html", enrolled=enrolled)
+
+
+# ---------------------------------------------------------------- student auth
+EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
+@app.route("/register", methods=["GET", "POST"])
+def register():
+    if current_user():
+        return redirect(url_for("dashboard"))
+    if request.method == "POST":
+        name = request.form.get("name", "").strip()
+        email = request.form.get("email", "").strip().lower()
+        pw = request.form.get("password", "")
+        if not name or not EMAIL_RE.match(email) or len(pw) < 8:
+            flash("Enter a name, a valid email, and a password of at least 8 characters.")
+            return render_template("register.html", name=name, email=email)
+        if User.query.filter_by(email=email).first():
+            flash("That email is already registered. Try logging in.")
+            return render_template("register.html", name=name, email=email)
+        u = User(email=email, name=name, password_hash=generate_password_hash(pw))
+        db.session.add(u)
+        db.session.commit()
+        session["uid"] = u.id
+        nxt = request.args.get("next")
+        return redirect(nxt or url_for("dashboard"))
+    return render_template("register.html", name="", email="")
+
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if current_user():
+        return redirect(url_for("dashboard"))
+    if request.method == "POST":
+        email = request.form.get("email", "").strip().lower()
+        pw = request.form.get("password", "")
+        u = User.query.filter_by(email=email).first()
+        if u and check_password_hash(u.password_hash, pw):
+            session["uid"] = u.id
+            nxt = request.args.get("next")
+            return redirect(nxt or url_for("dashboard"))
+        flash("Wrong email or password.")
+        return render_template("login.html", email=email)
+    return render_template("login.html", email="")
+
+
+@app.route("/logout")
+def logout():
+    session.pop("uid", None)
+    return redirect(url_for("index"))
+
+
+# ---------------------------------------------------------------- verify
 @app.route("/verify", methods=["GET"])
 def verify():
     return render_template("verify.html", code="", result=None)
@@ -199,7 +459,9 @@ def admin():
     default_pw = ADMIN_PASSWORD == "change-me"
     return render_template("admin.html", certs=certs, valid=valid,
                            courses=COURSES, today=date.today().isoformat(),
-                           default_pw=default_pw)
+                           default_pw=default_pw,
+                           students=User.query.count(),
+                           enrollments=Enrollment.query.count())
 
 
 @app.route("/admin/issue", methods=["POST"])

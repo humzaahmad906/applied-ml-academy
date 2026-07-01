@@ -7,23 +7,36 @@
 <link rel="icon" href="{{ url_for('static', filename='img/app-icon.svg') }}">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/site.css') }}">
+{% block head %}{% endblock %}
 </head>
 <body>
 <header>
   <div class="wrap">
     <a class="logo" href="{{ url_for('index') }}">
-      <img src="{{ url_for('static', filename='img/logo-horizontal-dark.svg') }}" alt="{{ BRAND }}">
+      <img src="{{ url_for('static', filename='img/logo-horizontal-light.svg') }}" alt="{{ BRAND }}">
     </a>
     <nav>
       <a href="{{ url_for('index') }}#courses">Courses</a>
-      <a href="{{ url_for('learn') }}">Learn</a>
       <a href="{{ url_for('verify') }}">Verify</a>
-      <a class="cta" href="{{ url_for('verify') }}">Verify a certificate</a>
+      {% if user %}
+        <a href="{{ url_for('dashboard') }}">My learning</a>
+        <span class="who">Hi, {{ user.name.split(' ')[0] }}</span>
+        <a class="ghostlink" href="{{ url_for('logout') }}">Log out</a>
+      {% else %}
+        <a href="{{ url_for('login') }}">Log in</a>
+        <a class="cta" href="{{ url_for('register') }}">Sign up</a>
+      {% endif %}
     </nav>
   </div>
 </header>
+
+{% with msgs = get_flashed_messages() %}
+  {% if msgs %}
+  <div class="wrap"><div class="flash">{% for m in msgs %}<div>{{ m }}</div>{% endfor %}</div></div>
+  {% endif %}
+{% endwith %}
 
 <main>
 {% block body %}{% endblock %}

@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}{{ current.title }} · {{ course.title }}{% endblock %}
+{% block body %}
+
+<div class="reader">
+  <aside class="reader-nav">
+    <a class="rn-back" href="{{ url_for('course_detail', slug=course.slug) }}">← {{ course.title }}</a>
+    <div class="rn-prog">{{ index + 1 }} / {{ course.module_count }}</div>
+    <ol class="rn-list">
+      {% for m in course.modules %}
+      <li class="{{ 'active' if m.id == current.id else '' }}">
+        <a href="{{ url_for('module', slug=course.slug, module_id=m.id) }}">
+          <span class="rn-num">{{ "%02d"|format(loop.index) }}</span>{{ m.title }}
+        </a>
+      </li>
+      {% endfor %}
+    </ol>
+  </aside>
+
+  <div class="reader-main">
+    <article class="md">{{ body|safe }}</article>
+
+    <section class="notes" id="notes">
+      <div class="notes-head">
+        <h3>Your notes</h3>
+        <span class="notes-status" id="noteStatus">Private to you</span>
+      </div>
+      <textarea id="noteBox" placeholder="Jot down anything from this module — your notes are private to your account and saved automatically.">{{ note_body }}</textarea>
+    </section>
+
+    <nav class="pager">
+      {% if prev_m %}
+      <a class="pg prev" href="{{ url_for('module', slug=course.slug, module_id=prev_m.id) }}">
+        <span>← Previous</span><b>{{ prev_m.title }}</b></a>
+      {% else %}<span></span>{% endif %}
+      {% if next_m %}
+      <a class="pg next" href="{{ url_for('module', slug=course.slug, module_id=next_m.id) }}">
+        <span>Next →</span><b>{{ next_m.title }}</b></a>
+      {% endif %}
+    </nav>
+  </div>
+</div>
+
+<script>
+(function(){
+  var box = document.getElementById('noteBox'),
+      status = document.getElementById('noteStatus'),
+      url = "{{ url_for('save_note', slug=course.slug, module_id=current.id) }}",
+      timer = null, lastSaved = box.value;
+  function save(){
+    if (box.value === lastSaved){ return; }
+    status.textContent = 'Saving…';
+    fetch(url, {method:'POST', headers:{'Content-Type':'application/json'},
+                body: JSON.stringify({body: box.value})})
+      .then(function(r){ if(!r.ok) throw 0; lastSaved = box.value;
+        status.textContent = 'Saved ✓';
+        setTimeout(function(){ status.textContent = 'Private to you'; }, 2000); })
+      .catch(function(){ status.textContent = 'Not saved — retrying…';
+        setTimeout(save, 3000); });
+  }
+  box.addEventListener('input', function(){ clearTimeout(timer); timer = setTimeout(save, 800); });
+  box.addEventListener('blur', save);
+  window.addEventListener('beforeunload', function(){
+    if (box.value !== lastSaved){
+      navigator.sendBeacon(url, new Blob([JSON.stringify({body: box.value})],
+                           {type:'application/json'})); }
+  });
+})();
+</script>
+
+{% endblock %}
