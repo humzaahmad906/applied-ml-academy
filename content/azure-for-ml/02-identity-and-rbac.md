@@ -30,7 +30,35 @@ az identity create \
 
 # Capture its principal ID and client ID for later role assignments and code
 PRINCIPAL_ID=$(az identity show -n id-mlplatform -g rg-mlx-dev --query principalId -o tsv)
+CLIENT_ID=$(az identity show -n id-mlplatform -g rg-mlx-dev --query clientId -o tsv)
 ```
+
+The `principalId` is the object the RBAC system grants roles to; the `clientId` is what your code passes to `DefaultAzureCredential` when a resource has *more than one* user-assigned identity attached and you must disambiguate. Managing user-assigned identities is the usual list/show/delete lifecycle:
+
+```bash
+# List every user-assigned identity in a group, and delete one you no longer need
+az identity list -g rg-mlx-dev -o table
+az identity delete -n id-mlplatform -g rg-mlx-dev
+```
+
+A **system-assigned** identity is never created on its own — you enable it *on* a resource, so it lives and dies with that resource. You will meet these flags again in later modules (`--assign-identity` on a VM, `--identity-type SystemAssigned` on a workspace); the point here is that system-assigned suits a single-purpose resource, while the standalone user-assigned identity above is what an ML *platform* shares across many.
+
+### Federated credentials: passwordless CI/CD
+
+The one place automation still tends to smuggle in a secret is CI/CD — a GitHub Actions pipeline that deploys your workspace. The modern fix is a **federated identity credential**: you tell a user-assigned managed identity to trust tokens issued by GitHub's OIDC provider for a specific repo and branch, so the pipeline exchanges a short-lived GitHub token for an Azure token with no stored client secret at all.
+
+```bash
+# Trust GitHub Actions on the main branch of one repo — no secret is created
+az identity federated-credential create \
+  --name gha-main --identity-name id-mlplatform --resource-group rg-mlx-dev \
+  --issuer "https://token.actions.githubusercontent.com" \
+  --subject "repo:my-org/ml-platform:ref:refs/heads/main" \
+  --audiences "api://AzureADTokenExchange"
+
+az identity federated-credential list --identity-name id-mlplatform -g rg-mlx-dev -o table
+```
+
+The `--subject` string must match exactly what GitHub puts in the token — swap `ref:refs/heads/main` for `environment:production` or `pull_request` to scope the trust differently.
 
 In Python, the SDK "just works" because it uses a credential that tries managed identity, then developer login, transparently:
 
@@ -81,11 +109,49 @@ az role assignment create --assignee-object-id "$PRINCIPAL_ID" \
   --role "AcrPull" --scope "$ACR_ID"
 ```
 
+A word on the `--assignee` flags, because this is a common source of flaky scripts. The convenient `--assignee <name-or-appId>` form makes the CLI do a directory lookup to resolve the object ID, which fails intermittently for brand-new principals that have not replicated yet, and can be ambiguous. Prefer the explicit pair `--assignee-object-id "$PRINCIPAL_ID" --assignee-principal-type ServicePrincipal` (as above) for managed identities and service principals — it skips the lookup and is deterministic. Use plain `--assignee user@contoso.com` for human users where the lookup is reliable.
+
+Auditing and cleanup use the same command group. `--scope` narrows the query, `--all` walks the whole subscription, and `--include-inherited` shows assignments a resource picks up from its parent scopes:
+
+```bash
+# Who has what on this storage account (including inherited RG/subscription grants)?
+az role assignment list --scope "$STORAGE_ID" --include-inherited -o table
+
+# Everything one identity can do, subscription-wide
+az role assignment list --assignee "$PRINCIPAL_ID" --all -o table
+
+# Remove a specific grant (same triple you created it with)
+az role assignment delete --assignee-object-id "$PRINCIPAL_ID" \
+  --role "Storage Blob Data Reader" --scope "$STORAGE_ID"
+```
+
+You do not have to memorize role names. Inspect built-in definitions to find the least-privileged one that covers your `Actions`/`DataActions`, and when nothing fits, author a **custom role** from a JSON definition:
+
+```bash
+# Find candidate roles and read exactly what one grants
+az role definition list --query "[?contains(roleName,'AzureML')].roleName" -o tsv
+az role definition list --name "Storage Blob Data Reader" --query "[0].permissions" -o jsonc
+
+# Create a narrow custom role from a JSON file (AssignableScopes must list your subscription)
+az role definition create --role-definition @ml-dataset-reader.json
+az role definition update --role-definition @ml-dataset-reader.json
+```
+
+When you genuinely cannot use a managed identity — say a tool running entirely outside Azure — `az ad sp create-for-rbac` mints a service principal *with a secret*. Reach for it last: it hands you a password you now own, must store securely, and must rotate. A federated credential (above) is almost always the better answer.
+
+```bash
+# Last resort: a service principal WITH a client secret, scoped to one RG
+az ad sp create-for-rbac --name sp-legacy-tool \
+  --role Contributor --scopes "/subscriptions/$SUB_ID/resourceGroups/rg-mlx-dev"
+```
+
 ## Least privilege as a design principle
 
 A newly created managed identity starts with **zero** permissions and inherits nothing until you assign a role. Keep it that way as long as possible and grant the narrowest role at the tightest scope that lets the job succeed. Concretely, for ML work: give a training identity read on the *dataset* container, not Contributor on the *subscription*; give an inference endpoint AcrPull on the *one* registry it serves from, not on all of them; give a scoring Function `Cognitive Services OpenAI User`, not `Contributor`, on the AI resource.
 
-Assign roles to **groups** for humans and to **user-assigned managed identities** for automation, both at **resource-group scope** where practical, so the number of assignments stays small and auditable. When someone needs elevated rights briefly (say, an on-call engineer debugging prod), prefer **Privileged Identity Management (PIM)** for just-in-time, time-boxed elevation over a standing assignment.
+Assign roles to **groups** for humans and to **user-assigned managed identities** for automation, both at **resource-group scope** where practical, so the number of assignments stays small and auditable. When someone needs elevated rights briefly (say, an on-call engineer debugging prod), prefer **Privileged Identity Management (PIM)** for just-in-time, time-boxed elevation over a standing assignment — the engineer *activates* the role for a few hours with justification and approval, and it lapses automatically, so there is no permanent Owner sitting on production. PIM is an Entra ID P2 feature managed through the portal and the Microsoft Graph / `az rest` APIs rather than a first-class `az role` verb, but it consumes the same role definitions you list above.
+
+To audit what actually accumulated, list assignments per identity or per scope periodically and prune anything a job no longer uses — stale grants are the quiet way least privilege erodes.
 
 ## Key Vault: the secret and key store
 
@@ -103,7 +169,14 @@ KV_ID=$(az keyvault show -n kv-mlx-dev -g rg-mlx-dev --query id -o tsv)
 az role assignment create --assignee-object-id "$PRINCIPAL_ID" \
   --assignee-principal-type ServicePrincipal \
   --role "Key Vault Secrets User" --scope "$KV_ID"
+
+# List / read / delete secrets — data-plane, so --auth-mode login uses your RBAC
+az keyvault secret list --vault-name kv-mlx-dev -o table
+az keyvault secret show --vault-name kv-mlx-dev --name external-api-token --query value -o tsv
+az keyvault secret delete --vault-name kv-mlx-dev --name external-api-token
 ```
+
+The Key Vault RBAC roles map to what each principal actually does: **Key Vault Secrets User** (read secret values) for the workloads that consume them, **Key Vault Secrets Officer** (full secret management) for the small operator group, and the analogous **Key Vault Crypto User / Officer** and **Certificates Officer** for key and certificate operations. Grant these at the vault scope, or — for the tightest control — scope a Secrets User role to an *individual secret* so an identity can read exactly the one credential it needs and nothing else.
 
 ```python
 from azure.identity import DefaultAzureCredential
@@ -122,6 +195,48 @@ An Azure Machine Learning workspace can be attached to a Key Vault so that conne
 - **RBAC** is (principal, role, scope). Remember the **control-plane vs data-plane** split: Owner/Contributor does *not* grant blob reads — you need a `Data` role.
 - Practice **least privilege**: narrowest role, tightest scope, assign to groups and shared identities, use **PIM** for temporary elevation.
 - **Key Vault** (RBAC mode) holds the rare human-set secrets; managed identities read them at runtime so nothing sensitive lands in code.
+
+## CLI cheat-sheet
+
+```bash
+# --- managed identities ---
+az identity create -n id-mlplatform -g rg-mlx-dev
+az identity show -n id-mlplatform -g rg-mlx-dev --query principalId -o tsv
+az identity show -n id-mlplatform -g rg-mlx-dev --query clientId -o tsv
+az identity list -g rg-mlx-dev -o table
+az identity delete -n id-mlplatform -g rg-mlx-dev
+
+# --- federated credentials (passwordless CI/CD) ---
+az identity federated-credential create --name gha-main --identity-name id-mlplatform -g rg-mlx-dev \
+  --issuer "https://token.actions.githubusercontent.com" \
+  --subject "repo:my-org/ml-platform:ref:refs/heads/main" \
+  --audiences "api://AzureADTokenExchange"
+az identity federated-credential list --identity-name id-mlplatform -g rg-mlx-dev -o table
+
+# --- role assignments (prefer object-id form for MIs/SPs) ---
+az role assignment create --assignee-object-id "$PID" --assignee-principal-type ServicePrincipal \
+  --role "Storage Blob Data Reader" --scope "$STORAGE_ID"
+az role assignment list --assignee "$PID" --all -o table
+az role assignment list --scope "$STORAGE_ID" --include-inherited -o table
+az role assignment delete --assignee-object-id "$PID" --role "AcrPull" --scope "$ACR_ID"
+
+# --- role definitions & custom roles ---
+az role definition list --query "[?contains(roleName,'AzureML')].roleName" -o tsv
+az role definition list --name "Storage Blob Data Reader" --query "[0].permissions" -o jsonc
+az role definition create --role-definition @ml-dataset-reader.json
+az role definition update --role-definition @ml-dataset-reader.json
+
+# --- service principal with secret (last resort) ---
+az ad sp create-for-rbac --name sp-legacy-tool --role Contributor \
+  --scopes "/subscriptions/$SUB_ID/resourceGroups/rg-mlx-dev"
+
+# --- Key Vault (RBAC mode) ---
+az keyvault create -n kv-mlx-dev -g rg-mlx-dev --enable-rbac-authorization true
+az keyvault secret set --vault-name kv-mlx-dev --name external-api-token --value "s3cr3t"
+az keyvault secret show --vault-name kv-mlx-dev --name external-api-token --query value -o tsv
+az keyvault secret list --vault-name kv-mlx-dev -o table
+# grant Key Vault Secrets User / Officer via az role assignment create against $KV_ID
+```
 
 ## Try it
 

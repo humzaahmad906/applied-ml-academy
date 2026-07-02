@@ -14,7 +14,28 @@ az storage account create \
   --enable-hierarchical-namespace true   # this flips it to Data Lake Gen2
 ```
 
+Two hardening flags belong on that create command for any real ML data account: `--min-tls-version TLS1_2` and `--allow-blob-public-access false`, which together refuse legacy clients and forbid anonymous container access — the single misconfiguration behind most public-data-leak headlines. As with everything else, the account has the full lifecycle beyond create:
+
+```bash
+# Inspect, list, and update an existing account in place
+az storage account show -n stmlxdata -g rg-mlx-dev -o jsonc
+az storage account list -g rg-mlx-dev --query "[].{Name:name,Kind:kind,Sku:sku.name,Hns:isHnsEnabled}" -o table
+az storage account update -n stmlxdata -g rg-mlx-dev \
+  --allow-blob-public-access false --min-tls-version TLS1_2
+az storage account delete -n stmlxdata -g rg-mlx-dev --yes
+```
+
 The `--sku` sets **redundancy**: `LRS` (locally redundant, three copies in one data center) is the cheap default for reproducible data you could regenerate; `ZRS` (zone-redundant) survives a data-center loss; `GRS`/`GZRS` replicate to a second region for disaster recovery. For a training dataset you can re-derive, LRS is fine; for the one copy of hand-labeled ground truth you cannot recreate, pay for ZRS or GRS.
+
+Redundancy protects against *hardware* loss, but not against *you* — an overwritten label file or a `delete` from a buggy pipeline. Three blob-service data-protection features cover that, and you should enable them on any account holding irreplaceable data. **Soft delete** keeps deleted blobs recoverable for a retention window; **versioning** snapshots a new version on every overwrite so you can roll back; **change feed** gives you an ordered, immutable log of every mutation (useful for incremental feature pipelines and audit):
+
+```bash
+az storage account blob-service-properties update \
+  --account-name stmlxdata -g rg-mlx-dev \
+  --enable-versioning true \
+  --enable-delete-retention true --delete-retention-days 14 \
+  --enable-change-feed true
+```
 
 ## Blob vs Data Lake Gen2: one product, one flag
 
@@ -59,6 +80,15 @@ az storage account management-policy create \
   --account-name stmlxdata -g rg-mlx-dev --policy @lifecycle.json
 ```
 
+Storage also has its own network firewall, independent of the RBAC that governs *who* can read data — this controls *from where*. You switch the default action to `Deny` and then explicitly allow a VNet subnet (a service endpoint) or an IP range; the fuller isolation story with private endpoints is the next module's subject, but the account-side commands live here:
+
+```bash
+az storage account update -n stmlxdata -g rg-mlx-dev --default-action Deny
+az storage account network-rule add -g rg-mlx-dev --account-name stmlxdata \
+  --vnet-name vnet-mlx --subnet snet-compute
+az storage account network-rule list -g rg-mlx-dev --account-name stmlxdata -o jsonc
+```
+
 ## Structuring data for ML: the medallion layout
 
 A durable convention for the data lake is the **medallion (bronze/silver/gold)** layout, which maps cleanly onto ML stages:
@@ -71,7 +101,46 @@ A concrete container layout: `raw/` (bronze), `curated/` (silver), `features/` a
 
 ## Accessing storage from ML code
 
-Authenticate with a **managed identity**, not account keys or SAS tokens embedded in code. Grant the platform identity **Storage Blob Data Reader** (or Contributor to write) scoped to the account or a single container, then use `DefaultAzureCredential`:
+Authenticate with a **managed identity**, not account keys or SAS tokens embedded in code. Grant the platform identity **Storage Blob Data Reader** (or Contributor to write) scoped to the account or a single container, then use `DefaultAzureCredential`.
+
+The same principle applies to the CLI: pass `--auth-mode login` on every `az storage` data-plane command so it authorizes with your Entra identity and RBAC rather than reaching for an account key. (Account keys and SAS tokens exist — `az storage account keys list`, `az storage container generate-sas` — but treat them as a break-glass tool for legacy clients, never the default; a leaked key grants full data access and cannot be scoped by RBAC.) The everyday container and blob operations:
+
+```bash
+# Containers — create and list with your own identity, no key
+az storage container create --account-name stmlxdata --name datasets --auth-mode login
+az storage container list --account-name stmlxdata --auth-mode login -o table
+
+# Blobs — upload, download, list, and copy
+az storage blob upload --account-name stmlxdata --auth-mode login \
+  -c datasets -f ./train.parquet -n fraud/train.parquet
+az storage blob download --account-name stmlxdata --auth-mode login \
+  -c datasets -n fraud/train.parquet -f ./train.parquet
+az storage blob list --account-name stmlxdata --auth-mode login \
+  -c datasets --prefix fraud/ -o table
+az storage blob copy start --account-name stmlxdata --auth-mode login \
+  --destination-container datasets --destination-blob fraud/train.bak.parquet \
+  --source-container datasets --source-blob fraud/train.parquet
+
+# Move a single blob down a cold tier (lifecycle policy automates this at scale)
+az storage blob set-tier --account-name stmlxdata --auth-mode login \
+  -c datasets -n fraud/train.parquet --tier Cool
+```
+
+On an HNS (Data Lake Gen2) account you also get the `az storage fs` command group, which speaks in real **filesystems, directories, and POSIX ACLs** rather than flat blob keys — this is what makes the medallion layout and fine-grained data governance practical:
+
+```bash
+# Filesystems and directories are first-class on HNS
+az storage fs create -n curated --account-name stmlxdata --auth-mode login
+az storage fs directory create -n silver/fraud -f curated --account-name stmlxdata --auth-mode login
+
+# POSIX ACLs on a path — grant one group execute+read, recursively down a tree
+az storage fs access set --acl "user::rwx,group::r-x,other::---" \
+  -p silver/fraud -f curated --account-name stmlxdata --auth-mode login
+az storage fs access set-recursive --acl "default:group:<group-object-id>:r-x" \
+  -p silver -f curated --account-name stmlxdata --auth-mode login
+```
+
+Then use `DefaultAzureCredential` from code:
 
 ```python
 from azure.identity import DefaultAzureCredential
@@ -115,6 +184,49 @@ Storage is the shared backbone. Streaming ingestion (Event Hubs) and batch inges
 - Structure the lake with the **medallion (bronze/silver/gold)** layout; prefer **Parquet/Delta** and partition large datasets.
 - Access storage via **managed identity + `DefaultAzureCredential`**, never embedded keys; inside Azure ML use **datastores and versioned data assets** for reproducibility and lineage.
 - Storage is the **hub** the entire end-to-end system reads from and writes to; getting its structure and tiering right pays off in every downstream service.
+
+## CLI cheat-sheet
+
+```bash
+# --- account lifecycle ---
+az storage account create -n stmlxdata -g rg-mlx-dev -l eastus2 --sku Standard_LRS --kind StorageV2 \
+  --enable-hierarchical-namespace true --min-tls-version TLS1_2 --allow-blob-public-access false
+az storage account show -n stmlxdata -g rg-mlx-dev -o jsonc
+az storage account list -g rg-mlx-dev -o table
+az storage account update -n stmlxdata -g rg-mlx-dev --allow-blob-public-access false
+az storage account delete -n stmlxdata -g rg-mlx-dev --yes
+
+# --- data protection ---
+az storage account blob-service-properties update --account-name stmlxdata -g rg-mlx-dev \
+  --enable-versioning true --enable-delete-retention true --delete-retention-days 14 --enable-change-feed true
+
+# --- lifecycle (auto-tiering) ---
+az storage account management-policy create --account-name stmlxdata -g rg-mlx-dev --policy @lifecycle.json
+
+# --- containers & blobs (always --auth-mode login) ---
+az storage container create --account-name stmlxdata --name datasets --auth-mode login
+az storage container list --account-name stmlxdata --auth-mode login -o table
+az storage blob upload --account-name stmlxdata --auth-mode login -c datasets -f ./train.parquet -n fraud/train.parquet
+az storage blob download --account-name stmlxdata --auth-mode login -c datasets -n fraud/train.parquet -f ./train.parquet
+az storage blob list --account-name stmlxdata --auth-mode login -c datasets --prefix fraud/ -o table
+az storage blob set-tier --account-name stmlxdata --auth-mode login -c datasets -n fraud/train.parquet --tier Cool
+az storage blob copy start --account-name stmlxdata --auth-mode login \
+  --destination-container datasets --destination-blob fraud/train.bak.parquet \
+  --source-container datasets --source-blob fraud/train.parquet
+
+# --- ADLS Gen2 (HNS): filesystems, directories, ACLs ---
+az storage fs create -n curated --account-name stmlxdata --auth-mode login
+az storage fs directory create -n silver/fraud -f curated --account-name stmlxdata --auth-mode login
+az storage fs access set --acl "user::rwx,group::r-x,other::---" -p silver/fraud -f curated --account-name stmlxdata --auth-mode login
+az storage fs access set-recursive --acl "default:group:<oid>:r-x" -p silver -f curated --account-name stmlxdata --auth-mode login
+
+# --- network firewall (account side) ---
+az storage account update -n stmlxdata -g rg-mlx-dev --default-action Deny
+az storage account network-rule add -g rg-mlx-dev --account-name stmlxdata --vnet-name vnet-mlx --subnet snet-compute
+
+# --- break-glass only: keys / SAS (prefer identity + --auth-mode login) ---
+az storage account keys list -n stmlxdata -g rg-mlx-dev -o table
+```
 
 ## Try it
 

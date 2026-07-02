@@ -18,7 +18,7 @@ gcloud monitoring uptime create serve-health \
   --hostname=fraud-serve-xyz.a.run.app --path=/healthz
 ```
 
-Alerting policies fire on metric thresholds (latency over X ms), log-based conditions (a spike in error logs), or PromQL expressions, and notify via email, Slack, PagerDuty, Pub/Sub, or webhooks. **Log-based metrics** let you count occurrences of a pattern (for example, "model returned low-confidence prediction") and alert on it. Note that alerting is a billable feature, so scope policies to what actually matters.
+Alerting policies fire on metric thresholds (latency over X ms), log-based conditions (a spike in error logs), or PromQL expressions, and notify via email, Slack, PagerDuty, Pub/Sub, or webhooks. **Log-based metrics** let you count occurrences of a pattern (for example, "model returned low-confidence prediction") and alert on it. Note that alerting is a billable feature, so scope policies to what actually matters. (Module 15 covers Cloud Monitoring, Logging, Error Reporting, and Trace in depth; this module keeps observability at the summary altitude and focuses on cost.)
 
 ## Model monitoring: the ML-specific observability
 
@@ -28,7 +28,7 @@ Infrastructure metrics tell you the endpoint is *up*; they do not tell you the m
 - **Prediction drift** — feature distributions shift over time in production compared to an earlier window (the world moved on).
 - **Feature attribution drift** — the relative importance of features changes, detected via Explainable AI.
 
-Under the hood it compares distributions using statistical distances — **L-infinity distance** for categorical features and **Jensen-Shannon divergence** for numerical ones — against a baseline, and alerts when a per-feature threshold is exceeded. You configure a baseline (your training data), attach monitoring to an endpoint, set thresholds, and receive alerts when production input distributions drift. This is the early-warning system that tells you to retrain *before* accuracy visibly collapses. Pair it with a periodic offline eval on a frozen test set to confirm real accuracy.
+Under the hood it compares distributions using statistical distances — **L-infinity distance** for categorical features and **Jensen-Shannon divergence** for numerical ones — against a baseline, and alerts when a per-feature threshold is exceeded. You configure a baseline (your training data), attach monitoring to an endpoint, set thresholds, and receive alerts when production input distributions drift. This is the early-warning system that tells you to retrain *before* accuracy visibly collapses. Pair it with a periodic offline eval on a frozen test set to confirm real accuracy. (Model monitoring is summarized here for completeness; module 17 covers the Vertex AI Feature Store and Experiments that feed and complement it in depth.)
 
 ## Cost controls
 
@@ -44,15 +44,95 @@ ML workloads are the most expensive thing most teams run on Google Cloud, and co
 - **Storage lifecycle.** Autoclass and lifecycle rules move cold data to cheaper tiers and delete transient artifacts automatically.
 - **Turn things off.** Stop idle GPU VMs and development notebooks; they bill by the second whether or not they compute.
 
+### Budgets: notify, and automate the enforcement
+
+Budgets live on the **billing account**, not the project, and you create them from the CLI so they are reproducible. A budget always *notifies*; to *enforce*, you wire its Pub/Sub notification to automation. The key flags: `--budget-amount` (a fixed amount, or `--last-period-amount` to track the previous period), one or more `--threshold-rule` entries (a percent plus a `basis` of `current-spend` or `forecasted-spend`), scoping with `--filter-projects` and/or `--filter-labels`, and `--notifications-rule-pubsub-topic` to emit a machine-readable message on every threshold crossing.
+
+```bash
+# Forecast- and actual-based thresholds, scoped to prod, publishing to Pub/Sub
+gcloud billing budgets create \
+  --billing-account=0X0X0X-0X0X0X-0X0X0X \
+  --display-name="fraud-prod monthly" \
+  --budget-amount=5000USD \
+  --filter-projects=projects/myco-fraud-prod \
+  --filter-labels=env=prod \
+  --threshold-rule=percent=0.5,basis=current-spend \
+  --threshold-rule=percent=0.9,basis=current-spend \
+  --threshold-rule=percent=1.0,basis=forecasted-spend \
+  --notifications-rule-pubsub-topic=projects/myco-fraud-prod/topics/budget-alerts
+```
+
+The Pub/Sub message is what turns a budget from a warning into a kill-switch: a function subscribed to `budget-alerts` can, at 100%, cap Vertex endpoint replicas, stop idle notebook VMs, or (in extreme cases) detach the billing account. Budgets *notify* by default; automation is what makes them *cap*.
+
+### Billing export: the SQL you actually run
+
+With **billing export to BigQuery** enabled, the `gcp_billing_export_v1_*` table is your source of truth. The label-attribution query is the starting point; the ones you run in practice slice by service, by SKU, by credits, and forward in time.
+
 ```sql
--- With billing export enabled, attribute last month's cost by label
+-- Cost by service last 30 days (where is the money actually going?)
+SELECT service.description AS service,
+       ROUND(SUM(cost), 2) AS cost_usd
+FROM `myco-fraud-prod.billing.gcp_billing_export_v1_XXXXXX`
+WHERE DATE(usage_start_time) >= DATE_SUB(CURRENT_DATE(), INTERVAL 30 DAY)
+GROUP BY service ORDER BY cost_usd DESC;
+
+-- Net cost after credits (CUD/committed-use and promotional credits net out here)
+SELECT sku.description AS sku,
+       ROUND(SUM(cost), 2) AS gross,
+       ROUND(SUM(IFNULL((SELECT SUM(c.amount) FROM UNNEST(credits) c), 0)), 2) AS credits,
+       ROUND(SUM(cost) + SUM(IFNULL((SELECT SUM(c.amount) FROM UNNEST(credits) c), 0)), 2) AS net
+FROM `myco-fraud-prod.billing.gcp_billing_export_v1_XXXXXX`
+WHERE DATE(usage_start_time) >= DATE_SUB(CURRENT_DATE(), INTERVAL 30 DAY)
+GROUP BY sku ORDER BY net DESC;
+
+-- Attribute last month's cost by component label (the original view)
 SELECT
   (SELECT value FROM UNNEST(labels) WHERE key = 'component') AS component,
   ROUND(SUM(cost), 2) AS cost_usd
-FROM `myco-fraud-dev.billing.gcp_billing_export_v1_XXXXXX`
+FROM `myco-fraud-prod.billing.gcp_billing_export_v1_XXXXXX`
 WHERE DATE(usage_start_time) >= DATE_SUB(CURRENT_DATE(), INTERVAL 30 DAY)
 GROUP BY component ORDER BY cost_usd DESC;
+
+-- Naive 30-day forecast from a 7-day daily run-rate
+SELECT ROUND(AVG(daily) * 30, 2) AS projected_month_usd FROM (
+  SELECT DATE(usage_start_time) AS d, SUM(cost) AS daily
+  FROM `myco-fraud-prod.billing.gcp_billing_export_v1_XXXXXX`
+  WHERE DATE(usage_start_time) >= DATE_SUB(CURRENT_DATE(), INTERVAL 7 DAY)
+  GROUP BY d);
 ```
+
+### Committed-use discounts and the recommenders
+
+For a steady baseline — an always-on serving endpoint, a persistent training rig — a **committed-use discount (CUD)** trades a 1- or 3-year commitment for a large discount (up to ~40% resource-based, more for some GPUs). Resource-based CUDs are purchased per region against vCPU/memory (and GPU/Local SSD) quantities:
+
+```bash
+gcloud compute commitments create fraud-serving-cud \
+  --region=us-central1 --plan=twelve-month \
+  --resources=vcpu=16,memory=64GB
+```
+
+You do not have to guess where the waste is. The **Recommender** service continuously analyzes usage and surfaces cost recommendations you can list and act on — idle VMs, over-provisioned machine types, idle Cloud SQL instances, unattached disks, and CUD purchase opportunities:
+
+```bash
+# Idle VMs (delete/stop candidates)
+gcloud recommender recommendations list \
+  --project=myco-fraud-prod --location=us-central1-a \
+  --recommender=google.compute.instance.IdleResourceRecommender
+
+# Machine-type rightsizing (over-provisioned VMs)
+gcloud recommender recommendations list \
+  --project=myco-fraud-prod --location=us-central1-a \
+  --recommender=google.compute.instance.MachineTypeRecommender
+
+# CUD purchase recommendations
+gcloud recommender recommendations list \
+  --project=myco-fraud-prod --location=us-central1 \
+  --recommender=google.compute.commitment.UsageCommitmentRecommender
+```
+
+### Quotas, pricing estimates, and per-second billing
+
+Two more levers round out cost hygiene. **Quotas** are a proactive cap, not just a safety limit: capping the GPU or vCPU quota on a dev project makes it *impossible* to accidentally spin up a fleet of A4 (B200) instances, which is a stronger guarantee than a budget alert that fires after the spend. List and audit account/quota state with `gcloud billing accounts list` and the project's quota page. Before committing to an architecture, price it with the **Google Cloud Pricing Calculator** (`cloud.google.com/products/calculator`) — an hour there is cheaper than a surprise invoice. And remember that Compute Engine, Cloud Run, GPUs, and notebooks bill by the **second** (with a small minimum), so an idle GPU VM left running overnight is pure, continuous waste — the single most common avoidable cost. Storage and BigQuery levers are covered in the storage and BigQuery modules; the same partitioning, lifecycle, and `--maximum_bytes_billed` disciplines apply here as first-class cost controls.
 
 ## Best practices for production ML on Google Cloud
 
@@ -76,6 +156,49 @@ Cost and monitoring are the closed loop around the entire end-to-end system. Mon
 - **Vertex AI Model Monitoring** is the ML-specific layer: it detects **training-serving skew, prediction drift, and attribution drift** (via L-infinity and Jensen-Shannon distances) and alerts you to retrain before accuracy visibly drops.
 - **Cost control** is dominated by right-sizing accelerators, **Spot** for interruptible work, **committed-use** for steady serving, **scale-to-zero**, BigQuery partitioning, and storage lifecycle — with **budgets + labeled billing export** for visibility and Pub/Sub automation for enforcement.
 - Production mastery = **reproducibility (IaC + containers + pipelines), least privilege, co-located and private data, an automated lifecycle, a frozen eval gate, dual-layer observability, and cost attribution** from day one.
+
+## CLI cheat-sheet
+
+```bash
+# --- Budgets (on the BILLING ACCOUNT; notify, then automate to enforce) ---
+gcloud billing accounts list
+gcloud billing budgets create --billing-account=0X0X0X-0X0X0X-0X0X0X \
+  --display-name="fraud-prod monthly" --budget-amount=5000USD \
+  --filter-projects=projects/myco-fraud-prod --filter-labels=env=prod \
+  --threshold-rule=percent=0.5,basis=current-spend \
+  --threshold-rule=percent=0.9,basis=current-spend \
+  --threshold-rule=percent=1.0,basis=forecasted-spend \
+  --notifications-rule-pubsub-topic=projects/myco-fraud-prod/topics/budget-alerts
+gcloud billing budgets list --billing-account=0X0X0X-0X0X0X-0X0X0X
+
+# --- Cost recommenders (find idle/oversized resources and CUD opportunities) ---
+gcloud recommender recommendations list --project=myco-fraud-prod \
+  --location=us-central1-a --recommender=google.compute.instance.IdleResourceRecommender
+gcloud recommender recommendations list --project=myco-fraud-prod \
+  --location=us-central1-a --recommender=google.compute.instance.MachineTypeRecommender
+gcloud recommender recommendations list --project=myco-fraud-prod \
+  --location=us-central1 --recommender=google.compute.commitment.UsageCommitmentRecommender
+
+# --- Committed-use discount for steady baseline capacity ---
+gcloud compute commitments create fraud-serving-cud --region=us-central1 \
+  --plan=twelve-month --resources=vcpu=16,memory=64GB
+
+# --- Turn idle spend off (bills by the second) ---
+gcloud compute instances stop dev-notebook --zone=us-central1-a
+
+# --- Monitoring (summary; see module 15 for depth) ---
+gcloud monitoring policies create --policy-from-file=high-latency-policy.json
+gcloud monitoring uptime create serve-health --resource-type=uptime-url \
+  --hostname=fraud-serve-xyz.a.run.app --path=/healthz
+```
+
+```sql
+-- Billing export: cost by service, and net-of-credits, last 30 days
+SELECT service.description AS service, ROUND(SUM(cost),2) AS cost_usd
+FROM `myco-fraud-prod.billing.gcp_billing_export_v1_XXXXXX`
+WHERE DATE(usage_start_time) >= DATE_SUB(CURRENT_DATE(), INTERVAL 30 DAY)
+GROUP BY service ORDER BY cost_usd DESC;
+```
 
 ## Try it
 

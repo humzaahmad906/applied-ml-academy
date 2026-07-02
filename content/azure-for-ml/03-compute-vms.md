@@ -41,6 +41,10 @@ az vm list-sizes --location eastus2 \
 az vm list-usage --location eastus2 \
   --query "[?contains(localName,'ND') || contains(localName,'NC')].{Family:localName, Used:currentValue, Limit:limit}" \
   -o table
+
+# Inspect one SKU's full spec (vCPUs, memory, max data disks, accelerated networking)
+az vm list-sizes --location eastus2 \
+  --query "[?name=='Standard_NC24ads_A100_v4']" -o jsonc
 ```
 
 If your quota is zero (the default for many GPU families), you request an increase through the portal's **Quotas** blade or a support request — do this days ahead of a deadline, because approval is not instant.
@@ -59,6 +63,27 @@ az vm create \
   --admin-username azureuser \
   --generate-ssh-keys \
   --assign-identity id-mlplatform   # attach the platform managed identity
+```
+
+To find a concrete image URN rather than guessing, list what a publisher offers. Image references are `publisher:offer:sku:version`, and `latest` is convenient for dev but you should pin an exact version for anything reproducible:
+
+```bash
+# Browse the Data Science VM and HPC (CUDA-preinstalled) images
+az vm image list --publisher microsoft-dsvm --all -o table
+az vm image list --publisher microsoft-dsvm --offer ubuntu-hpc --all -o table
+az vm image list-skus --location eastus2 --publisher microsoft-dsvm --offer ubuntu-hpc -o table
+```
+
+Once a VM exists you spend most of your time in its power lifecycle, and the distinction between **stop** and **deallocate** is the one that costs people money. A merely *stopped* (`az vm stop`) VM still holds its compute reservation and keeps billing for cores; a **deallocated** VM releases the hardware and stops compute charges (you still pay for the disks). Always `deallocate` a GPU box you are not using:
+
+```bash
+az vm list -g rg-mlx-dev -o table                # all VMs and their power state
+az vm show -g rg-mlx-dev -n vm-gpu-dev -d --query powerState -o tsv
+az vm start -g rg-mlx-dev -n vm-gpu-dev
+az vm deallocate -g rg-mlx-dev -n vm-gpu-dev     # stops COMPUTE billing (do this)
+az vm stop -g rg-mlx-dev -n vm-gpu-dev           # stops the OS but KEEPS billing cores
+az vm resize -g rg-mlx-dev -n vm-gpu-dev --size Standard_NC48ads_A100_v4  # requires deallocate for a different family
+az vm delete -g rg-mlx-dev -n vm-gpu-dev --yes
 ```
 
 ## Spot VMs: cheap, interruptible compute
@@ -81,6 +106,16 @@ az vm create \
 
 A **Virtual Machine Scale Set (VMSS)** manages an identical group of VMs as one unit, with autoscaling based on metrics (CPU, GPU, queue depth) or schedule. You rarely create raw VMSS for ML because the managed services build on top of it — an **Azure Machine Learning compute cluster** *is* a scale set with min/max node counts, and an **AKS node pool** is a scale set of Kubernetes workers. Understanding VMSS explains their behavior: scale-to-zero when idle (so you pay nothing between jobs), scale-out under load, and per-node health management.
 
+If you ever do touch raw VMSS, the shape is familiar — a scale set has a capacity you set directly or hand to an autoscale rule, and you can list its member instances:
+
+```bash
+az vmss create -g rg-mlx-dev -n vmss-workers --image Ubuntu2204 \
+  --vm-sku Standard_NC24ads_A100_v4 --instance-count 2 --generate-ssh-keys
+az vmss scale -g rg-mlx-dev -n vmss-workers --new-capacity 4
+az vmss list-instances -g rg-mlx-dev -n vmss-workers -o table
+az vmss deallocate -g rg-mlx-dev -n vmss-workers
+```
+
 ```bash
 # The managed equivalent you'll actually use: an autoscaling ML compute cluster
 az ml compute create \
@@ -94,6 +129,27 @@ az ml compute create \
 
 Min-instances of 0 is the money-saver: the cluster deallocates all nodes when no job is queued, and spins them up on demand. Combined with the LowPriority (spot) tier, this is the cheapest way to run training on Azure.
 
+The `az ml compute` command group (CLI v2, the `ml` extension) is where you manage both cluster types you actually use: **AmlCompute** (the scale-to-zero training cluster above) and a **ComputeInstance** (a single-user managed dev box, the cloud equivalent of the DSVM VM but wired into the workspace). Both take a managed identity via `--identity-type` so jobs authenticate without keys, and both support the full lifecycle:
+
+```bash
+# A single-user managed dev box tied to the workspace, with the platform MI attached
+az ml compute create --name ci-dev --type ComputeInstance \
+  --size Standard_NC24ads_A100_v4 \
+  --identity-type UserAssigned --user-assigned-identities "$UAMI_ID" \
+  -g rg-mlx-dev -w mlw-mlx-dev
+
+# List / inspect / retune / tear down clusters and instances
+az ml compute list -g rg-mlx-dev -w mlw-mlx-dev -o table
+az ml compute show --name gpu-cluster -g rg-mlx-dev -w mlw-mlx-dev
+az ml compute update --name gpu-cluster --min-instances 0 --max-instances 8 \
+  -g rg-mlx-dev -w mlw-mlx-dev
+az ml compute list-nodes --name gpu-cluster -g rg-mlx-dev -w mlw-mlx-dev -o table  # what's running now
+az ml compute stop --name ci-dev -g rg-mlx-dev -w mlw-mlx-dev   # ComputeInstance only
+az ml compute delete --name gpu-cluster -g rg-mlx-dev -w mlw-mlx-dev --yes
+```
+
+Two practitioner notes: a ComputeInstance keeps billing while *running*, so `az ml compute stop` it at the end of the day (an idle-shutdown schedule in the YAML spec automates this); and `az ml compute update` can grow or shrink an AmlCompute cluster's node bounds live, but you cannot change its VM `--size` after creation — that is fixed at create time, so pick the SKU deliberately.
+
 ## Choosing compute for the whole solution
 
 In the reference architecture you will build later, compute divides by job type. **Training** runs on Azure Machine Learning compute clusters — ND SKUs for multi-node jobs, NC for single-node, LowPriority tier and scale-to-zero to control cost. **Batch inference** runs on the same clusters through batch endpoints. **Real-time inference** runs on dedicated (non-spot) managed online endpoints or AKS GPU pools sized on NC. **Interactive development** happens on a small compute instance or a single NC dev box. You almost never manage raw VMs by hand; you let the managed layer manage scale sets for you and reserve direct VM control for special cases.
@@ -105,6 +161,44 @@ In the reference architecture you will build later, compute divides by job type.
 - Use **container images** (via ACR) for reproducible environments across dev, training, and serving.
 - **Spot / LowPriority** compute cuts training cost dramatically if you checkpoint; never put it behind latency-sensitive endpoints.
 - You rarely touch raw VMs or VMSS — Azure Machine Learning compute clusters and AKS node pools *are* managed scale sets; use `min-instances 0` to pay nothing when idle.
+
+## CLI cheat-sheet
+
+```bash
+# --- discover SKUs, quota, images ---
+az vm list-sizes -l eastus2 --query "[?contains(name,'Standard_N')].name" -o tsv | sort
+az vm list-usage -l eastus2 --query "[?contains(localName,'ND')||contains(localName,'NC')].{F:localName,Used:currentValue,Max:limit}" -o table
+az vm image list --publisher microsoft-dsvm --offer ubuntu-hpc --all -o table
+
+# --- raw VM lifecycle ---
+az vm create -g rg-mlx-dev -n vm-gpu-dev --size Standard_NC24ads_A100_v4 \
+  --image microsoft-dsvm:ubuntu-hpc:2204:latest --generate-ssh-keys --assign-identity id-mlplatform
+az vm create -g rg-mlx-dev -n vm-spot --size Standard_NC24ads_A100_v4 \
+  --priority Spot --max-price -1 --eviction-policy Deallocate --generate-ssh-keys
+az vm list -g rg-mlx-dev -o table
+az vm show -g rg-mlx-dev -n vm-gpu-dev -d --query powerState -o tsv
+az vm start -g rg-mlx-dev -n vm-gpu-dev
+az vm deallocate -g rg-mlx-dev -n vm-gpu-dev      # stops compute billing
+az vm resize -g rg-mlx-dev -n vm-gpu-dev --size Standard_NC48ads_A100_v4
+az vm delete -g rg-mlx-dev -n vm-gpu-dev --yes
+
+# --- scale sets (rarely by hand) ---
+az vmss create -g rg-mlx-dev -n vmss-workers --image Ubuntu2204 --vm-sku Standard_NC24ads_A100_v4 --instance-count 2 --generate-ssh-keys
+az vmss scale -g rg-mlx-dev -n vmss-workers --new-capacity 4
+az vmss list-instances -g rg-mlx-dev -n vmss-workers -o table
+
+# --- Azure ML compute (CLI v2, what you actually use) ---
+az ml compute create --name gpu-cluster --type AmlCompute --size Standard_NC24ads_A100_v4 \
+  --min-instances 0 --max-instances 4 --tier LowPriority -g rg-mlx-dev -w mlw-mlx-dev
+az ml compute create --name ci-dev --type ComputeInstance --size Standard_NC24ads_A100_v4 \
+  --identity-type UserAssigned --user-assigned-identities "$UAMI_ID" -g rg-mlx-dev -w mlw-mlx-dev
+az ml compute list -g rg-mlx-dev -w mlw-mlx-dev -o table
+az ml compute show --name gpu-cluster -g rg-mlx-dev -w mlw-mlx-dev
+az ml compute update --name gpu-cluster --min-instances 0 --max-instances 8 -g rg-mlx-dev -w mlw-mlx-dev
+az ml compute list-nodes --name gpu-cluster -g rg-mlx-dev -w mlw-mlx-dev -o table
+az ml compute stop --name ci-dev -g rg-mlx-dev -w mlw-mlx-dev
+az ml compute delete --name gpu-cluster -g rg-mlx-dev -w mlw-mlx-dev --yes
+```
 
 ## Try it
 

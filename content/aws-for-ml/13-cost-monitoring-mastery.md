@@ -23,20 +23,99 @@ aws cloudwatch put-metric-alarm \
   --alarm-actions arn:aws:sns:us-east-1:<acct>:ml-oncall
 ```
 
-For ML specifically, watch GPU utilization on endpoints — a chronically underutilized GPU endpoint is money burning, and the fix is often inference components or a smaller instance. Pair CloudWatch with **Model Monitor** so data/prediction drift shows up alongside infrastructure metrics.
+For ML specifically, watch GPU utilization on endpoints — a chronically underutilized GPU endpoint is money burning, and the fix is often inference components or a smaller instance. Pair CloudWatch with **Model Monitor** so data/prediction drift shows up alongside infrastructure metrics. (This module keeps observability at the level needed to *act on cost*; metrics, EMF, Logs Insights, and X-Ray get their own dedicated module.)
+
+Two CLI habits carry most of the operational weight. `put-dashboard` builds the single-pane view as code (a JSON body you keep in the repo, not clicks in the console), so a new environment gets the same dashboard on deploy. And when triaging a failed job or a spike, `logs start-query` runs a Logs Insights query across log groups and returns a query id you poll with `get-query-results` — far faster than scrolling raw log streams.
+
+```bash
+# Publish a dashboard from a versioned JSON body
+aws cloudwatch put-dashboard \
+  --dashboard-name ml-platform \
+  --dashboard-body file://dashboard.json
+
+# Find the endpoints that errored in the last hour (Logs Insights)
+QID=$(aws logs start-query \
+  --log-group-name /aws/sagemaker/Endpoints/fraud-scorer \
+  --start-time $(date -v-1H +%s) --end-time $(date +%s) \
+  --query-string 'fields @timestamp, @message | filter @message like /Error/ | limit 50' \
+  --query queryId --output text)
+aws logs get-query-results --query-id "$QID"
+```
 
 ## Cost control
 
 ML is expensive in ways web apps are not — GPUs, large data transfer, always-on endpoints — so cost discipline is an engineering skill, not a finance afterthought.
 
 - **Cost Explorer** visualizes spend over time and by dimension; **AWS Budgets** sets thresholds that alert (or act) before you overspend; the **Cost and Usage Report** gives the raw detail for deep analysis.
+
+Everything Cost Explorer shows in the console is available from `aws ce`, which is what lets you script a weekly cost report or wire spend into a dashboard. `get-cost-and-usage` is the workhorse: it takes a `--time-period`, a `--granularity` (DAILY/MONTHLY), one or more `--metrics` (`UnblendedCost` is the number on your bill), and a `--group-by` that is the whole game — group by `Type=DIMENSION,Key=SERVICE` to see which service dominates, or by `Type=TAG,Key=Project` to answer "what did this model cost." `get-cost-forecast` projects the rest of the month so a budget alert isn't the first warning, and `get-dimension-values` enumerates what you can filter on (e.g. every `SERVICE` value that has spend). A gotcha worth internalizing: the Cost Explorer API bills roughly $0.01 per paginated request, so a tight polling loop over it is itself a (small) cost line — cache results, don't hammer it.
+
+```bash
+# Month-to-date spend broken down by service
+aws ce get-cost-and-usage \
+  --time-period Start=2026-07-01,End=2026-07-31 \
+  --granularity MONTHLY --metrics UnblendedCost \
+  --group-by Type=DIMENSION,Key=SERVICE
+
+# "What did this project cost?" — group by a cost-allocation tag
+aws ce get-cost-and-usage \
+  --time-period Start=2026-07-01,End=2026-07-31 \
+  --granularity MONTHLY --metrics UnblendedCost \
+  --group-by Type=TAG,Key=Project
+
+# Project the rest of the month before the bill surprises you
+aws ce get-cost-forecast \
+  --time-period Start=2026-07-03,End=2026-07-31 \
+  --metric UNBLENDED_COST --granularity MONTHLY
+```
 - **Tagging** is the foundation of all cost attribution. Tag every resource with team, project, and environment, and you can answer "what did this model cost to train and serve?" Untagged resources are invisible in cost reports — enforce tags with policy.
+
+There is a two-step subtlety that trips up almost everyone: applying a tag to a resource is *not* enough for it to appear as a `--group-by TAG` dimension in Cost Explorer. You must also **activate** the tag key as a cost-allocation tag with `ce update-cost-allocation-tags-status`, and — this is the sharp edge — activation is not retroactive, so cost data only splits by that tag from the activation date forward. Activate your `Project`/`Team`/`Environment` keys on day one. To find and fix the resources that slipped through untagged, `resourcegroupstaggingapi get-resources --tag-filters` audits what carries a given tag, and `tag-resources` bulk-applies tags by ARN across services in one call.
+
+```bash
+# Bulk-apply tags across services by ARN
+aws resourcegroupstaggingapi tag-resources \
+  --resource-arn-list <endpoint-arn> <training-job-arn> \
+  --tags Project=fraud,Team=risk,Environment=prod
+
+# Audit: which resources are missing the Project tag
+aws resourcegroupstaggingapi get-resources \
+  --tag-filters Key=Project
+
+# Activate the keys as cost-allocation tags (NOT retroactive — do this early)
+aws ce update-cost-allocation-tags-status \
+  --cost-allocation-tags-status \
+  TagKey=Project,Status=Active TagKey=Team,Status=Active TagKey=Environment,Status=Active
+```
 - **Pricing model per workload** is the biggest lever: **Spot / managed spot** for checkpointed training (up to ~90% off), **Savings Plans** for steady baseline inference, **Capacity Blocks** to guarantee scarce GPUs, and **On-Demand** only for unpredictable bursts.
 - **Right inference option** matters as much: serverless and asynchronous inference scale to zero, so intermittent workloads should never sit on an always-on real-time endpoint. Multi-model endpoints and inference components pack many models onto shared instances.
 - **Storage lifecycle** moves cold data to Glacier and expires temporary artifacts automatically.
 - **VPC endpoints** cut NAT data-processing charges on large training reads.
 
 The recurring failure mode is the forgotten resource: an idle GPU endpoint, an oversized notebook instance, an un-lifecycled bucket of old checkpoints. Budgets and tagged dashboards catch these before the bill does.
+
+A budget is the guardrail that turns "we should watch spend" into an automatic alert. `budgets create-budget` takes the budget definition (amount, period, and any filters) plus one or more `--notifications-with-subscribers` that fire an SNS or email alert at, say, 80% and 100% of the threshold — and, critically, you can alert on *forecasted* spend so you hear about a runaway training run mid-month, not after. `describe-budgets` lists what's configured.
+
+```bash
+# Alert at 80% actual and 100% forecasted of a $5k monthly ML budget
+aws budgets create-budget \
+  --account-id <acct> \
+  --budget '{"BudgetName":"ml-monthly","BudgetLimit":{"Amount":"5000","Unit":"USD"},"TimeUnit":"MONTHLY","BudgetType":"COST"}' \
+  --notifications-with-subscribers '[{"Notification":{"NotificationType":"ACTUAL","ComparisonOperator":"GREATER_THAN","Threshold":80},"Subscribers":[{"SubscriptionType":"SNS","Address":"arn:aws:sns:us-east-1:<acct>:ml-cost"}]},{"Notification":{"NotificationType":"FORECASTED","ComparisonOperator":"GREATER_THAN","Threshold":100},"Subscribers":[{"SubscriptionType":"EMAIL","Address":"ml-oncall@example.com"}]}]'
+
+aws budgets describe-budgets --account-id <acct>
+```
+
+Two services turn "is anything oversized?" from a guess into a report. **Compute Optimizer** analyzes utilization and recommends right-sizing — `get-ec2-instance-recommendations` returns, per instance, whether it is `Overprovisioned`/`Underprovisioned`/`Optimized` and the cheaper instance it suggests, which is the fastest way to catch the notebook or training box that is three sizes too big. **Trusted Advisor** (via the `support` API, which requires a Business or Enterprise support plan) has checks for idle load balancers, underutilized instances, and unassociated EIPs — its cost-optimization checks are exactly the "forgotten resource" hunt automated.
+
+```bash
+# Right-sizing: which instances are over/under-provisioned
+aws compute-optimizer get-ec2-instance-recommendations
+
+# Trusted Advisor cost checks (needs Business+ support; API lives under `support`)
+aws support describe-trusted-advisor-checks --language en
+aws support describe-trusted-advisor-check-result --check-id <cost-check-id>
+```
 
 ## The Well-Architected Framework
 
@@ -76,6 +155,55 @@ Cost and observability are not a final chapter bolted on — they are the feedba
 - The forgotten idle GPU endpoint is the classic ML cost leak — dashboards and budgets catch it early.
 - The Well-Architected Framework's six pillars (Operational Excellence, Security, Reliability, Performance Efficiency, Cost Optimization, Sustainability) plus the ML/GenAI/Responsible AI lenses are your design review checklist.
 - Mastery is the ability to reason about a full ML system across all pillars and operate it economically over time.
+
+## CLI cheat-sheet
+
+```bash
+# ── Cost Explorer: where the money goes ──
+aws ce get-cost-and-usage --time-period Start=2026-07-01,End=2026-07-31 \
+  --granularity MONTHLY --metrics UnblendedCost \
+  --group-by Type=DIMENSION,Key=SERVICE          # spend by service
+aws ce get-cost-and-usage --time-period Start=2026-07-01,End=2026-07-31 \
+  --granularity MONTHLY --metrics UnblendedCost \
+  --group-by Type=TAG,Key=Project                # spend by project tag
+aws ce get-cost-forecast --time-period Start=2026-07-03,End=2026-07-31 \
+  --metric UNBLENDED_COST --granularity MONTHLY  # projected month-end
+aws ce get-dimension-values --time-period Start=2026-07-01,End=2026-07-31 \
+  --dimension SERVICE                            # what you can filter/group on
+
+# ── Budgets: automatic guardrails (alert on actual AND forecasted) ──
+aws budgets create-budget --account-id ACCT \
+  --budget '{"BudgetName":"ml-monthly","BudgetLimit":{"Amount":"5000","Unit":"USD"},"TimeUnit":"MONTHLY","BudgetType":"COST"}' \
+  --notifications-with-subscribers file://notifications.json
+aws budgets describe-budgets --account-id ACCT
+
+# ── Cost-allocation tags: apply, audit, then ACTIVATE (not retroactive) ──
+aws resourcegroupstaggingapi tag-resources --resource-arn-list ARN1 ARN2 \
+  --tags Project=fraud,Team=risk,Environment=prod
+aws resourcegroupstaggingapi get-resources --tag-filters Key=Project
+aws ce update-cost-allocation-tags-status \
+  --cost-allocation-tags-status TagKey=Project,Status=Active
+
+# ── Right-sizing & waste hunt ──
+aws compute-optimizer get-ec2-instance-recommendations
+aws support describe-trusted-advisor-checks --language en     # Business+ support
+aws support describe-trusted-advisor-check-result --check-id CHECK_ID
+
+# ── Observability to act on cost (full observability = its own module) ──
+aws cloudwatch put-metric-alarm --alarm-name idle-endpoint \
+  --namespace AWS/SageMaker --metric-name Invocations \
+  --dimensions Name=EndpointName,Value=fraud-scorer \
+  --statistic Sum --period 3600 --evaluation-periods 6 \
+  --threshold 1 --comparison-operator LessThanThreshold \
+  --alarm-actions arn:aws:sns:us-east-1:ACCT:ml-cost   # near-zero traffic = idle spend
+aws cloudwatch put-dashboard --dashboard-name ml-platform --dashboard-body file://dashboard.json
+aws cloudwatch get-metric-data --metric-data-queries file://queries.json \
+  --start-time 2026-07-01T00:00:00Z --end-time 2026-07-02T00:00:00Z
+aws logs start-query --log-group-name /aws/sagemaker/Endpoints/fraud-scorer \
+  --start-time START --end-time END \
+  --query-string 'fields @timestamp,@message | filter @message like /Error/'
+aws logs get-query-results --query-id QID
+```
 
 ## Try it
 

@@ -103,13 +103,81 @@ resource blobRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
 }
 ```
 
+The deploy itself is one command, but the practitioner sequence around it is what keeps prod safe. Before applying anything you run **what-if**, which diffs the template against live infrastructure and prints exactly what will be created, modified, or deleted — the single most valuable habit for avoiding an accidental teardown. Compile the Bicep to ARM JSON to catch template errors early, and scope the deployment to the right level: `deployment group` for resources inside a resource group, `deployment sub` for subscription-level things (the resource groups themselves, policy assignments, role assignments at sub scope):
+
 ```bash
+# Install / update the Bicep CLI (bundled with recent az, but pin it explicitly in CI)
+az bicep install
+az bicep upgrade
+az bicep version
+
+# Lint + compile to ARM JSON — fails fast on template errors before any deploy
+az bicep build --file main.bicep
+
+# Preview the change set against live infra BEFORE deploying (read-only)
+az deployment group what-if -g rg-mlx-dev \
+  --template-file main.bicep --parameters env=dev prefix=mlx
+
 # Deploy per environment; prod is the same template with different params
 az deployment group create -g rg-mlx-dev \
   --template-file main.bicep --parameters env=dev prefix=mlx
+# --what-if on create previews inline; --confirm-with-what-if forces a review gate
+az deployment group create -g rg-mlx-dev \
+  --template-file main.bicep --parameters env=prod prefix=mlx --confirm-with-what-if
+
+# Subscription scope: create the resource group + sub-level policy/role assignments
+az deployment sub create --location eastus2 \
+  --template-file platform.bicep --parameters env=prod
+
+# Inspect and validate deployments
+az deployment group validate -g rg-mlx-dev --template-file main.bicep --parameters env=dev
+az deployment group list -g rg-mlx-dev -o table
+az deployment group show -g rg-mlx-dev -n main --query properties.outputs
 ```
 
-Streaming (Event Hubs), the online store (Cosmos DB), AI Search, the Foundry resource, and the private endpoints follow the same pattern as additional resources and modules. The discipline that matters: nothing production-critical is created by clicking in the portal — if it is not in the template, it does not exist.
+Teams standardizing on **Terraform** get the same reproducibility with the `azurerm` provider — `terraform plan` is the what-if analog, `terraform apply` the deploy, and remote state in a locked storage account replaces ARM's deployment history. The choice is organizational (Bicep is Azure-native and needs no state file; Terraform is multi-cloud and has a mature module ecosystem); the discipline is identical. Streaming (Event Hubs), the online store (Cosmos DB), AI Search, the Foundry resource, and the private endpoints follow the same pattern as additional resources and modules. The discipline that matters: nothing production-critical is created by clicking in the portal — if it is not in the template, it does not exist.
+
+Once the platform is live, **Azure Resource Graph** is how you query it at scale — a KQL-over-your-resources engine that answers "which storage accounts still allow public access?" or "every GPU VM across all subscriptions" in one call, invaluable for governance audits and drift detection:
+
+```bash
+# Find any storage account with public network access still enabled
+az graph query -q "Resources
+  | where type =~ 'microsoft.storage/storageaccounts'
+  | where properties.publicNetworkAccess != 'Disabled'
+  | project name, resourceGroup, subscriptionId"
+```
+
+## CI/CD: the automation spine in practice
+
+The pipeline that ties IaC, training, and deployment together should authenticate to Azure with **no stored secrets**. The current standard is **OIDC federation**: GitHub Actions (or Azure DevOps) presents a short-lived workflow token to Entra ID, which exchanges it for an Azure access token against a **federated credential** you registered on an app/managed identity — so there is no client secret to rotate or leak. The `azure/login` action wires this up, and every subsequent `az` / `az ml` step runs as that identity:
+
+```yaml
+# .github/workflows/deploy.yml — keyless deploy via OIDC
+permissions:
+  id-token: write        # required for the workflow to request the OIDC token
+  contents: read
+jobs:
+  ship:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/login@v2                    # OIDC — no client secret
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - name: Provision infra
+        run: az deployment group create -g rg-mlx-dev --template-file main.bicep --parameters env=dev
+      - name: Train + register (Azure ML job)
+        run: |
+          az ml job create --file pipeline-job.yml -g rg-mlx-dev -w mlw-mlx-dev
+      - name: Roll out canary deployment
+        run: |
+          az ml online-deployment create --file green-deployment.yml -g rg-mlx-dev -w mlw-mlx-dev
+          az ml online-endpoint update -n fraud-endpoint --traffic "blue=90 green=10" -g rg-mlx-dev -w mlw-mlx-dev
+```
+
+The `az ml` verbs are the orchestration surface CI actually drives: `az ml job create --file pipeline-job.yml` kicks off the train→evaluate→register pipeline, `az ml model list`/`az ml model show` gate promotion on the new version's metrics, and the online-deployment commands from the deployment section perform the canary rollout — all the same YAML specs a data scientist ran locally, now executed by a keyless identity. The federated credential is itself declared in Bicep, so even the CI trust relationship is reproducible infrastructure.
 
 ## The lifecycle, end to end
 
@@ -122,6 +190,42 @@ Trace one change through the whole system. A data scientist opens a PR improving
 - **CI/CD (Azure DevOps / GitHub Actions)** is the spine that builds images, runs the training pipeline, and rolls out canary deployments; **orchestration** duties split cleanly across Data Factory, ML pipelines, and Durable Functions.
 - The **GenAI branch** (Foundry + AI Search RAG) runs in parallel, sharing the identity/network/monitoring backbone with the custom-ML branch.
 - Provision everything with **Bicep/Terraform** so environments are reproducible; wrap it all in **Entra ID identity, private-endpoint networking, and Cost Management** — the cross-cutting concerns that make it production-grade.
+
+## CLI cheat-sheet
+
+```bash
+# --- Bicep tooling ---
+az bicep install                    # install the Bicep CLI (pin in CI)
+az bicep upgrade                    # update to latest
+az bicep version
+az bicep build --file main.bicep    # lint + compile Bicep -> ARM JSON
+
+# --- Deploy (resource-group scope) ---
+az deployment group what-if -g rg-mlx-dev --template-file main.bicep --parameters env=dev   # preview change set
+az deployment group validate -g rg-mlx-dev --template-file main.bicep --parameters env=dev  # template check
+az deployment group create -g rg-mlx-dev --template-file main.bicep --parameters env=dev prefix=mlx
+az deployment group create -g rg-mlx-dev --template-file main.bicep --parameters env=prod --confirm-with-what-if
+az deployment group list -g rg-mlx-dev -o table
+az deployment group show -g rg-mlx-dev -n main --query properties.outputs
+
+# --- Deploy (subscription scope: resource groups, policy/role assignments) ---
+az deployment sub what-if --location eastus2 --template-file platform.bicep --parameters env=prod
+az deployment sub create  --location eastus2 --template-file platform.bicep --parameters env=prod
+
+# --- Resource Graph (query the live estate with KQL) ---
+az graph query -q "Resources | where type =~ 'microsoft.machinelearningservices/workspaces' | project name, resourceGroup"
+az graph query -q "Resources | summarize count() by type | order by count_ desc"
+
+# --- Azure ML orchestration (what CI/CD drives) ---
+az ml job create --file pipeline-job.yml -g rg-mlx-dev -w mlw-mlx-dev    # train -> eval -> register
+az ml model list -g rg-mlx-dev -w mlw-mlx-dev -o table
+az ml model show -n fraud-detector --version 2 -g rg-mlx-dev -w mlw-mlx-dev
+az ml online-deployment create --file green-deployment.yml -g rg-mlx-dev -w mlw-mlx-dev
+az ml online-endpoint update -n fraud-endpoint --traffic "blue=90 green=10" -g rg-mlx-dev -w mlw-mlx-dev
+
+# --- Keyless CI login (GitHub Actions / Azure DevOps via OIDC) ---
+# azure/login@v2 with client-id/tenant-id/subscription-id + a federated credential — no client secret
+```
 
 ## Try it
 

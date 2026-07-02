@@ -61,7 +61,66 @@ az functionapp create \
   --storage-account stmlxfunc \
   --flexconsumption-location eastus2 \
   --runtime python --runtime-version 3.12 \
+  --instance-memory 2048 --maximum-instance-count 100 \
   --assign-identity id-mlplatform
+```
+
+The presence of `--flexconsumption-location` is what selects the Flex Consumption plan — you do not pre-create a plan object as you do for Premium or Dedicated. `--instance-memory` (512, 2048, or 4096 MB) sets the per-instance size that Flex scales out, and `--maximum-instance-count` caps the blast radius so a runaway trigger cannot scale into a surprise bill. After creation, the everyday operations are list/show/delete plus configuring app settings and identity:
+
+```bash
+az functionapp list   -g rg-mlx-dev -o table
+az functionapp show   -g rg-mlx-dev -n func-mlx-scoring --query "{state:state, plan:sku}" -o table
+az functionapp delete -g rg-mlx-dev -n func-mlx-scoring
+
+# App settings are your environment variables — point the function at its downstream endpoint
+az functionapp config appsettings set -g rg-mlx-dev -n func-mlx-scoring \
+  --settings SCORING_ENDPOINT="https://mlw-mlx-dev.eastus2.inference.ml.azure.com/score"
+az functionapp config appsettings list -g rg-mlx-dev -n func-mlx-scoring -o table
+
+# Attach the shared managed identity so the function reaches storage / Key Vault / the ML endpoint keyless
+az functionapp identity assign -g rg-mlx-dev -n func-mlx-scoring --identities id-mlplatform
+
+# VNet integration (Flex Consumption / Premium) so the function reaches private endpoints
+az functionapp vnet-integration add -g rg-mlx-dev -n func-mlx-scoring \
+  --vnet vnet-mlx --subnet snet-functions
+az functionapp vnet-integration list -g rg-mlx-dev -n func-mlx-scoring -o table
+```
+
+Premium and Dedicated plans, unlike Flex, are created explicitly and then a function app is bound to the plan. That extra step is how you get pre-warmed (always-ready) instances that eliminate cold starts:
+
+```bash
+# Premium plan (EP1/EP2/EP3) with two always-ready warm instances, then an app on it
+az functionapp plan create -g rg-mlx-dev -n plan-mlx-premium \
+  --sku EP1 --min-instances 2 --max-burst 20 --location eastus2
+az functionapp create -g rg-mlx-dev -n func-mlx-lowlatency \
+  --plan plan-mlx-premium --storage-account stmlxfunc \
+  --runtime python --runtime-version 3.12 --assign-identity id-mlplatform
+az functionapp plan list -g rg-mlx-dev -o table
+```
+
+The **local development** loop uses the Azure Functions Core Tools (`func`), separate from `az`: `func init` scaffolds a project, `func new` adds a trigger, `func start` runs it locally against the same bindings, and `func azure functionapp publish` deploys the code to the app you created with `az`:
+
+```bash
+func init func-mlx-scoring --python
+func new --name score_on_arrival --template "Azure Blob Storage trigger"
+func start                                            # run locally with the local.settings.json bindings
+func azure functionapp publish func-mlx-scoring       # deploy code to the Azure app
+```
+
+For safe rollouts, non-Consumption plans support **deployment slots** (a staging slot you publish to, warm up, then swap into production with zero downtime) and Flex/Premium let you tune **scaling** limits after the fact. And because a Function's HTTP endpoints are protected by keys, retrieving and rotating those keys is a first-class `az` operation — put the host or function key behind API Management or a managed-identity call rather than embedding it:
+
+```bash
+# Deployment slots (Premium/Dedicated) — publish to staging, then swap
+az functionapp deployment slot create -g rg-mlx-dev -n func-mlx-lowlatency --slot staging
+az functionapp deployment slot swap   -g rg-mlx-dev -n func-mlx-lowlatency --slot staging --target-slot production
+
+# Scaling controls
+az functionapp scale config set -g rg-mlx-dev -n func-mlx-scoring --maximum-instance-count 40   # Flex
+az functionapp plan update -g rg-mlx-dev -n plan-mlx-premium --min-instances 3                  # Premium warm floor
+
+# Keys — list, then rotate the host key rather than shipping it in code
+az functionapp keys list -g rg-mlx-dev -n func-mlx-scoring
+az functionapp keys set  -g rg-mlx-dev -n func-mlx-scoring --key-type functionKeys --key-name mykey --key-value <new>
 ```
 
 ## Durable Functions: stateful orchestration
@@ -92,6 +151,49 @@ In the reference architecture, Functions is the event layer that keeps the syste
 - Prefer the **Flex Consumption** plan for new work — fast scale-to-zero, VNet integration, per-function scaling; use **Premium** to avoid cold starts.
 - **Durable Functions** expresses stateful, multi-step event-driven workflows; for scheduled DAG pipelines use Azure ML pipelines or Data Factory instead.
 - Functions has **execution-time, memory, and no-GPU** limits: let it *orchestrate and react*, and delegate heavy training/inference to Azure ML compute and endpoints.
+
+## CLI cheat-sheet
+
+```bash
+# --- Local development (Azure Functions Core Tools) ---
+func init func-mlx-scoring --python
+func new --name score_on_arrival --template "Azure Blob Storage trigger"
+func start                                          # run + debug locally
+func azure functionapp publish func-mlx-scoring     # deploy code to the app
+
+# --- Create the app (Flex Consumption = the modern default) ---
+az functionapp create -g rg-mlx-dev -n func-mlx-scoring --storage-account stmlxfunc \
+  --flexconsumption-location eastus2 --runtime python --runtime-version 3.12 \
+  --instance-memory 2048 --maximum-instance-count 100 --assign-identity id-mlplatform
+
+# --- Premium plan (pre-warmed, no cold start) ---
+az functionapp plan create -g rg-mlx-dev -n plan-mlx-premium --sku EP1 --min-instances 2 --max-burst 20 --location eastus2
+az functionapp create -g rg-mlx-dev -n func-mlx-lowlatency --plan plan-mlx-premium \
+  --storage-account stmlxfunc --runtime python --runtime-version 3.12 --assign-identity id-mlplatform
+az functionapp plan list   -g rg-mlx-dev -o table
+az functionapp plan update -g rg-mlx-dev -n plan-mlx-premium --min-instances 3
+
+# --- Lifecycle ---
+az functionapp list   -g rg-mlx-dev -o table
+az functionapp show   -g rg-mlx-dev -n func-mlx-scoring
+az functionapp stop   -g rg-mlx-dev -n func-mlx-scoring
+az functionapp start  -g rg-mlx-dev -n func-mlx-scoring
+az functionapp delete -g rg-mlx-dev -n func-mlx-scoring
+
+# --- Config, identity, networking ---
+az functionapp config appsettings set  -g rg-mlx-dev -n func-mlx-scoring --settings SCORING_ENDPOINT="https://..."
+az functionapp config appsettings list -g rg-mlx-dev -n func-mlx-scoring -o table
+az functionapp identity assign -g rg-mlx-dev -n func-mlx-scoring --identities id-mlplatform
+az functionapp vnet-integration add  -g rg-mlx-dev -n func-mlx-scoring --vnet vnet-mlx --subnet snet-functions
+az functionapp vnet-integration list -g rg-mlx-dev -n func-mlx-scoring -o table
+
+# --- Scaling, slots, keys ---
+az functionapp scale config set -g rg-mlx-dev -n func-mlx-scoring --maximum-instance-count 40
+az functionapp deployment slot create -g rg-mlx-dev -n func-mlx-lowlatency --slot staging
+az functionapp deployment slot swap   -g rg-mlx-dev -n func-mlx-lowlatency --slot staging --target-slot production
+az functionapp keys list -g rg-mlx-dev -n func-mlx-scoring
+az functionapp keys set  -g rg-mlx-dev -n func-mlx-scoring --key-type functionKeys --key-name mykey --key-value <new>
+```
 
 ## Try it
 

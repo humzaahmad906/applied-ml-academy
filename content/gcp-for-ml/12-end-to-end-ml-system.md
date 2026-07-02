@@ -10,11 +10,11 @@ Consider a real-time fraud-scoring system for a payments product. It must score 
 
 **2. Data lake and warehouse.** Bulk and historical data lives in **Cloud Storage** (the data lake); **BigQuery** is the warehouse where training sets are assembled with SQL, partitioned by date and clustered for cost. Raw, curated, and feature layers are separate datasets.
 
-**3. Feature management.** Feature definitions are registered in the **Vertex AI Feature Store**: **feature groups** point at BigQuery source tables/views (the offline store), and **feature views** sync selected features into a **Bigtable-backed online store** for low-latency retrieval at serving time. This solves the training-serving skew problem structurally — training reads features from BigQuery, serving reads the *same* feature definitions from the online store.
+**3. Feature management.** Feature definitions are registered in the **Vertex AI Feature Store**: **feature groups** point at BigQuery source tables/views (the offline store), and **feature views** sync selected features into a **Bigtable-backed online store** for low-latency retrieval at serving time. This solves the training-serving skew problem structurally — training reads features from BigQuery, serving reads the *same* feature definitions from the online store. Feature Store — together with Experiments and Metadata for run tracking — is covered in depth in module 17; treat this as the architectural placement, not the how-to.
 
 **4. Training and evaluation.** A **Vertex AI Pipeline** (Kubeflow-based) orchestrates the workflow: pull the training set from BigQuery, run **Vertex AI custom training** on GPU (an A100/L4, on Spot with checkpointing), evaluate against a **frozen eval set**, and — gated by a metric threshold — register the model to the **Vertex AI Model Registry** with a new version.
 
-**5. CI/CD.** Code changes trigger **Cloud Build** (or GitHub Actions authenticating via **Workload Identity Federation**, no keys): build the training and serving containers, push to **Artifact Registry**, run tests, and kick off the pipeline. Model promotion (moving the `production` alias to a new version) is gated on the eval.
+**5. CI/CD.** Code changes trigger **Cloud Build** (or GitHub Actions authenticating via **Workload Identity Federation**, no keys): build the training and serving containers, push to **Artifact Registry**, run tests, and kick off the pipeline. Model promotion (moving the `production` alias to a new version) is gated on the eval. **Workload Identity Federation** is what lets an external CI runner (GitHub Actions) impersonate a GCP service account without a downloaded key: you create a **workload identity pool** and an OIDC **provider** that trusts your repo's tokens, then bind the pool to a deploy service account. Setting it up is a one-time ordering: create the pool and provider, then grant the impersonation binding — the CI job exchanges its OIDC token for short-lived GCP credentials at run time.
 
 **6. Orchestration.** The pipeline runs on a schedule and on new-data triggers via **Vertex AI Pipelines**; for cross-service, time-based orchestration that also touches BigQuery and Dataflow, **Cloud Composer** (managed Airflow) coordinates the broader workflow.
 
@@ -129,6 +129,54 @@ This *is* the whole solution — the point where projects, IAM, compute, storage
 - The **Model Registry alias** is the contract between training and serving; **gate promotion on a frozen eval**; **close the loop** so drift monitoring triggers retraining.
 - Provision durable infrastructure with **Terraform** (IaC) and drive pipelines/deployments with CI/CD — the whole system is reconstructable from a repository.
 - Design for **separation of concerns, least privilege, private-by-default networking, and cost attribution** from the start.
+
+## CLI cheat-sheet
+
+A curated "provision the whole system" sequence, one or two commands per layer. **Order matters**: enable APIs first, then create the durable resources (buckets, dataset, registry, service accounts) before anything that references them, and set up Workload Identity Federation before the first CI deploy.
+
+```bash
+PROJECT=myco-fraud-prod; REGION=us-central1
+
+# 0. APIs (do this first — everything below depends on them)
+gcloud services enable aiplatform.googleapis.com bigquery.googleapis.com \
+  pubsub.googleapis.com dataflow.googleapis.com run.googleapis.com \
+  artifactregistry.googleapis.com secretmanager.googleapis.com --project=$PROJECT
+
+# 1. Durable data + artifact resources (prefer `gcloud storage` over gsutil)
+gcloud storage buckets create gs://myco-fraud-data --location=$REGION --uniform-bucket-level-access
+bq --location=$REGION mk --dataset $PROJECT:fraud
+gcloud artifacts repositories create ml-images --repository-format=docker --location=$REGION
+
+# 2. Ingestion
+gcloud pubsub topics create transactions
+gcloud pubsub subscriptions create transactions-to-bq --topic=transactions \
+  --bigquery-table=$PROJECT:fraud.raw_events --use-topic-schema
+
+# 3. Least-privilege service accounts (create before the jobs that assume them)
+gcloud iam service-accounts create training-sa --display-name="Vertex training"
+gcloud iam service-accounts create serving-sa  --display-name="Vertex serving"
+
+# 4. Train → register → deploy (details in modules 09 & 10)
+gcloud ai custom-jobs create --region=$REGION --display-name=fraud-train \
+  --service-account=training-sa@$PROJECT.iam.gserviceaccount.com \
+  --worker-pool-spec=machine-type=a2-highgpu-1g,replica-count=1,accelerator-type=NVIDIA_TESLA_A100,accelerator-count=1,container-image-uri=$REGION-docker.pkg.dev/$PROJECT/ml-images/train:v1
+gcloud ai models upload   --region=$REGION --display-name=fraud-classifier \
+  --artifact-uri=gs://myco-fraud-models/fraud/run-001/model \
+  --container-image-uri=$REGION-docker.pkg.dev/$PROJECT/ml-images/serve:v1
+gcloud ai endpoints create --region=$REGION --display-name=fraud-endpoint
+gcloud ai endpoints deploy-model ENDPOINT_ID --region=$REGION --model=MODEL_ID \
+  --machine-type=g2-standard-8 --accelerator=type=nvidia-l4,count=1 --min-replica-count=1 --max-replica-count=8
+
+# 5. Workload Identity Federation for keyless CI/CD (set up once, before first CI deploy)
+gcloud iam workload-identity-pools create github --location=global --display-name="GitHub CI"
+gcloud iam workload-identity-pools providers create-oidc github-provider \
+  --location=global --workload-identity-pool=github \
+  --issuer-uri="https://token.actions.githubusercontent.com" \
+  --attribute-mapping="google.subject=assertion.sub,attribute.repository=assertion.repository"
+# then bind the pool to a deploy SA via roles/iam.workloadIdentityUser
+
+# Serving container, pipeline, and Gemini/RAG service are driven by the SDKs (modules 09-11).
+```
 
 ## Try it
 

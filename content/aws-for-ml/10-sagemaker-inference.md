@@ -44,6 +44,57 @@ result = predictor.predict({"features": [0.1, 0.9, 0.3]})
 
 For serverless, deploy with a `ServerlessInferenceConfig` (memory size and max concurrency) instead of an instance type; for asynchronous, provide an `AsyncInferenceConfig` with an S3 output location.
 
+Under the SDK's `deploy()` sit three distinct API calls, and it pays to know them because updates, rollbacks, and CI/CD all work at this level: **`CreateModel`** (names the container image + artifact + role), **`CreateEndpointConfig`** (declares the production variants — instance type, count, and the serverless/async config), and **`CreateEndpoint`** (spins up the config as a live endpoint). The separation is deliberate: to ship a new model you create a *new* config and call `update-endpoint`, which does a managed blue/green swap with zero downtime, and you can roll back by pointing the endpoint at the previous config.
+
+```bash
+aws sagemaker create-model --model-name fraud-v3 \
+  --primary-container Image=<ecr-image>,ModelDataUrl=s3://my-ml-data/models/model.tar.gz \
+  --execution-role-arn arn:aws:iam::123456789012:role/SageMakerRole
+
+# Real-time variant
+aws sagemaker create-endpoint-config --endpoint-config-name fraud-v3-cfg \
+  --production-variants VariantName=AllTraffic,ModelName=fraud-v3,InstanceType=ml.g5.xlarge,InitialInstanceCount=1
+
+aws sagemaker create-endpoint --endpoint-name fraud-scorer --endpoint-config-name fraud-v3-cfg
+aws sagemaker describe-endpoint --endpoint-name fraud-scorer --query 'EndpointStatus'
+
+# Ship v4: new config, then swap in place (managed blue/green, no downtime)
+aws sagemaker update-endpoint --endpoint-name fraud-scorer --endpoint-config-name fraud-v4-cfg
+```
+
+The serverless and async variants are the *same* `create-endpoint-config` call with a different production-variant shape — serverless swaps the instance fields for a `ServerlessConfig`, and async is a real-time variant plus a top-level `--async-inference-config`:
+
+```bash
+# Serverless variant (no instance type; memory + concurrency instead)
+aws sagemaker create-endpoint-config --endpoint-config-name fraud-serverless-cfg \
+  --production-variants VariantName=AllTraffic,ModelName=fraud-v3,ServerlessConfig={MemorySizeInMB=4096,MaxConcurrency=20}
+
+# Async variant (real-time variant + S3 output location for results)
+aws sagemaker create-endpoint-config --endpoint-config-name fraud-async-cfg \
+  --production-variants VariantName=AllTraffic,ModelName=fraud-v3,InstanceType=ml.g5.xlarge,InitialInstanceCount=1 \
+  --async-inference-config OutputConfig={S3OutputPath=s3://my-ml-data/async-out/}
+```
+
+Invocation lives in a *separate* service, `sagemaker-runtime` (a common surprise — `aws sagemaker invoke-endpoint` does not exist). Real-time is `invoke-endpoint`; async is `invoke-endpoint-async`, which takes an S3 input location and returns immediately with the S3 path where the result will land.
+
+```bash
+aws sagemaker-runtime invoke-endpoint --endpoint-name fraud-scorer \
+  --content-type application/json --body '{"features":[0.1,0.9,0.3]}' /dev/stdout
+
+aws sagemaker-runtime invoke-endpoint-async --endpoint-name fraud-scorer \
+  --content-type application/json --input-location s3://my-ml-data/async-in/req1.json
+```
+
+**Batch transform** is not an endpoint — it is its own job that reads a dataset from S3, scores it, and shuts down, so there is nothing to invoke or tear down afterward:
+
+```bash
+aws sagemaker create-transform-job --transform-job-name nightly-score \
+  --model-name fraud-v3 \
+  --transform-input DataSource={S3DataSource={S3DataType=S3Prefix,S3Uri=s3://my-ml-data/score-in/}} \
+  --transform-output S3OutputPath=s3://my-ml-data/score-out/ \
+  --transform-resources InstanceType=ml.m5.xlarge,InstanceCount=4
+```
+
 ## Hosting many models efficiently
 
 Two features cut the cost of hosting large model fleets:
@@ -51,6 +102,24 @@ Two features cut the cost of hosting large model fleets:
 **Multi-model endpoints (MME)** host many models behind a single endpoint on shared instances; SageMaker loads a model into memory on demand and evicts idle ones. For organizations serving hundreds of low-traffic models (per-customer or per-segment models), MME can cut inference cost by 80–90% versus one endpoint per model, since you are not paying for idle capacity per model.
 
 **Inference components** let you deploy multiple models — or multiple copies of a model — onto a shared endpoint with fine-grained control over how much CPU, memory, and how many accelerators each gets, and independent scaling per component. This is the modern way to pack several models onto expensive GPU instances at high utilization instead of dedicating a whole instance to each. **Multi-container endpoints** similarly place multiple containers behind one endpoint.
+
+MME hosts all its models from a single S3 prefix — you add a model by uploading its `model.tar.gz` there (no redeploy) and invoke a specific one with the `--target-model` argument; the eviction of idle models is what causes the occasional cold-start latency spike, the main MME gotcha to plan around.
+
+```bash
+# Invoke a specific model on a multi-model endpoint
+aws sagemaker-runtime invoke-endpoint --endpoint-name customer-models \
+  --target-model customer-42.tar.gz \
+  --content-type application/json --body '{"features":[...]}' /dev/stdout
+```
+
+Inference components are the newer, more explicit path: you create an endpoint with an empty config, then attach a `create-inference-component` per model declaring its compute (`--compute-resource-requirements`) and copy count, and scale each component independently — including scale-to-zero for components that go quiet.
+
+```bash
+aws sagemaker create-inference-component --inference-component-name ranker \
+  --endpoint-name shared-gpu --variant-name AllTraffic \
+  --specification 'ModelName=ranker-v2,ComputeResourceRequirements={NumberOfAcceleratorDevicesRequired=1,MinMemoryRequiredInMb=8192}' \
+  --runtime-config CopyCount=2
+```
 
 ## Autoscaling
 
@@ -80,6 +149,18 @@ aas.put_scaling_policy(
 
 Set `MinCapacity` thoughtfully: 1 keeps a warm baseline, while asynchronous inference lets you scale the minimum to 0 for true pay-per-use. Deploying new versions safely uses **production variants** and traffic shifting (blue/green or canary) so you can roll out a new model behind the same endpoint without downtime.
 
+The scale-to-zero pattern for async is the same two calls with `MinCapacity=0` and a policy on the `ApproximateBacklogSizePerInstance` metric — the queue depth, not invocation rate, is what drives async scaling from and back to zero:
+
+```python
+aas.register_scalable_target(
+    ServiceNamespace="sagemaker", ResourceId="endpoint/fraud-async/variant/AllTraffic",
+    ScalableDimension="sagemaker:variant:DesiredInstanceCount",
+    MinCapacity=0, MaxCapacity=4,   # true zero idle cost between bursts
+)
+```
+
+Two operational gotchas: target-tracking only scales *out* on a breach and relies on the cooldowns to avoid thrashing (a too-short `ScaleInCooldown` flaps the fleet), and the `ResourceId` string format is exact — a typo in `endpoint/<name>/variant/<variant>` fails silently by simply never scaling. The raw CLI equivalents are `aws application-autoscaling register-scalable-target` and `put-scaling-policy` with the same arguments.
+
 ## How this fits the whole ML solution
 
 Inference is where the model meets consumers, and each option corresponds to a real place in the architecture: real-time behind the API front door, serverless for a spiky internal feature, asynchronous for heavy generative jobs, batch transform for nightly scoring feeding the warehouse. The endpoint reads the artifact the model registry promoted, sits inside the VPC, is fronted by API Gateway/Lambda, and emits the metrics that monitoring watches for drift. Picking the right option per workload is a direct, ongoing lever on both latency and cost across the whole system.
@@ -91,6 +172,58 @@ Inference is where the model meets consumers, and each option corresponds to a r
 - Multi-model endpoints cut cost 80–90% for many low-traffic models; inference components pack multiple models onto shared (GPU) endpoints at high utilization.
 - Autoscale real-time endpoints on invocations-per-instance; use asynchronous inference to reach true zero idle cost.
 - Roll out new models safely with production variants and canary/blue-green traffic shifting.
+
+## CLI cheat-sheet
+
+```bash
+# --- Deploy (Model -> EndpointConfig -> Endpoint) ---
+aws sagemaker create-model --model-name fraud-v3 \
+  --primary-container Image=<ecr-image>,ModelDataUrl=s3://.../model.tar.gz \
+  --execution-role-arn <role>
+aws sagemaker create-endpoint-config --endpoint-config-name fraud-cfg \
+  --production-variants VariantName=AllTraffic,ModelName=fraud-v3,InstanceType=ml.g5.xlarge,InitialInstanceCount=1
+aws sagemaker create-endpoint --endpoint-name fraud-scorer --endpoint-config-name fraud-cfg
+aws sagemaker describe-endpoint --endpoint-name fraud-scorer --query 'EndpointStatus'
+aws sagemaker update-endpoint --endpoint-name fraud-scorer --endpoint-config-name fraud-v4-cfg  # blue/green
+aws sagemaker delete-endpoint --endpoint-name fraud-scorer   # STOP paying: delete idle endpoints
+
+# Serverless / async variants (same create-endpoint-config, different variant shape)
+#   ServerlessConfig={MemorySizeInMB=4096,MaxConcurrency=20}
+#   --async-inference-config OutputConfig={S3OutputPath=s3://.../async-out/}
+
+# --- Invoke (separate service: sagemaker-runtime) ---
+aws sagemaker-runtime invoke-endpoint --endpoint-name fraud-scorer \
+  --content-type application/json --body '{"features":[0.1,0.9]}' /dev/stdout
+aws sagemaker-runtime invoke-endpoint-async --endpoint-name fraud-scorer \
+  --content-type application/json --input-location s3://.../async-in/req.json
+aws sagemaker-runtime invoke-endpoint --endpoint-name customer-models \
+  --target-model customer-42.tar.gz --content-type application/json --body '{...}' /dev/stdout  # MME
+
+# --- Batch transform (no endpoint) ---
+aws sagemaker create-transform-job --transform-job-name nightly-score --model-name fraud-v3 \
+  --transform-input DataSource={S3DataSource={S3DataType=S3Prefix,S3Uri=s3://.../in/}} \
+  --transform-output S3OutputPath=s3://.../out/ \
+  --transform-resources InstanceType=ml.m5.xlarge,InstanceCount=4
+
+# --- Inference components (pack models on shared GPU) ---
+aws sagemaker create-inference-component --inference-component-name ranker \
+  --endpoint-name shared-gpu --variant-name AllTraffic \
+  --specification 'ModelName=ranker-v2,ComputeResourceRequirements={NumberOfAcceleratorDevicesRequired=1,MinMemoryRequiredInMb=8192}' \
+  --runtime-config CopyCount=2
+
+# --- Autoscaling (application-autoscaling; namespace sagemaker) ---
+aws application-autoscaling register-scalable-target --service-namespace sagemaker \
+  --resource-id endpoint/fraud-scorer/variant/AllTraffic \
+  --scalable-dimension sagemaker:variant:DesiredInstanceCount \
+  --min-capacity 1 --max-capacity 8            # min 0 for async scale-to-zero
+aws application-autoscaling put-scaling-policy --service-namespace sagemaker \
+  --resource-id endpoint/fraud-scorer/variant/AllTraffic \
+  --scalable-dimension sagemaker:variant:DesiredInstanceCount \
+  --policy-name invocations-target --policy-type TargetTrackingScaling \
+  --target-tracking-scaling-policy-configuration file://policy.json
+# policy.json metric: SageMakerVariantInvocationsPerInstance (real-time)
+#                     ApproximateBacklogSizePerInstance      (async queue depth)
+```
 
 ## Try it
 

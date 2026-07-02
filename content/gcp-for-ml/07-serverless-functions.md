@@ -62,9 +62,82 @@ gcloud functions deploy on-new-object \
 
 Note the dedicated **service account** and `--no-allow-unauthenticated`: functions run as an identity and should require authentication by default, exactly the least-privilege posture from the security module.
 
+The deploy command carries the full set of runtime and trigger flags, and this is where you tune behavior in practice. The **trigger** flags determine how the function is invoked — pick exactly one:
+
+- `--trigger-http` — an HTTP function reachable at an HTTPS URL.
+- `--trigger-topic=NAME` — fire on every message published to a Pub/Sub topic (shorthand for the equivalent Eventarc filter).
+- `--trigger-bucket=NAME` — fire on object finalize/delete in a Cloud Storage bucket (shorthand).
+- `--trigger-event-filters="type=...,..."` — the general **Eventarc** form; repeat the flag to add filters (an event `type` plus resource filters like `bucket=` or `serviceName=`). Use this for the full range of Eventarc sources, Audit-Log-based triggers, and multi-attribute matching.
+
+The **scaling and resource** flags map straight onto the underlying Cloud Run service. `--min-instances` keeps N instances warm (kills cold starts for latency-sensitive glue; costs money at idle), `--max-instances` caps fan-out so a burst of events cannot blow your budget or hammer a downstream database, `--concurrency` sets how many requests one instance handles at once (>1 amortizes cold starts and cost for I/O-bound work; keep it at 1 for CPU-bound inference), and `--memory` / `--cpu` / `--timeout` size each instance (up to 16 GiB / 4 vCPU, 60-minute HTTP / 9-minute event-driven). Config and secrets come in via `--set-env-vars`, `--set-secrets` (mount a Secret Manager version as an env var or file — never bake keys into source), and `--run-service-account` (the identity the running container uses, as distinct from the build identity). A production-shaped deploy:
+
+```bash
+gcloud functions deploy fraud-score \
+  --gen2 --region=us-central1 --runtime=python312 \
+  --source=. --entry-point=score \
+  --trigger-http --no-allow-unauthenticated \
+  --min-instances=1 --max-instances=50 --concurrency=20 \
+  --memory=1Gi --cpu=1 --timeout=120s \
+  --set-env-vars=MODEL_BUCKET=myco-fraud-models,LOG_LEVEL=info \
+  --set-secrets=API_KEY=projects/myco-fraud-prod/secrets/scoring-api-key:latest \
+  --run-service-account=serving-sa@myco-fraud-prod.iam.gserviceaccount.com
+```
+
+### The modern deploy path: `gcloud run deploy --function`
+
+Because current-generation functions *are* Cloud Run services, you can deploy them straight through the Cloud Run surface with `gcloud run deploy --function=<entry-point>`. This gives you the function build experience (no Dockerfile — buildpacks detect your runtime from the source) while exposing the full Cloud Run flag set. It is the forward-looking path; `gcloud functions deploy --gen2` remains fully supported and is what most existing tooling uses.
+
+```bash
+gcloud run deploy fraud-score \
+  --function=score \
+  --source=. \
+  --base-image=python312 \
+  --region=us-central1 \
+  --no-allow-unauthenticated
+```
+
+### Day-two operations
+
+Deploying is the easy part; you spend far more time inspecting, invoking, and cleaning up. These are the commands you run constantly:
+
+```bash
+# List and inspect
+gcloud functions list --regions=us-central1
+gcloud functions describe fraud-score --region=us-central1 --gen2
+
+# Read logs (last 5 min of executions, most recent first)
+gcloud functions logs read fraud-score --region=us-central1 --gen2 --limit=50
+
+# Invoke directly for a smoke test (bypasses the network path)
+gcloud functions call fraud-score --region=us-central1 --gen2 \
+  --data='{"amount": 940.0, "merchant_category": "electronics"}'
+
+# Delete
+gcloud functions delete fraud-score --region=us-central1 --gen2
+```
+
+Grant callers the right to invoke an authenticated function without opening it to the world with `add-invoker-policy-binding` — the least-privilege alternative to `--allow-unauthenticated`:
+
+```bash
+gcloud functions add-invoker-policy-binding fraud-score \
+  --region=us-central1 \
+  --member=serviceAccount:caller-sa@myco-fraud-prod.iam.gserviceaccount.com
+```
+
+To see the Eventarc plumbing behind an event-driven function — useful when a trigger silently stops firing — list the triggers directly:
+
+```bash
+gcloud eventarc triggers list --location=us-central1
+gcloud eventarc triggers describe TRIGGER_NAME --location=us-central1
+```
+
+### gen1 vs gen2 — and why it matters
+
+You will still encounter **1st-gen** functions in older projects, and the difference is not cosmetic. Gen1 caps out at one request per instance, ~8 GiB memory, and a 9-minute timeout, uses a different (legacy) event format, and can only target a fixed set of trigger types. Gen2 (Cloud Run functions) gives you concurrency, up to 16 GiB / 4 vCPU, 60-minute HTTP timeouts, and the full Eventarc trigger surface. Deploy new work with `--gen2` (or the `gcloud run deploy --function` path); migrate gen1 functions deliberately, since the event payload shape and the required Functions Framework decorators differ between generations.
+
 ## Triggers and event flow
 
-Eventarc is what makes functions the connective tissue of an ML system. A typical event chain: a client uploads a batch-prediction input to Cloud Storage → a Storage-triggered function validates it and publishes to Pub/Sub → that message triggers a function (or a Cloud Run job) that submits a Vertex AI batch prediction → completion publishes another event that triggers a function to notify the caller. Each hop is a small, independently scalable, pay-per-use function. Because Pub/Sub delivers at-least-once, your event functions should be **idempotent** — processing the same event twice must be safe.
+Eventarc is what makes functions the connective tissue of an ML system. A typical event chain: a client uploads a batch-prediction input to Cloud Storage → a Storage-triggered function validates it and publishes to Pub/Sub → that message triggers a function (or a Cloud Run job) that submits a Vertex AI batch prediction → completion publishes another event that triggers a function to notify the caller. Each hop is a small, independently scalable, pay-per-use function. Because Pub/Sub (and Eventarc generally) delivers **at-least-once**, your event functions should be **idempotent** — processing the same event twice must be safe. The practical pattern is to derive a stable key from the event (the Cloud Storage object generation, the Pub/Sub message ID) and skip work you have already done, so a redelivery is a no-op rather than a double-charge or a duplicate row. A related gotcha: event-driven functions are capped at a **9-minute** timeout even on gen2 (only HTTP functions get the full 60 minutes), so an event handler that might run long should hand off to a Cloud Run job rather than doing the work inline.
 
 ## Limits — and when a function is the wrong tool
 
@@ -92,6 +165,48 @@ In the end-to-end architecture, functions are the low-cost reflexes between the 
 - Functions are **HTTP** or **event-driven** (via **Eventarc**), with common ML triggers on **Cloud Storage** and **Pub/Sub**; make event handlers **idempotent**.
 - Respect the limits — **bounded timeout, capped memory/CPU, no GPUs, size limits, cold starts, statelessness** — and use functions only for **short, stateless glue and lightweight inference**.
 - Run functions under a **dedicated service account**, require authentication by default, and read secrets from **Secret Manager**.
+
+## CLI cheat-sheet
+
+```bash
+# --- Deploy (gen2 / Cloud Run functions) ---
+# HTTP function, authenticated, warm + capped, with secrets and env
+gcloud functions deploy fraud-score --gen2 --region=us-central1 \
+  --runtime=python312 --source=. --entry-point=score \
+  --trigger-http --no-allow-unauthenticated \
+  --min-instances=1 --max-instances=50 --concurrency=20 \
+  --memory=1Gi --cpu=1 --timeout=120s \
+  --set-env-vars=MODEL_BUCKET=myco-fraud-models \
+  --set-secrets=API_KEY=projects/myco-fraud-prod/secrets/scoring-api-key:latest \
+  --run-service-account=serving-sa@myco-fraud-prod.iam.gserviceaccount.com
+
+# Event triggers (pick one)
+gcloud functions deploy on-new-object --gen2 --region=us-central1 \
+  --runtime=python312 --source=. --entry-point=on_new_object \
+  --trigger-event-filters="type=google.cloud.storage.object.v1.finalized" \
+  --trigger-event-filters="bucket=myco-fraud-data"
+gcloud functions deploy on-msg --gen2 ... --trigger-topic=transactions
+gcloud functions deploy on-file --gen2 ... --trigger-bucket=myco-fraud-data
+
+# Modern Cloud Run path (buildpacks, no Dockerfile)
+gcloud run deploy fraud-score --function=score --source=. \
+  --base-image=python312 --region=us-central1 --no-allow-unauthenticated
+
+# --- Day-two ops ---
+gcloud functions list --regions=us-central1
+gcloud functions describe fraud-score --region=us-central1 --gen2
+gcloud functions logs read fraud-score --region=us-central1 --gen2 --limit=50
+gcloud functions call fraud-score --region=us-central1 --gen2 --data='{"amount":940}'
+gcloud functions delete fraud-score --region=us-central1 --gen2
+
+# Grant invoke to a specific caller (least privilege vs --allow-unauthenticated)
+gcloud functions add-invoker-policy-binding fraud-score --region=us-central1 \
+  --member=serviceAccount:caller-sa@myco-fraud-prod.iam.gserviceaccount.com
+
+# Inspect the Eventarc plumbing behind an event-driven function
+gcloud eventarc triggers list --location=us-central1
+gcloud eventarc triggers describe TRIGGER_NAME --location=us-central1
+```
 
 ## Try it
 

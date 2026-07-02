@@ -10,14 +10,44 @@ For ML, three layers of monitoring matter:
 
 **Infrastructure and endpoint health.** Every managed online endpoint emits metrics — request rate, latency percentiles, error rate, and instance utilization — into Azure Monitor. These drive the **autoscale** rules from the deployment section and feed **alerts** so you know before users do.
 
+Metrics and logs go to different sinks, and both must be wired up deliberately — this is the step most people miss, because an endpoint emits *nothing* to Log Analytics until you attach a **diagnostic setting** routing its categories there. So the foundation is a **Log Analytics workspace**, and a diagnostic setting on each resource forwarding logs and platform metrics into it:
+
 ```bash
+# 1. The workspace that stores logs and powers KQL
+az monitor log-analytics workspace create -g rg-mlx-dev \
+  --workspace-name log-mlx-dev --location eastus2 --retention-time 90
+
+# 2. Route the endpoint's logs + metrics into it (nothing arrives without this)
+WS_ID=$(az monitor log-analytics workspace show -g rg-mlx-dev \
+  --workspace-name log-mlx-dev --query id -o tsv)
+EP_ID=$(az ml online-endpoint show -n fraud-endpoint -g rg-mlx-dev -w mlw-mlx-dev --query id -o tsv)
+az monitor diagnostic-settings create --name to-log-analytics \
+  --resource "$EP_ID" --workspace "$WS_ID" \
+  --logs    '[{"categoryGroup":"allLogs","enabled":true}]' \
+  --metrics '[{"category":"AllMetrics","enabled":true}]'
+```
+
+With telemetry flowing, you can browse what a resource emits and read raw metric values from the CLI before wiring an alert — `metrics list-definitions` shows the available metric names, `metrics list` pulls the time series:
+
+```bash
+# Discover which metrics the endpoint exposes, then read one
+az monitor metrics list-definitions --resource "$EP_ID" -o table
+az monitor metrics list --resource "$EP_ID" \
+  --metric RequestLatency_P95 --interval PT5M --aggregation Average -o table
+
 # Alert when p95 endpoint latency exceeds 500ms over 5 minutes
 az monitor metrics alert create -g rg-mlx-dev --name high-latency \
-  --scopes "$(az ml online-endpoint show -n fraud-endpoint -g rg-mlx-dev \
-      -w mlw-mlx-dev --query id -o tsv)" \
-  --condition "avg RequestLatency > 500" --window-size 5m \
+  --scopes "$EP_ID" \
+  --condition "avg RequestLatency > 500" --window-size 5m --evaluation-frequency 1m \
+  --severity 2 --action "$(az monitor action-group show -n oncall -g rg-mlx-dev --query id -o tsv)" \
   --description "Fraud endpoint p95 latency high"
+
+# The activity log is the control-plane audit trail (who changed/deleted what)
+az monitor activity-log list -g rg-mlx-dev --offset 24h \
+  --query "[?operationName.value=='Microsoft.MachineLearningServices/workspaces/onlineEndpoints/delete']"
 ```
+
+The `--action` on the alert points at an **action group** — the fan-out target (email, SMS, webhook, a Function, a PagerDuty/Teams hook) that turns a fired alert into a page. An alert with no action group fires silently into the portal; wire the action group first.
 
 ```kusto
 // Log Analytics (KQL): error rate by deployment over the last hour
@@ -44,6 +74,18 @@ monitor = MonitorSchedule(
 ml_client.schedules.begin_create_or_update(monitor)
 ```
 
+The monitor runs on a recurrence and is itself an `az ml schedule` object, so CI/CD manages it declaratively and you operate it from the CLI — list what monitors exist, disable one during a planned data migration that would otherwise trip false drift alarms, and re-enable it after:
+
+```bash
+# Define the monitor in YAML (trigger + drift signals + baseline) and apply it
+az ml schedule create --file drift-monitor.yml -g rg-mlx-dev -w mlw-mlx-dev
+az ml schedule list -g rg-mlx-dev -w mlw-mlx-dev -o table
+az ml schedule show -n fraud-drift-monitor -g rg-mlx-dev -w mlw-mlx-dev
+# Pause during a known distribution shift (a migration, a promo) to suppress false alarms
+az ml schedule disable -n fraud-drift-monitor -g rg-mlx-dev -w mlw-mlx-dev
+az ml schedule enable  -n fraud-drift-monitor -g rg-mlx-dev -w mlw-mlx-dev
+```
+
 **Cost as a signal.** Spend is telemetry too — a training run that costs 5x its usual is often a bug (a job stuck retrying, a cluster that failed to scale down). Watch cost with the same seriousness as latency.
 
 ## Cost management
@@ -59,6 +101,29 @@ az consumption budget create --budget-name fraud-dev-monthly \
   --amount 3000 --time-grain Monthly \
   --resource-group rg-mlx-dev \
   --category Cost --start-date 2026-07-01 --end-date 2027-07-01
+
+# Enumerate and manage budgets
+az consumption budget list -g rg-mlx-dev -o table
+az consumption budget show --budget-name fraud-dev-monthly -g rg-mlx-dev
+az consumption budget delete --budget-name fraud-dev-monthly -g rg-mlx-dev
+```
+
+For actual spend analysis rather than guardrails, **Cost Management** exposes two commands (in the `costmanagement` extension). `costmanagement query` runs an ad-hoc, on-demand aggregation — the CLI equivalent of the Cost Analysis blade, and the fastest way to answer "what did the fraud project's dev resources cost this month, grouped by service?" `costmanagement export` schedules a recurring dump of the full cost dataset to a storage account for a FinOps dashboard or chargeback pipeline:
+
+```bash
+# Ad-hoc: month-to-date actual cost for this RG, grouped by service
+az costmanagement query --type ActualCost --timeframe MonthToDate \
+  --scope "/subscriptions/<sub-id>/resourceGroups/rg-mlx-dev" \
+  --dataset-aggregation '{"totalCost":{"name":"Cost","function":"Sum"}}' \
+  --dataset-grouping name=ServiceName type=Dimension
+
+# Recurring: export the full cost dataset daily to storage for dashboards
+az costmanagement export create --name daily-cost-export \
+  --scope "/subscriptions/<sub-id>/resourceGroups/rg-mlx-dev" \
+  --storage-account-id "$(az storage account show -n stmlxdata -g rg-mlx-dev --query id -o tsv)" \
+  --storage-container costexports --storage-directory mlx \
+  --timeframe MonthToDate --recurrence Daily --schedule-status Active
+az costmanagement export list --scope "/subscriptions/<sub-id>/resourceGroups/rg-mlx-dev" -o table
 ```
 
 **Optimization** is where ML teams save the most, because GPU is the biggest cost:
@@ -81,15 +146,64 @@ Governance keeps a growing platform consistent and compliant. The core tool is *
 - **Enforce private endpoints / deny public network access** on storage, workspaces, and endpoints — network posture as code.
 - **Require managed identity / RBAC** and forbid legacy access policies on Key Vault.
 
+Azure ships hundreds of **built-in** policy definitions (referenced by GUID, like the require-tag one above), and you author **custom** ones with `az policy definition create` when nothing built-in fits — the rule body is a JSON `if`/`then` where the `then.effect` is `deny`, `audit`, `modify`, or `deployIfNotExists`. You then group definitions into an **initiative** (a policy *set*) so a whole compliance standard assigns as one unit:
+
 ```bash
+# Author a custom definition (rule + effect in a JSON file)
+az policy definition create --name deny-public-storage \
+  --rules @deny-public-storage.rules.json --mode All \
+  --display-name "Storage accounts must disable public network access"
+
+# Bundle definitions into an initiative and assign the bundle
+az policy set-definition create --name ml-platform-baseline \
+  --definitions @initiative-definitions.json \
+  --display-name "ML platform governance baseline"
+
 # Enforce a required 'project' tag on all resources in a scope
 az policy assignment create --name require-project-tag \
   --policy "871b6d14-10aa-478d-b590-94f262ecfa99" \
   --params '{"tagName": {"value": "project"}}' \
   --scope "/subscriptions/<sub-id>/resourceGroups/rg-mlx-dev"
+
+# Assign the whole initiative at management-group scope; grant it a MI for modify/DINE effects
+az policy assignment create --name ml-baseline \
+  --policy-set-definition ml-platform-baseline \
+  --scope "/providers/Microsoft.Management/managementGroups/mg-mlx" \
+  --mi-system-assigned --identity-scope "/subscriptions/<sub-id>" --location eastus2
 ```
 
-Policies group into **initiatives**, and apply at **management-group** scope so every subscription inherits them — recall the management-group hierarchy from the overview section, which exists precisely so governance applies broadly and consistently. Pair policy with **Microsoft Defender for Cloud** for continuous security-posture assessment and recommendations across the platform.
+Assignment is only half the job — you have to *watch* compliance and *fix* existing drift. `az policy state` reports which resources are compliant or not, and for `deployIfNotExists`/`modify` policies, `az policy remediation` retroactively brings already-deployed resources into line (a fresh assignment only governs *new* deployments until you remediate):
+
+```bash
+# Which resources are non-compliant, and why
+az policy state list --resource-group rg-mlx-dev \
+  --filter "complianceState eq 'NonCompliant'" -o table
+az policy state summarize --resource-group rg-mlx-dev
+
+# Remediate existing non-compliant resources for a modify/DINE assignment
+az policy remediation create --name fix-tags \
+  --policy-assignment ml-baseline \
+  --resource-discovery-mode ExistingNonCompliant
+az policy remediation list --resource-group rg-mlx-dev -o table
+```
+
+Tags themselves are managed with `az tag` (and enforced by the policies above), so you can bulk-apply the `project`/`env`/`owner` scheme or audit what is missing:
+
+```bash
+az tag create --resource-id "$(az group show -n rg-mlx-dev --query id -o tsv)" \
+  --tags project=fraud env=dev owner=humza
+az tag list --resource-id "$(az group show -n rg-mlx-dev --query id -o tsv)"
+```
+
+Policies group into **initiatives**, and apply at **management-group** scope so every subscription inherits them — recall the management-group hierarchy from the overview section, which exists precisely so governance applies broadly and consistently. Pair policy with **Microsoft Defender for Cloud** for continuous security-posture assessment and recommendations across the platform — enable its plans and read its findings from the CLI:
+
+```bash
+# Turn on Defender for Cloud plans and review the security posture
+az security pricing create -n VirtualMachines --tier Standard
+az security pricing list -o table
+az security assessment list -o table          # posture findings to act on
+az security alert list -o table               # active security alerts
+```
 
 ## The mastery checklist
 
@@ -112,6 +226,57 @@ You have mastered Azure for ML when your platform satisfies all of the following
 - **Cost Management** runs a loop of visibility → allocation → optimization → forecasting → governance; **consistent tagging** is the prerequisite, and **eliminating idle GPU** (scale-to-zero, spot, autoscale, reservations, tiering) is the biggest lever.
 - **Azure Policy** enforces tags, regions, SKUs, and network posture as code at **management-group** scope; **Defender for Cloud** watches security posture.
 - **Mastery** = keyless identity, private networking, cost-disciplined compute, versioned reproducible ML lifecycle, canary delivery, drift-aware monitoring, enforced governance, all provisioned as **IaC**.
+
+## CLI cheat-sheet
+
+```bash
+# --- Monitoring: Log Analytics, diagnostics, metrics, alerts ---
+az monitor log-analytics workspace create -g rg-mlx-dev --workspace-name log-mlx-dev --retention-time 90
+az monitor diagnostic-settings create --name to-log-analytics --resource "$EP_ID" --workspace "$WS_ID" \
+  --logs '[{"categoryGroup":"allLogs","enabled":true}]' --metrics '[{"category":"AllMetrics","enabled":true}]'
+az monitor metrics list-definitions --resource "$EP_ID" -o table
+az monitor metrics list --resource "$EP_ID" --metric RequestLatency_P95 --interval PT5M --aggregation Average
+az monitor metrics alert create -g rg-mlx-dev --name high-latency --scopes "$EP_ID" \
+  --condition "avg RequestLatency > 500" --window-size 5m --severity 2 --action "$AG_ID"
+az monitor action-group create -g rg-mlx-dev -n oncall --short-name oncall --action email me me@x.com
+az monitor activity-log list -g rg-mlx-dev --offset 24h -o table
+# Run a KQL query against Log Analytics
+az monitor log-analytics query -w "$WS_ID" --analytics-query "AmlOnlineEndpointConsoleLog | take 50"
+
+# --- Model monitoring (drift) ---
+az ml schedule create --file drift-monitor.yml -g rg-mlx-dev -w mlw-mlx-dev
+az ml schedule list -g rg-mlx-dev -w mlw-mlx-dev -o table
+az ml schedule disable -n fraud-drift-monitor -g rg-mlx-dev -w mlw-mlx-dev
+az ml schedule enable  -n fraud-drift-monitor -g rg-mlx-dev -w mlw-mlx-dev
+
+# --- Cost management ---
+az consumption budget create --budget-name fraud-dev-monthly --amount 3000 --time-grain Monthly \
+  --resource-group rg-mlx-dev --category Cost --start-date 2026-07-01 --end-date 2027-07-01
+az consumption budget list -g rg-mlx-dev -o table
+az costmanagement query --type ActualCost --timeframe MonthToDate --scope "$RG_SCOPE" \
+  --dataset-aggregation '{"totalCost":{"name":"Cost","function":"Sum"}}' \
+  --dataset-grouping name=ServiceName type=Dimension
+az costmanagement export create --name daily-cost-export --scope "$RG_SCOPE" \
+  --storage-account-id "$SA_ID" --storage-container costexports --storage-directory mlx \
+  --timeframe MonthToDate --recurrence Daily --schedule-status Active
+
+# --- Governance: policy, tags, Defender ---
+az policy definition create --name deny-public-storage --rules @rules.json --mode All
+az policy set-definition create --name ml-platform-baseline --definitions @initiative.json
+az policy assignment create --name require-project-tag --policy <builtin-guid> \
+  --params '{"tagName":{"value":"project"}}' --scope "$RG_SCOPE"
+az policy assignment create --name ml-baseline --policy-set-definition ml-platform-baseline \
+  --scope "$MG_SCOPE" --mi-system-assigned --identity-scope "$SUB_SCOPE" --location eastus2
+az policy state list -g rg-mlx-dev --filter "complianceState eq 'NonCompliant'" -o table
+az policy state summarize -g rg-mlx-dev
+az policy remediation create --name fix-tags --policy-assignment ml-baseline \
+  --resource-discovery-mode ExistingNonCompliant
+az tag create --resource-id "$RG_ID" --tags project=fraud env=dev owner=humza
+az tag list --resource-id "$RG_ID"
+az security pricing create -n VirtualMachines --tier Standard      # enable Defender plan
+az security assessment list -o table
+az security alert list -o table
+```
 
 ## Try it
 
