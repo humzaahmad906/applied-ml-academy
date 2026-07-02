@@ -138,6 +138,64 @@ The control-plane/data-plane split is the standard mitigation: the **control pla
 - The set of long-standing engineering rules for ML systems — favor a simple model with good features, watch for training-serving skew, design metrics before models — is dated in tooling but timeless in judgment.
 - The workflows-vs-agents distinction is worth previewing now; it is developed fully in the agentic-systems chapter.
 
+## Foundations Box: The anatomy of a production ML system — what breaks between components
+
+The planes in section 1 are the right mental model; this box makes the *joints* concrete, because joints are where failures live.
+
+**The classic recommender request path:**
+
+```text
+raw request → candidate generation → ranking → policy/filter → response
+```
+
+Candidate generation is a recall problem (ANN retrieval over an embedding index, or rule-based filtering) — it runs in roughly 5–20 ms and must return hundreds of items. Ranking is a precision problem (a scoring model over (user, item) pairs) — it consumes another 20–60 ms of the budget. Policy/filter is deterministic business logic: deduplication, diversification, content moderation, A/B treatment assignment, price eligibility. The joint between candidate gen and ranking is where **embedding freshness** matters: if items were encoded with a 24-hour-old model but the ranker expects the current embedding space, you get silent quality regression with no error signal. The joint between ranking and policy is where **business-logic creep** lives — requirements that started as "just one small filter" accumulate into a 300-line rule set that contradicts the ranker's optimization objective.
+
+**The GenAI request path:**
+
+```text
+raw request → retrieval → reranking → context assembly → generation → guardrail → response
+```
+
+Retrieval (vector search plus optional BM25 hybrid) costs roughly 5–50 ms. A cross-encoder reranker adds another 20–100 ms but dramatically improves precision. Context assembly is O(1) text manipulation — but it is where **prompt-assembly bugs** live: wrong document order, truncated chunks, or a system-prompt collision that shifts the model's behavior mid-conversation. Generation is where most of the latency and cost sit (TTFT plus decode time). The guardrail is the last synchronous gate and must be fast — a small classifier or regex layer, not a second frontier-model call, or it blows the latency budget. The joint between context assembly and generation is where **context-length economics** play out: adding one more retrieval chunk to improve recall costs proportionally more in decode latency due to attention's quadratic scaling over input length (though linear-attention variants are shifting this — see the serving chapter).
+
+**Where latency accumulates.**
+
+In practice, p99 latency is dominated by: (1) the slowest synchronous I/O call — usually the database or vector-index lookup under cold-cache conditions, (2) the generation step if autoregressive, and (3) the guardrail if implemented naively as a serial LLM call. The standard pattern for staying within a 300–500 ms SLO: parallelize retrieval and metadata lookups; stream generation (tokens to client immediately, no wait for completion); run a lightweight guardrail concurrently with the stream and terminate early if violated.
+
+**Where cost accumulates.**
+
+Generation dominates in token-based billing. But the retrieval infrastructure — vector database, embedding re-encoding, reranker compute — is often 20–40% of total system cost at scale and is systematically underestimated in early designs. Design documents that quote only the LLM API cost are missing a line item. The serving chapter has the full TCO breakdown.
+
+**The feedback loop is the architecture, not the afterthought.**
+
+Every request produces two artifacts: the visible response and the invisible *event record* — what was retrieved, what was scored, what was shown, and then what the user did. That record is the raw material for the next training run, the offline eval set, and the drift monitor. Systems that skip logging the full event record — "we can add logging later" — consistently find that the data needed to debug production regressions doesn't exist. Log it all from day one. The schema can be refined; missing columns cannot be recovered retroactively. The feedback loop is not a feature to add after the model ships; it is the mechanism by which the data flywheel compounds, and designing it is the first architectural decision, not the last.
+
+---
+
+## War Story — Great offline metrics, nothing online
+
+A mid-size e-commerce team spent three months improving their product-ranking model. nDCG@10 went up eight points on their holdout set. The A/B experiment launched — and revenue per session was flat. Click-through on recommended items was slightly down. The model had gotten objectively better at ranking according to the eval set. Nothing moved in the product.
+
+**Symptom.** The A/B showed flat-to-negative product metrics despite a real offline lift. The experiment had run two weeks, well past the novelty-effect window. Power was fine.
+
+**Debugging.** The team first suspected A/B assignment or logging. Both were clean. Then they looked at prediction coverage — was the new model actually serving? It was, for roughly 30% of requests. The other 70% were hitting the policy/filter layer and being overridden: the filter enforced an "in-stock items from suppliers with high seller ratings only" rule that discarded most of the model's top-k before any result reached the user. The model had been trained and evaluated against the full item catalogue, but served against a heavily filtered slice.
+
+**Root cause.** The training and evaluation pipeline had no knowledge of the downstream policy layer. The model was optimized for a candidate distribution that didn't exist in production — not feature skew, but *candidate-set skew*. The offline metric was measuring ranking quality over items the user would never see.
+
+**Fix.** Two changes: (1) the training pipeline applied the same eligibility filter before constructing training examples, so the model learned within the feasible set; (2) the evaluation pipeline applied the filter before computing nDCG, so offline metrics reflected the deployed reality. The same model architecture, retrained on the corrected pipeline, recovered the expected A/B lift on the next experiment.
+
+**Prevention.** Before any model goes to A/B, someone — ideally not the person who built it — should walk the full serving path from raw request to final response and identify every transformation, filter, and override that happens *after* the model scores. Document the delta between what the model was trained on and what it actually controls. This is not a nice-to-have; it is the checklist item that prevents wasted experiment quarters. Raising "does the training distribution match the served distribution, including the downstream policy layer?" unprompted in an interview is a senior signal. Most candidates only think about feature skew; candidate-set and slate-level skew is equally dangerous and less often discussed.
+
+---
+
+## Learning paths, prerequisites, and the capstone
+
+If you haven't worked through the prerequisite self-check in the README yet, do it before going deeper — the chapters assume comfort with training pipelines, evaluation metrics, and basic distributed-systems vocabulary. The README maps two paths (classic ML engineering and GenAI/LLM engineering) and calls out which modules differ between them.
+
+Everything in modules 2–14 feeds a single artifact: the **module 15 cumulative capstone**, which asks you to design a full production system end-to-end, produce a decision document for every key architectural fork, and defend the design as you would in a 60-minute system-design interview. It is worth reading the capstone brief now — knowing what you are accumulating toward changes how you read every chapter. Each module from here is building a vocabulary entry or a component that the capstone will require.
+
+---
+
 ## Project 01 — Two design docs
 
 Write two one-page design documents (this trains the muscle the interview actually tests):

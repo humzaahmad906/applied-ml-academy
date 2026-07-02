@@ -46,7 +46,7 @@
 **Failure archetypes table:**
 
 | Symptom | Most likely cause | First check |
-|---|---|---|
+| --- | --- | --- |
 | Accuracy drop, all segments | Data schema change or backfill | Feature null rates, upstream schema diff |
 | Accuracy drop, one segment | Distribution shift or feature bug for that segment | Slice feature distributions vs training |
 | Gradual accuracy decay over days | Model drift or slow data degradation | Feature PSI trend, label distribution |
@@ -79,6 +79,142 @@ A prompt is not a config value tucked in a string constant. It is a software art
 **Ecosystem note.** The tooling here consolidates quickly, and early standalone prompt-management products have not all survived. The durable lesson: prompt management is now a feature of broader observability platforms, not a standalone product category — choose a tool with a strong underlying data model, not just a nice UI, and be prepared to migrate if a niche vendor disappears.
 
 **Pin model API versions explicitly.** Silent upstream model updates are a documented incident class — a provider promotes a new model version under the same name and your prompt behavior changes without any code change on your end. Always pin to an explicit version string (e.g., `gpt-4o-2024-11-20`, not `gpt-4o`) and treat version bumps as a prompt-change deploy: run the eval suite, gate, A/B, promote. Keep rollback one click away — the cheapest reliability feature in existence.
+
+## 7. Operations
+
+### Alert thresholds
+
+ML alerts have a fundamentally different signal-to-noise profile than infra alerts: they fire on degradation, not outage, which means higher false-positive rates and more ambiguous signals. Counter that with tiering — tier 1 (page immediately) for clear pipeline failures and acute performance regressions; tier 2 (ticket, next business hour) for slow drift and model anomalies that require investigation before action. Every threshold below is a calibrated starting point for a medium-traffic production system; tune for your traffic volume, seasonality, and risk tolerance before treating any of these as gospel.
+
+| Signal | Alert threshold | Tier | First action |
+| --- | --- | --- | --- |
+| Feature null rate | > 5% on any critical feature | 1 | Upstream data triage — pipeline health, schema diff |
+| Prediction-distribution PSI | > 0.1 vs 7-day baseline | 2 | Score histogram by segment; may be benign distribution shift |
+| Score at hard ceiling | > 0.95 for > 5% of requests | 2 | Possible model collapse or score saturation — check artifact hash, max_tokens |
+| Latency p99 | > 2× 7-day baseline | 1 | Serving config, context-length growth, fallback path |
+| Cost / request | > 2× 7-day baseline | 2 | Log prompt + response token counts; likely prompt-template or input-length change |
+| KV-cache hit rate (LLM/agent) | < 0.40 | 2 | System-prompt prefix likely changed; review prefix caching config |
+
+Two mechanics prevent alert fatigue at scale: **hysteresis** (fire after N consecutive windows breach the threshold, not a single data point — a single spike is noise) and **ownership** (every alert names a team and links a runbook; an unowned alert that fires weekly is a policy failure, not an engineering gap).
+
+### Runbook template
+
+Copy this into your team wiki and fill bracketed fields when wiring a new alert. Triage steps intentionally reference the five-step sequence in the incident-response section (§5) above — the taxonomy already exists; a runbook that restates it is a runbook that will drift out of sync.
+
+```text
+RUNBOOK: [Alert name]
+Severity: [Tier 1 — page immediately / Tier 2 — ticket, next business hour]
+Owner: [Team or rotation alias]
+
+1. CONFIRM. Query the raw metric independently; compare to a 24h baseline. If the
+   monitoring system itself is broken, escalate to infra on-call and stop here.
+
+2. LOCALIZE. Follow the triage taxonomy in §5 in order:
+     (a) Data in — null spikes, schema drift, upstream backfills
+     (b) Feature / train-serve skew — serving vs training distribution diff
+     (c) Artifact — confirm deployed hash, tokenizer version
+     (d) Serving config — max_tokens, temperature, prompt template changelog
+     (e) Eval — verify golden set and judge are not the signal source
+
+3. BLAST RADIUS. What % of traffic is affected? Which segments?
+
+4. MITIGATE. If root cause is unclear and blast radius is growing, rollback the
+   most recent deploy (model, prompt, or feature pipeline). Rollback buys time;
+   investigate post-stabilization.
+
+5. DOCUMENT. Open a postmortem ticket immediately — a stub is fine. Record the
+   current time as the detection timestamp.
+
+6. RESOLVE. Confirm metrics return to baseline for two consecutive alert windows
+   before marking closed.
+
+7. POST-INCIDENT. Add root cause as a golden-set entry or a tighter threshold.
+   Every incident that reaches users should produce one concrete monitoring artifact.
+```
+
+### Postmortem template
+
+The postmortem discipline in §5 describes what to capture; this is the structured form to make that discipline repeatable. Complete within 48 hours of incident close while memory is fresh.
+
+```text
+POSTMORTEM: [Title]   Date: [ISO]   Severity: [P1 / P2 / P3]
+Author: [Name]   Reviewers: [Names]
+
+SUMMARY
+[One paragraph: what broke, user impact, resolution. Readable by a non-ML person.]
+
+TIMELINE (UTC)
+[HH:MM] — [Event]
+[HH:MM] — [Event]
+
+ROOT CAUSE
+[Map to triage taxonomy in §5: data / feature-skew / artifact / serving-config / eval.
+Explain the specific mechanism — not just the category.]
+
+IMPACT
+  Users affected: [N or %, with segment breakdown if available]
+  Duration: [HH:MM]
+  Business metric: [recall drop / complaint spike / revenue effect if measurable]
+
+  MTTD (incident start → first alert fire): [HH:MM]
+  MTTR (first alert acknowledgment → resolution): [HH:MM]
+
+WHAT WENT WELL
+  -
+
+WHAT WENT WRONG
+  -
+
+ACTION ITEMS
+  | Item | Owner | Due | Type [monitor / golden-set / process / infra] |
+  |------|-------|-----|-----------------------------------------------|
+  |      |       |     |                                               |
+```
+
+Mature systems target MTTD < 30 min for tier-1 alerts and MTTR < 2 hours. If MTTD persistently misses target, the monitoring gap is the engineering priority — not the fix for the incident that revealed it.
+
+### Dashboard and metric export
+
+A Prometheus/Grafana stack (or DataDog with custom ML metrics) needs five ML-specific panels beyond standard infra: **feature null rate by feature name**, **prediction score histogram** (the full distribution, not just mean — collapse and calibration drift appear here before they show up in aggregate metrics), **p50/p95/p99 request latency**, **cost or token count per request** (for LLM systems), and **golden-set pass rate** exported from the latest CI eval run as a time-series metric. Without the score histogram you are flying blind on model collapse.
+
+Exporting a custom metric from a serving process is minimal:
+
+```python
+from prometheus_client import Gauge
+import logging
+
+log = logging.getLogger(__name__)
+
+_feature_null_rate = Gauge(
+    "ml_feature_null_rate",
+    "Fraction of serving requests where a feature was null",
+    labelnames=["feature_name"],
+)
+
+def record_feature_nulls(features: dict[str, float | None]) -> None:
+    """Call once per request, immediately after feature fetch."""
+    for name, value in features.items():
+        is_null = 1.0 if value is None else 0.0
+        _feature_null_rate.labels(feature_name=name).set(is_null)
+        if is_null:
+            log.warning("Null feature at serving time: %s", name)
+```
+
+Grafana averages this over a rolling window; alert at > 0.05 on any feature marked critical in your feature registry. For large feature sets, emit only the top-N features by model importance to keep Prometheus cardinality manageable.
+
+### On-call reality
+
+ML on-call pages are rarer than infra pages but harder — "something is subtly wrong" demands more diagnosis before a mitigation path is clear, and the blast radius can be large before anyone notices. Practices that distinguish functional from dysfunctional ML on-call:
+
+**Rotation depth.** Two or three engineers who know the runbook through personal incident experience — primary takes the page, secondary covers escalation and backup. A full-team round-robin guarantees someone on-call who has never debugged the model in production; that is not rotation coverage, it is a lottery. Depth beats breadth.
+
+**Tiered escalation.** Tier-1 pages primary immediately. Tier-2 creates a ticket; primary triages at the next business hour. If tier-1 is unresolved in 30 minutes, page secondary. At 90 minutes, escalate to domain experts (data team, model owner, ML platform team) and engineering leadership simultaneously — "when to escalate" should be a calendar rule, not a judgment call made under production pressure.
+
+**Pager-load hygiene.** If tier-1 fires more than roughly once per week on average, thresholds are miscalibrated or the system has a structural reliability problem that on-call cannot paper over. Track weekly alert volume as an engineering-health metric; include it in sprint retrospectives. Chronic pager load is a retention risk before it becomes an SLA risk.
+
+**Knowledge transfer.** Runbooks and postmortems are the asset that survives individual team members rotating off. New engineers shadow at least two live incidents before taking primary. When a senior engineer leaves, runbook review should be on the offboarding checklist alongside code review.
+
+In an interview, mentioning on-call rotation depth and pager-load hygiene alongside alert thresholds is a reliable signal that you have operated a production ML system — not just designed one.
 
 ## References
 

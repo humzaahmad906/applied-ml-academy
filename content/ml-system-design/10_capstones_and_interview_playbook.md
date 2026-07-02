@@ -121,6 +121,14 @@ The first design decision the interviewer is probing: **cascaded pipeline** (ASR
 
 ---
 
+### Reading the room — adapting to interviewer type and handling gaps
+
+**Who is in the room** shapes the vocabulary you reach for, not the depth of analysis. A product-side interviewer rewards user-facing framing: "this reduces zero-result rate by X points" lands better than "this improves NDCG@10." A research interviewer rewards mathematical precision — name the objective function, state the loss formulation, acknowledge convergence properties; the product business case is secondary. An infra/platform interviewer cares about operational contracts: SLOs, rollback mechanism, resource efficiency, on-call load. Read the room by asking a calibrating question early ("are you more interested in the modeling approach or the system reliability story?") and adjusting as the interviewer signals which threads to pull. Most interviewers telegraph what they care about in the first follow-up question — treat it as a routing signal, not a test you passed or failed.
+
+**Handling gaps honestly.** "I don't know the exact paper, but here's how I'd reason about it" scores higher than a confident wrong answer, almost universally. Signal competence three ways: (a) name what you do know that is adjacent; (b) derive what you can from first principles — the interviewer is watching the reasoning, not the recall; (c) flag the gap cleanly ("my instinct says X because of Y — this is where I'd go deeper before committing"). What damages a candidate is not the gap itself but papering over it: a senior interviewer will follow up on any claim you made, and if that follow-up exposes a fabrication the trust damage is larger than the gap ever was. A clean "I'm not solid here" preserves your credibility for the components you do own. Audience-adaptation tactics for portfolio materials and written narratives — distinct from in-interview adjustment — are covered in the career and portfolio strategy chapter (module 16).
+
+---
+
 ## 3. Capstone projects (pick one, 3–4 weekends)
 
 **Capstone A — Document-AI platform end-to-end** (data engineering, inference optimization, retrieval, evaluation). Synthetic doc generator → fine-tune + QAT a small VLM for field extraction → quantized deployment with a serving endpoint → ColPali-style page-image retrieval over a doc corpus → full eval harness (per-field metrics, real-transfer measurement, judge calibration) → tracing + CI eval gate. *Deliverable: repo + a write-up of synthetic-to-real transfer numbers.*
@@ -130,6 +138,10 @@ The first design decision the interviewer is probing: **cascaded pipeline** (ASR
 **Capstone C — Full-funnel recommender** (data engineering, classic ML systems, evaluation). Feature platform with point-in-time correctness → two-tower + ANN retrieval (logQ ablation) → multi-task ranker → diversity re-rank → position-bias study → offline eval suite + simulated A/B with power analysis. *Deliverable: funnel metrics table + the bias-study write-up.*
 
 Each capstone is interview ammunition: every mock question above can be answered with "I actually built this — here's what surprised me."
+
+### The cumulative build — module 15
+
+Capstones A, B, and C are scoped for focused, isolated practice — each exercises three or four modules and is tight enough to finish in a long weekend. **Module 15 is the single end-to-end system** that spans all modules: real data ingestion, a feature platform with point-in-time correctness, a training and post-training loop, a quantized serving stack, a full evaluation harness, and an operations story — all wired together. Where the per-module capstones build vertical depth, the cumulative build tests whether the seams hold: does your feature platform feed your training pipeline without leakage? Does your eval CI gate catch a regression in the serving artifact after a quantization change? The per-module capstones make you dangerous in a design conversation; the cumulative build makes you credible when an interviewer asks for a GitHub link. Components you build in the earlier capstones port directly into module 15 — plan the integration starting in week 10 so the cumulative build inherits rather than duplicates.
 
 ## 4. The 12-week plan, restated as outcomes
 
@@ -160,6 +172,10 @@ Each capstone is interview ammunition: every mock question above can be answered
 - Read a few real ML system design case studies each week from the companies you are targeting; large public collections of these exist and are the best breadth-builders.
 - In the month before the loop, read the public engineering write-ups of your target companies — interviewers ask about their own stack's problems.
 - Record yourself answering, then count assumptions stated, tradeoffs compared, numbers produced, and failure modes volunteered. That count is the fastest feedback signal you have.
+
+## For job search, portfolio structure, and audience strategy — see module 16
+
+This chapter is deliberately scoped to in-interview mechanics: the rubric, the mock questions, the 12-week schedule, and the ten common mistakes. What it does not cover is everything that happens before and after you are in the room — how to structure a portfolio so the right audiences surface the right signals, how to narrate a project for a research role versus an ML platform role, how to sequence a job search, and how to pitch the same system design work differently in written form for different company types. All of that is in the career and portfolio strategy chapter (module 16). In particular, module 16 goes deeper on audience-specific framing; the "reading the room" note above covers only real-time in-interview adjustment — the upstream portfolio and written-narrative strategy is in module 16.
 
 ---
 

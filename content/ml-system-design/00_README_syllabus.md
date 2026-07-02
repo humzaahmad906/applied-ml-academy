@@ -23,7 +23,42 @@
 | 09 | Evaluation, Observability & MLOps | Offline/online eval, A/B testing, LLM-as-judge, drift, tracing, CI for models |
 | 10 | Capstones & the Interview Playbook | Full mock questions with model answers, capstone projects, 12-week plan |
 
-Every module ends with: **References** (papers, engineering blogs, repos), a **hands-on project** sized for a single workstation/consumer GPU, and **interview Q&A with full answers**.
+**Core modules 01–10 are the spine — read them in order.** The modules below extend it and are meant to be read after the core, in sequence; a time-constrained learner can treat 13–14 as electives (see the learning paths below).
+
+| # | Module | One-line summary |
+|---|--------|------------------|
+| 11 | Economics & Cost Modeling | Cloud/API pricing, build-vs-buy crossover math, a TCO worksheet |
+| 12 | DevOps & Deployment | Dockerfiles, Kubernetes, autoscaling, a full CI/CD pipeline for models |
+| 13 | Case Studies | Five end-to-end system walkthroughs assembling everything you've learned |
+| 14 | Domain Variations | How the core patterns bend for healthcare, finance, autonomous, manufacturing |
+| 15 | Cumulative Capstone | One end-to-end build across all modules — the portfolio centerpiece |
+| 16 | Career, Portfolio & Interview Strategy | Portfolio structure, interview tactics, career progression, reading list |
+| 17 | Course Delivery & Roadmap | Learning design, the capacity-math cheat sheet, staying current, cohort guidance |
+
+Every core module ends with: **References** (papers, engineering blogs, repos), a **hands-on project** sized for a single workstation/consumer GPU, and **interview Q&A with full answers**.
+
+---
+
+## Prerequisite self-check
+
+Before starting, confirm you can honestly answer yes to these. If not, close the gap first — the course assumes them and moves fast.
+
+- **Python:** comfortable with classes, decorators, async/await basics, and reading library source. If not → any solid intermediate-Python course.
+- **PyTorch:** you can write a training loop by hand (forward, loss, `backward()`, optimizer step), and you know what a `DataLoader` and a `Dataset` are. If not → the official PyTorch 60-minute blitz + one from-scratch training script.
+- **Core ML:** you know cross-entropy vs MSE, train/val/test discipline, overfitting, and the transformer at a block-diagram level (attention, MLP, residual, layernorm). If not → any modern intro-to-DL course and Karpathy's "Let's build GPT".
+- **Systems basics:** you know what a REST endpoint, a database index, and a container are. If not → the DevOps chapter (module 12) will be rough; skim a Docker primer first.
+
+You do **not** need prior distributed-training, CUDA, or MLOps experience — those are built up from first principles.
+
+## Learning paths
+
+The course is one spine with three entry emphases. All learners do the core (01–10); the paths differ in what they linger on and what they skim.
+
+- **SWE → ML:** you have systems, you need modeling intuition. Linger on 03 (training), 04 (inference), 08 (classic ML fundamentals) and the Foundations Boxes throughout. Skim nothing in 01–02; those reframe what you already know in ML terms. 12 (DevOps) will feel easy — use it as a checkpoint.
+- **Data Scientist → MLE:** you have modeling, you need productionization. Linger on 02 (feature platforms), 05 (serving), 09 (eval/observability/MLOps), 11 (economics), 12 (DevOps). The Tool Survival Guides are your fastest ramp.
+- **Experienced MLE → interview prep:** you have breadth, you need pressure-tested recall and tradeoff fluency. Prioritize the Interview Q&A in every module, the War Stories, module 10 (mock questions), module 13 (case studies as retellable narratives), and module 16 (interview strategy). Use module 17's cheat sheet for the capacity-math constants.
+
+Every learner finishes with the **cumulative capstone (module 15)** — it is the single artifact that proves end-to-end capability and anchors the portfolio (module 16).
 
 ---
 
@@ -43,6 +78,8 @@ Every module ends with: **References** (papers, engineering blogs, repos), a **h
 - **Week 9:** Module 08 + recsys project
 - **Week 10:** Module 09 + instrument your earlier projects
 - **Weeks 11–12:** Module 10 — capstone + 4 timed mock interviews (45 min each, recorded)
+
+The **extension modules (11–17)** come after the core, read in order. They are self-paced rather than fitted to the 12-week clock: pull in **11 (economics)** and **12 (DevOps)** whenever a project needs cost math or a real deployment; read **13 (case studies)** and **14 (domain variations)** once the core patterns are solid; run **15 (cumulative capstone)** as the integrating build (start planning it around week 10); and use **16 (career)** and **17 (delivery & roadmap)** as you prepare to interview. See the learning paths above for which of these matter most for your target role.
 
 ## How the course is structured
 

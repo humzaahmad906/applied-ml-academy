@@ -38,6 +38,73 @@ Evaluate the two stages separately — end-to-end answer quality alone can't tel
 - **Generation metrics (the RAG triad):** **faithfulness/groundedness** (is every claim supported by retrieved context? — the hallucination metric), **answer relevance**, **context precision/utilization**. LLM-as-judge implementations work but inherit judge biases — calibrate against a human-labeled subset (covered in the evaluation chapter).
 - **Operational metrics:** retrieval latency p99, index freshness lag, cost/query, and the hit-rate of "I don't know" on questions genuinely outside the corpus (abstention quality — under-measured everywhere).
 
+### Eval harness sketch
+
+Build the harness before the first ablation — it prevents you from chasing noise.
+
+**Golden set construction.** Sample chunks uniformly, ask an LLM "write one question whose complete answer is in this passage", and record the source chunk ID as ground truth. Hand-write 20–30 adversarial pairs: multi-hop questions, exact identifiers, and out-of-corpus questions for abstention testing. Audit the synthetic pairs before freezing — LLM-generated questions occasionally reference facts not present in the chunk.
+
+```python
+import logging
+from dataclasses import dataclass
+from typing import Callable
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class GoldenPair:
+    question: str
+    gold_chunk_ids: list[str]   # ≥1 chunk must appear for a retrieval hit
+    reference_answer: str        # used only for faithfulness calibration
+
+
+def recall_at_k(
+    golden: list[GoldenPair],
+    retrieve_fn: Callable[[str, int], list[str]],  # (query, k) -> [chunk_id, ...]
+    k: int = 5,
+) -> float:
+    """Fraction of golden pairs where ≥1 gold chunk appears in the top-k result."""
+    hits = sum(
+        bool(set(retrieve_fn(pair.question, k)) & set(pair.gold_chunk_ids))
+        for pair in golden
+    )
+    score = hits / len(golden)
+    logger.info("recall@%d = %.3f  (%d/%d)", k, score, hits, len(golden))
+    return score
+```
+
+**Faithfulness (claim-by-claim).** Decompose the model's answer into atomic claims with a short LLM call — "list every factual claim in this sentence as a JSON array". Then for each claim ask the judge: "Is this claim supported by the context below? Answer yes or no." Faithfulness = (supported claims) / (total claims). This is deliberately pessimistic: one unsupported claim in a three-claim answer scores 0.67, which is the right sensitivity for hallucination detection.
+
+```python
+def faithfulness_score(
+    claims: list[str],
+    context_chunks: list[str],
+    judge_fn: Callable[[str, str], bool],  # (claim, context) -> grounded?
+) -> float:
+    """Claim-level groundedness. Decompose the answer into claims before calling this."""
+    if not claims:
+        return 1.0
+    context = "\n\n".join(context_chunks)
+    supported = sum(judge_fn(claim, context) for claim in claims)
+    return supported / len(claims)
+```
+
+Calibrate the judge against 50–100 human-labeled (claim, context, grounded) triples before trusting it at scale — LLM judges systematically over-rate "supported" on longer contexts (covered in the evaluation chapter).
+
+**Ablation protocol.** Run recall@5, recall@20, and mean faithfulness across the full golden set for each variant — record absolute numbers, not just deltas:
+
+| Variant | recall@5 | recall@20 | faithfulness |
+| --- | --- | --- | --- |
+| Baseline: dense-only, 512-token chunks | — | — | — |
+| + BM25 hybrid (RRF k=60) | — | — | — |
+| + cross-encoder reranker | — | — | — |
+| + contextual chunk headers | — | — | — |
+| Chunk size 256 vs 1024 | — | — | — |
+| efSearch sweep (32 → 128) | latency curve | — | — |
+
+The reranker typically moves the faithfulness needle more than it moves recall@20 — it does not surface new evidence; it promotes the right evidence to positions the model uses.
+
 ## 4. ICL example selection as retrieval
 
 Dynamic few-shot selection is a retrieval problem wearing a prompting hat — and recognizing that connection lets you reuse the entire retrieval stack described earlier without building anything new.
@@ -52,6 +119,20 @@ Dynamic few-shot selection is a retrieval problem wearing a prompting hat — an
 
 **Operational notes.** The example bank needs curation — low-quality examples retrieved at high similarity will degrade outputs faster than no examples at all. Version the bank like a dataset, gate changes through the eval suite, and monitor per-example retrieval frequency (popular examples should be high-quality; stale examples that never retrieve can be pruned). At high QPS, the retrieval latency adds to TTFT — keep the bank index small (hundreds to low thousands of examples) and the bi-encoder fast, or pre-cache the query embedding if the query arrives in a predictable form.
 
+## 5. RAG failure modes
+
+Every failure maps to a retrieval stage, a generation stage, or an operational gap. The table makes the debug decision tree faster — pair each row with the localization step in the eval harness above.
+
+| Failure mode | Symptom | Root cause | Fix |
+| --- | --- | --- | --- |
+| Retrieval miss — embedding gap | Gold evidence exists; BM25 finds it, dense misses | Query/document vocabulary mismatch; domain distribution shift | BM25 hybrid + RRF; mine hard negatives from logs; fine-tune embedder on domain pairs |
+| Chunk boundary splits the answer | Neither of two adjacent chunks is sufficient alone | Fixed-size splitting cuts mid-sentence or mid-table | Sentence/paragraph-boundary splitting; 15–20% overlap; parent-child retrieval |
+| Lost in the middle | Top-k retrieved correctly; model ignores middle chunks | Attention degrades for tokens far from context boundaries | Rerank: put the highest-scoring chunk first and last; pass fewer but higher-quality chunks |
+| Stale index | Queries return outdated or deleted content | Indexing lag; deleted docs still retrievable | Streaming embed pipeline + fresh-index tier merged at query time; tombstone on delete |
+| Out-of-corpus hallucination | Model fabricates confidently; no relevant chunk retrieved | No abstention instruction; no OOC signal | Explicit "say I don't know if not in context"; measure abstention on a held-out OOC set |
+
+In an interview, naming these five failure modes and pairing each with its localization step — retrieval recall vs. faithfulness score — is the senior signal. Most candidates debug by guessing at prompts.
+
 ## Going deeper
 
 - The retrieval stack layers cleanly — embeddings, chunking, ANN index, hybrid dense+lexical fusion, reranking — and each layer has a well-studied set of tradeoffs. Learn the recall@latency story for HNSW, IVF-PQ, and disk-resident graphs rather than memorizing vendor names.
@@ -62,6 +143,204 @@ Dynamic few-shot selection is a retrieval problem wearing a prompting hat — an
 ## Project 06 — A RAG system with a real eval harness
 
 Corpus: ~5k arXiv abstracts+intros (or your own document set). Build: (1) baseline — fixed-size chunks, one embedding model, HNSW (FAISS or Qdrant), top-k → answer with a small local LLM; (2) golden set — 150 synthetic QA pairs generated from sampled chunks + 30 hand-written hard ones (multi-hop, exact-identifier, out-of-corpus); (3) measure retrieval recall@5/@20 and judge-scored faithfulness; (4) ablate one axis at a time and chart deltas: + BM25 hybrid w/ RRF, + cross-encoder reranker, + contextual chunk headers, chunk size 256 vs 1024, efSearch sweep (recall vs latency curve); (5) report which intervention bought the most per millisecond added. Stretch: index 200 PDF pages as *images* with ColPali and compare against the OCR-text pipeline on visually-rich pages (tables, figures).
+
+### Stage-by-stage walkthrough
+
+Each stage has a concrete expected output so you can confirm correctness before moving on.
+
+**Stage 1 — Chunking.** The naive mistake is fixed-size character splitting: it cuts sentences and tables mid-thought, handing the embedder incoherent fragments. Paragraph-boundary splitting with overlap is the baseline to beat.
+
+```python
+import re
+from dataclasses import dataclass
+
+
+@dataclass
+class Chunk:
+    chunk_id: str
+    doc_id: str
+    text: str
+
+
+def split_paragraphs_with_overlap(
+    text: str,
+    doc_id: str,
+    max_words: int = 400,
+    overlap_words: int = 60,
+) -> list[Chunk]:
+    """
+    Split at paragraph boundaries; merge short paragraphs to stay near max_words;
+    carry an overlap window into each new chunk to preserve cross-boundary context.
+    Fixed-size character splits measurably hurt retrieval recall on domain corpora
+    vs. paragraph-aligned chunking — the overlap preserves context that a hard
+    boundary would sever.
+    """
+    paragraphs = [p.strip() for p in re.split(r"\n{2,}", text) if p.strip()]
+    chunks: list[Chunk] = []
+    buffer: list[str] = []
+    buffer_wc = 0
+
+    def flush() -> None:
+        if buffer:
+            chunks.append(
+                Chunk(
+                    chunk_id=f"{doc_id}_{len(chunks)}",
+                    doc_id=doc_id,
+                    text="\n\n".join(buffer),
+                )
+            )
+
+    for para in paragraphs:
+        wc = len(para.split())
+        if buffer_wc + wc > max_words and buffer:
+            flush()
+            tail: list[str] = []
+            tail_wc = 0
+            for prev in reversed(buffer):
+                pw = len(prev.split())
+                if tail_wc + pw > overlap_words:
+                    break
+                tail.insert(0, prev)
+                tail_wc += pw
+            buffer, buffer_wc = tail, tail_wc
+        buffer.append(para)
+        buffer_wc += wc
+    flush()
+    return chunks
+```
+
+*Expected output:* 5k arXiv abstracts yield roughly 8k–12k chunks, median ~300 words, with ~15% of content duplicated across overlap windows. Spot-check a random sample — chunks should begin and end on sentence boundaries.
+
+**Stage 2 — Embedding + HNSW index.** `normalize_embeddings=True` puts vectors on the unit sphere so FAISS inner product equals cosine similarity.
+
+```python
+import logging
+from pathlib import Path
+
+import faiss
+import numpy as np
+from sentence_transformers import SentenceTransformer
+
+logger = logging.getLogger(__name__)
+
+
+def build_hnsw_index(
+    chunks: list[Chunk],
+    model_name: str = "BAAI/bge-small-en-v1.5",  # representative 2026 — verify on MTEB for your domain
+    index_path: Path | None = None,
+) -> tuple[faiss.Index, list[str]]:
+    """Encode chunks and build an HNSW index with cosine similarity via inner product."""
+    model = SentenceTransformer(model_name)
+    texts = [c.text for c in chunks]
+    chunk_ids = [c.chunk_id for c in chunks]
+
+    logger.info("Encoding %d chunks with %s", len(texts), model_name)
+    vecs = model.encode(
+        texts, batch_size=64, show_progress_bar=True, normalize_embeddings=True
+    )
+    vecs = np.array(vecs, dtype=np.float32)
+
+    dim = vecs.shape[1]
+    index = faiss.IndexHNSWFlat(dim, 32, faiss.METRIC_INNER_PRODUCT)
+    index.hnsw.efConstruction = 200
+    index.add(vecs)
+    logger.info("Index built: %d vectors, dim=%d", index.ntotal, dim)
+    if index_path:
+        faiss.write_index(index, str(index_path))
+    return index, chunk_ids
+```
+
+*Expected output:* build time roughly 2–5 min on CPU for 10k vectors; `index.ntotal == len(chunks)`. Sanity query: an exact phrase from a known chunk should return that chunk in top-3 at default `efSearch`.
+
+**Stage 3 — Hybrid search (BM25 + dense + RRF).** Build the `BM25Okapi` index from tokenized chunk texts before calling `hybrid_retrieve`.
+
+```python
+import faiss
+import numpy as np
+from rank_bm25 import BM25Okapi
+from sentence_transformers import SentenceTransformer
+
+
+def reciprocal_rank_fusion(
+    *ranked_lists: list[str], k: int = 60
+) -> list[tuple[str, float]]:
+    """k=60 is the standard constant from the original RRF paper (Cormack et al., 2009)."""
+    scores: dict[str, float] = {}
+    for ranked in ranked_lists:
+        for rank, doc_id in enumerate(ranked, start=1):
+            scores[doc_id] = scores.get(doc_id, 0.0) + 1.0 / (k + rank)
+    return sorted(scores.items(), key=lambda x: x[1], reverse=True)
+
+
+def hybrid_retrieve(
+    query: str,
+    dense_index: faiss.Index,
+    chunk_ids: list[str],
+    bm25_index: BM25Okapi,
+    encoder: SentenceTransformer,
+    top_n: int = 50,
+) -> list[str]:
+    qvec = encoder.encode([query], normalize_embeddings=True).astype(np.float32)
+    _, dense_idxs = dense_index.search(qvec, top_n)
+    dense_ranked = [chunk_ids[i] for i in dense_idxs[0] if i != -1]
+
+    tokens = query.lower().split()
+    bm25_scores = bm25_index.get_scores(tokens)
+    sparse_ranked = [chunk_ids[i] for i in np.argsort(bm25_scores)[::-1][:top_n]]
+
+    merged = reciprocal_rank_fusion(dense_ranked, sparse_ranked)
+    return [cid for cid, _ in merged[:top_n]]
+```
+
+*Expected output:* a query containing an exact model number or author name should rank its source chunk higher with hybrid than with dense alone. That exact-identifier test is the cheapest sanity check that hybrid is working correctly.
+
+**Stage 4 — Cross-encoder reranker.** Run only over the top 50 candidates from Stage 3; the cross-encoder reads the full (query, chunk) pair jointly and is not precomputable.
+
+```python
+from sentence_transformers import CrossEncoder
+
+
+def rerank(
+    query: str,
+    candidate_ids: list[str],
+    chunk_store: dict[str, str],   # chunk_id -> text
+    model_name: str = "cross-encoder/ms-marco-MiniLM-L-6-v2",  # representative 2026 — check current
+    top_k: int = 10,
+) -> list[str]:
+    reranker = CrossEncoder(model_name)
+    valid_ids = [cid for cid in candidate_ids if cid in chunk_store]
+    pairs = [(query, chunk_store[cid]) for cid in valid_ids]
+    scores = reranker.predict(pairs)
+    ranked = sorted(zip(valid_ids, scores), key=lambda x: x[1], reverse=True)
+    return [cid for cid, _ in ranked[:top_k]]
+```
+
+*Expected output:* the reranker should place a clearly relevant chunk at position #1 for the majority of easy questions in the golden set. Track latency — a small cross-encoder on CPU takes roughly 200–500 ms for 50 candidates; batch on GPU for production use.
+
+**Stage 5 — Generation.** Pass reranked chunks best-first; "sandwich" ordering (best chunk first and last) mitigates lost-in-the-middle for longer contexts.
+
+```python
+from typing import Callable
+
+
+def generate_answer(
+    query: str,
+    top_chunk_texts: list[str],   # ordered best-first from the reranker
+    generate_fn: Callable[[str], str],
+) -> str:
+    context = "\n\n---\n\n".join(top_chunk_texts)
+    prompt = (
+        "Answer using only the context below. "
+        'If the answer is not in the context, say "I don\'t know."\n\n'
+        f"Context:\n{context}\n\n"
+        f"Question: {query}\n\nAnswer:"
+    )
+    return generate_fn(prompt)
+```
+
+*Expected output:* on the 150-pair golden set, the full pipeline (all five stages) should reach roughly faithfulness > 0.75 and recall@5 > 0.60 on a clean arXiv corpus. If it falls short, trace back through the stage-level sanity checks before touching the generation prompt.
+
+For the end-to-end RAG case study — serving architecture, latency budget breakdown, online eval loop, and production incident analysis — see the case-studies chapter (module 13).
 
 ## Interview Q&A
 
