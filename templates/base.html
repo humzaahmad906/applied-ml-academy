@@ -19,7 +19,8 @@
       <span class="logo-word"><b>Applied&nbsp;ML</b><i>ACADEMY</i></span>
     </a>
     <nav>
-      <a href="{{ url_for('index') }}#courses">Courses</a>
+      <a href="{{ url_for('index') }}#programs">Programs</a>
+      <a href="{{ url_for('roadmaps') }}">Career paths</a>
       <a href="{{ url_for('verify') }}">Verify</a>
       {% if user %}
         <a href="{{ url_for('dashboard') }}">My learning</a>

@@ -38,9 +38,13 @@ app.secret_key = os.environ.get("SECRET_KEY", secrets.token_hex(32))
 # ---------------------------------------------------------------- courses
 # Static metadata per course; module lists are loaded from content/<slug>/*.md.
 COURSES = [
-    {"code": "LANGMDL", "title": "Language Modeling from Scratch",
-     "blurb": "Build a modern LLM end to end — tokenizer, transformer, kernels, "
-              "parallelism, scaling, inference, alignment. Four interview banks included.",
+    {"code": "LANGMDL", "title": "LLM Foundation-Model Engineer Nanodegree",
+     "program": "Nanodegree", "role": "Foundation-Model Engineer",
+     "prereqs": ["linear-algebra", "calculus-gradients", "pytorch-essentials",
+                 "deep-learning-foundations", "vlm-guide"],
+     "blurb": "Become the engineer who builds language models, not just calls them. "
+              "Tokenizer, transformer, kernels, parallelism, scaling, inference, and "
+              "alignment — a modern LLM end to end. The deepest track we offer.",
      "hours": "48", "level": "Advanced", "tag": "LLMs & Systems", "accent": "#c6a04e",
      "order": 4, "path_note": "Go deep — build a modern LLM end to end. The hardest track.",
      "slug": "language-modeling",
@@ -49,9 +53,13 @@ COURSES = [
                   "Optimize inference: KV cache, quantization, speculative decoding",
                   "Align a base model with SFT, DPO, and GRPO",
                   "Answer frontier-lab interview questions across four banks"]},
-    {"code": "LLMVLM", "title": "LLM · VLM · RAG · Agents",
-     "blurb": "Foundations through frontier: attention, KV cache, RAG, and agents, "
-              "with the tradeoffs behind each. Senior-level throughout.",
+    {"code": "LLMVLM", "title": "GenAI Engineer Nanodegree",
+     "program": "Nanodegree", "role": "GenAI Engineer",
+     "prereqs": ["python-foundations", "ml-foundations", "pytorch-essentials",
+                 "apis-web-services", "software-engineering-practices"],
+     "blurb": "Become a generative-AI engineer: attention, KV cache, RAG, and agents — "
+              "and the tradeoffs behind each. Foundations through frontier, senior-level "
+              "throughout. The vocabulary and mental models the rest build on.",
      "hours": "36", "level": "Foundations", "tag": "Generative AI", "accent": "#8b5cf6",
      "order": 1, "path_note": "Start here — the vocabulary and mental models the rest build on.",
      "slug": "vlm-guide",
@@ -59,9 +67,13 @@ COURSES = [
                   "Design retrieval-augmented generation pipelines",
                   "Build and reason about agentic systems",
                   "Read papers and speak the vocabulary fluently"]},
-    {"code": "MLSYS", "title": "ML System Design",
-     "blurb": "Design ML systems the way a staff engineer does: data platforms, "
-              "training and serving infra, RAG, agents, recsys, and the interview playbook.",
+    {"code": "MLSYS", "title": "ML Systems Architect Nanodegree",
+     "program": "Nanodegree", "role": "ML Systems Architect",
+     "prereqs": ["ml-foundations", "deep-learning-foundations",
+                 "software-engineering-practices", "apis-web-services", "mlops"],
+     "blurb": "Design ML systems the way a staff engineer does: data platforms, training "
+              "and serving infra, RAG, agents, recsys, and the interview playbook. Learn "
+              "to frame any 'Design X' problem and defend the tradeoffs.",
      "hours": "40", "level": "Advanced", "tag": "System Design", "accent": "#0ea5e9",
      "order": 5, "path_note": "Capstone — design end-to-end systems and prep for interviews.",
      "slug": "ml-system-design",
@@ -69,9 +81,13 @@ COURSES = [
                   "Design feature platforms and training/serving infrastructure",
                   "Architect retrieval, agents, recsys, search, and fraud systems",
                   "Handle evaluation, observability, and MLOps at scale"]},
-    {"code": "MLOPS", "title": "MLOps: Production Machine Learning Systems",
-     "blurb": "Serving, monitoring, CI/CD for models, and the failure modes nobody "
-              "warns you about. Beginner to architect track.",
+    {"code": "MLOPS", "title": "MLOps Engineer Nanodegree",
+     "program": "Nanodegree", "role": "MLOps Engineer",
+     "prereqs": ["python-foundations", "cli-git", "software-engineering-practices",
+                 "apis-web-services", "docker-containers", "cloud-linux"],
+     "blurb": "Take models to production and keep them alive: serving, monitoring, CI/CD "
+              "for models, and the failure modes nobody warns you about. Practitioner to "
+              "architect track.",
      "hours": "40", "level": "Intermediate → Advanced", "tag": "MLOps", "accent": "#ec4899",
      "order": 3, "path_note": "Take models to production: serving, monitoring, CI/CD.",
      "slug": "mlops",
@@ -79,9 +95,27 @@ COURSES = [
                   "Build CI/CD pipelines for ML",
                   "Diagnose the failure modes that break deployed models",
                   "Grow from practitioner to ML architect"]},
-    {"code": "DATAENG", "title": "Data Engineering",
-     "blurb": "Pipelines, warehouses, and the architecture behind them — from first "
-              "principles to Fortune-100 scale and the data-architect track.",
+    {"code": "PRINML", "title": "Principal ML Engineer Nanodegree",
+     "program": "Nanodegree", "role": "Principal ML Engineer",
+     "prereqs": ["ml-system-design", "mlops"],
+     "blurb": "Operate at org scale with the judgment of a 15-year veteran: technical "
+              "strategy, platform architecture, unit economics, migrations, governance, "
+              "and influence without authority. The senior-to-principal delta, compressed.",
+     "hours": "50", "level": "Expert", "tag": "Career", "accent": "#dc2626",
+     "order": 6, "path_note": "Beyond staff — operate at org scale with principal-level judgment.",
+     "slug": "principal-ml-engineer",
+     "outcomes": ["Write technical strategy documents that move an entire org",
+                  "Architect ML platforms, training fleets, and serving stacks at org scale",
+                  "Make build-vs-buy and migration decisions with defensible unit economics",
+                  "Carry the production failure pattern library of a 15-year veteran",
+                  "Pass principal-level (L7+/E7+) interview loops and build the portfolio to prove it"]},
+    {"code": "DATAENG", "title": "Data Engineer Nanodegree",
+     "program": "Nanodegree", "role": "Data Engineer",
+     "prereqs": ["python-foundations", "sql-databases", "pandas-analysis",
+                 "software-engineering-practices"],
+     "blurb": "Build the data layer every model and system sits on top of: pipelines, "
+              "warehouses, and the architecture behind them — from first principles to "
+              "Fortune-100 scale and the data-architect track.",
      "hours": "36", "level": "Beginner → Advanced", "tag": "Data", "accent": "#f59e0b",
      "order": 2, "path_note": "The data layer every model and system sits on top of.",
      "slug": "data-engineering",
@@ -243,6 +277,41 @@ FOUNDATIONS = [
         ("Networking basics", "IPs, ports, DNS, and firewalls."),
         ("IAM and security", "Identities, roles, and least privilege."),
         ("Cost and trade-offs", "Pick the right service without overspending."))},
+    {"code": "API", "title": "APIs & Web Services", "slug": "apis-web-services",
+     "tag": "Programming", "accent": "#0891b2", "level": "Beginner", "hours": "12", "order": 13,
+     "foundation": True, "certificate": False,
+     "blurb": "Build and consume HTTP services — the interface between your model and the "
+              "world. HTTP, REST, and a full FastAPI app serving predictions. The prereq "
+              "every MLOps, GenAI, and Systems track assumes.",
+     "syllabus": _syl(
+        ("How the web works: HTTP fundamentals", "Methods, status codes, headers, and the request/response cycle."),
+        ("JSON and REST: designing resource APIs", "REST conventions and JSON so your endpoints are predictable."),
+        ("Consuming APIs from Python", "Call APIs with requests and httpx: auth, timeouts, retries, pagination."),
+        ("Your first FastAPI application", "Routes, parameters, and the dev server with FastAPI."),
+        ("Request and response models with Pydantic", "Validate inputs and shape outputs with Pydantic v2."),
+        ("Errors, dependencies, and middleware", "Handle errors, inject dependencies, add cross-cutting behavior."),
+        ("Serving an ML model behind an endpoint", "Load a model once and serve validated predictions."),
+        ("Authentication, rate limiting, and security", "API keys, bearer tokens, CORS, and rate limits."),
+        ("Async basics and concurrency for APIs", "When async def helps, when it doesn't, and how to use it."),
+        ("Testing, docs, and API versioning", "pytest + TestClient, OpenAPI docs, and versioning."))},
+    {"code": "SWE", "title": "Software Engineering Practices", "slug": "software-engineering-practices",
+     "tag": "Tooling", "accent": "#57534e", "level": "Beginner", "hours": "12", "order": 14,
+     "foundation": True, "certificate": False,
+     "blurb": "Write code a team can maintain, test, and ship: packaging, dependency "
+              "management, testing, types, linting, logging, config, and CI. The practices "
+              "every Nanodegree assumes but nobody else teaches.",
+     "syllabus": _syl(
+        ("Project structure and Python packaging", "pyproject.toml, src layout, and editable installs."),
+        ("Virtual environments and dependency management", "Isolate and pin dependencies with uv for reproducible builds."),
+        ("Testing with pytest: the fundamentals", "Assertions, test discovery, and testing as you go."),
+        ("Fixtures, parametrize, and test organization", "Reusable setup, many-case tests, and tests that scale."),
+        ("Type hints and static analysis", "Annotate code and catch bugs before runtime with a type checker."),
+        ("Linting, formatting, and pre-commit hooks", "Automate code quality with ruff and pre-commit."),
+        ("Logging done right", "Levels, configuration, and structured logs instead of print()."),
+        ("Error handling and exceptions", "Specific and custom exceptions, and the fail-loud principle."),
+        ("Configuration and secrets management", "Env vars, .env, pydantic-settings, and never committing secrets."),
+        ("Code review and pull-request discipline", "What a good PR and a good review actually look like."),
+        ("CI/CD with GitHub Actions", "Run tests and lint on every push — an intro to continuous integration."))},
 ]
 
 # Cloud provider deep-dives: detailed, certificate-eligible, in the Cloud category
@@ -250,7 +319,8 @@ FOUNDATIONS = [
 CLOUD = [
     {"code": "AWS", "title": "AWS for ML Engineers", "slug": "aws-for-ml",
      "tag": "Cloud", "accent": "#ff9900", "level": "Beginner → Advanced", "hours": "34", "order": 6,
-     "certificate": True,
+     "certificate": True, "program": "Specialization", "role": "AWS ML Engineer",
+     "prereqs": ["cloud-linux", "docker-containers"],
      "blurb": "Amazon Web Services from first principles to building and shipping ML systems — "
               "IAM, compute, storage, containers, SageMaker AI, and Bedrock.",
      "outcomes": ["Navigate AWS core services (IAM, EC2, S3, VPC) confidently",
@@ -259,7 +329,8 @@ CLOUD = [
                   "Architect a production ML system on AWS end to end"]},
     {"code": "AZURE", "title": "Azure for ML Engineers", "slug": "azure-for-ml",
      "tag": "Cloud", "accent": "#0078d4", "level": "Beginner → Advanced", "hours": "34", "order": 7,
-     "certificate": True,
+     "certificate": True, "program": "Specialization", "role": "Azure ML Engineer",
+     "prereqs": ["cloud-linux", "docker-containers"],
      "blurb": "Microsoft Azure end to end for ML — Entra ID, compute, storage, AKS, "
               "Azure Machine Learning, and Azure AI Foundry / OpenAI.",
      "outcomes": ["Work with Azure core services and Entra ID securely",
@@ -268,7 +339,8 @@ CLOUD = [
                   "Architect a production ML system on Azure end to end"]},
     {"code": "GCP", "title": "GCP for ML Engineers", "slug": "gcp-for-ml",
      "tag": "Cloud", "accent": "#34a853", "level": "Beginner → Advanced", "hours": "34", "order": 8,
-     "certificate": True,
+     "certificate": True, "program": "Specialization", "role": "GCP ML Engineer",
+     "prereqs": ["cloud-linux", "docker-containers"],
      "blurb": "Google Cloud from fundamentals to production ML — IAM, Compute Engine, "
               "Cloud Storage, BigQuery, GKE, and Vertex AI with Gemini.",
      "outcomes": ["Navigate GCP core services (IAM, Compute Engine, Cloud Storage)",
@@ -283,14 +355,107 @@ COURSE_BY_SLUG = {c["slug"]: c for c in ALL_COURSES}
 # ---------------------------------------------------------------- categories
 # Browse-by-category taxonomy across every course. Order = display order.
 CATEGORIES = [
-    ("Programming & Tools", ["python-foundations", "cli-git"]),
+    ("Programming & Tools", ["python-foundations", "cli-git", "apis-web-services",
+                             "software-engineering-practices"]),
     ("Mathematics", ["linear-algebra", "calculus-gradients", "probability-stats"]),
     ("Data & Analytics", ["sql-databases", "pandas-analysis", "data-engineering"]),
     ("Machine Learning", ["ml-foundations", "deep-learning-foundations", "pytorch-essentials"]),
-    ("LLMs & Systems", ["vlm-guide", "language-modeling", "ml-system-design"]),
+    ("LLMs & Systems", ["vlm-guide", "language-modeling", "ml-system-design",
+                        "principal-ml-engineer"]),
     ("Cloud & Infrastructure",
      ["cloud-linux", "docker-containers", "aws-for-ml", "azure-for-ml", "gcp-for-ml", "mlops"]),
 ]
+# ---------------------------------------------------------------- roadmaps
+# Goal-oriented career paths. Each ordered step points at a course slug with a
+# one-line reason; steps mix free foundations with paid Nanodegrees. `kind` is
+# derived at render time from the course's program/foundation flags, so a step
+# only needs (slug, why). `cap` is the slug of the destination Nanodegree.
+def _step(slug, why):
+    return {"slug": slug, "why": why}
+
+
+ROADMAPS = [
+    {"key": "ml-engineer", "role": "ML Engineer", "accent": "#ea580c",
+     "tagline": "Train, evaluate, and ship models that work.",
+     "who": "You can code and want to become a hireable machine-learning engineer — "
+            "from math foundations to designing real systems.",
+     "outcome": "Build and evaluate models end to end and design ML systems for interviews.",
+     "cap": "ml-system-design",
+     "steps": [
+        _step("python-foundations", "The language every ML tool assumes."),
+        _step("linear-algebra", "The language tensors are written in."),
+        _step("calculus-gradients", "How models actually learn."),
+        _step("probability-stats", "The reasoning under every metric and loss."),
+        _step("ml-foundations", "Classical ML end to end, and the traps that fool beginners."),
+        _step("deep-learning-foundations", "From a neuron to a trained network."),
+        _step("pytorch-essentials", "The framework the deep courses assume."),
+        _step("software-engineering-practices", "Write ML code that's tested, typed, and maintainable."),
+        _step("ml-system-design", "Design end-to-end ML systems like a staff engineer.")]},
+    {"key": "genai-engineer", "role": "GenAI Engineer", "accent": "#8b5cf6",
+     "tagline": "Build with LLMs, RAG, and agents — then build the models themselves.",
+     "who": "You want to work at the frontier: applied generative AI first, then the "
+            "internals of the models underneath.",
+     "outcome": "Ship RAG and agent systems, and build a modern LLM from scratch.",
+     "cap": "language-modeling",
+     "steps": [
+        _step("python-foundations", "Baseline fluency for everything that follows."),
+        _step("ml-foundations", "The ML vocabulary GenAI builds on."),
+        _step("pytorch-essentials", "Tensors and training loops you'll need."),
+        _step("apis-web-services", "Consume and expose APIs — the backbone of RAG and agents."),
+        _step("software-engineering-practices", "Ship tested, maintainable code for real GenAI systems."),
+        _step("vlm-guide", "Attention, RAG, and agents — the applied frontier."),
+        _step("language-modeling", "Build a modern LLM end to end. The deepest track.")]},
+    {"key": "mlops-engineer", "role": "MLOps Engineer", "accent": "#ec4899",
+     "tagline": "Take models to production and keep them alive.",
+     "who": "You want to own serving, monitoring, and CI/CD for models — the infra "
+            "side of ML — with the cloud skills that back it.",
+     "outcome": "Serve, monitor, and version models in production on real infrastructure.",
+     "cap": "mlops",
+     "steps": [
+        _step("python-foundations", "Scripting and services start here."),
+        _step("cli-git", "The daily workflow of every engineer."),
+        _step("software-engineering-practices", "Testing, packaging, logging, and CI — code a team can ship."),
+        _step("apis-web-services", "Serve a model behind an endpoint — the skill MLOps builds on."),
+        _step("cloud-linux", "Compute, storage, networking, and IAM without the jargon."),
+        _step("docker-containers", "The unit of deployment for modern ML."),
+        _step("mlops", "Serving, monitoring, CI/CD, and the failure modes nobody warns you about."),
+        _step("aws-for-ml", "Optional specialization — do it on AWS end to end.")]},
+    {"key": "data-engineer", "role": "Data Engineer", "accent": "#f59e0b",
+     "tagline": "Build the data layer every model sits on top of.",
+     "who": "You want to build reliable pipelines and warehouses — the foundation "
+            "beneath every model and analytics system.",
+     "outcome": "Design batch and streaming pipelines and warehouses at scale.",
+     "cap": "data-engineering",
+     "steps": [
+        _step("python-foundations", "The glue language of data work."),
+        _step("sql-databases", "Query and model relational data — the backbone."),
+        _step("pandas-analysis", "Load, clean, and explore real data."),
+        _step("software-engineering-practices", "Pipeline code needs testing, logging, and reproducible envs."),
+        _step("data-engineering", "Pipelines, warehouses, and architecture to Fortune-100 scale.")]},
+    {"key": "ml-systems-architect", "role": "ML Systems Architect", "accent": "#0ea5e9",
+     "tagline": "Design ML systems and the infrastructure they run on.",
+     "who": "You're already a solid ML engineer and want to design systems, pass "
+            "senior system-design loops, and operate them in production.",
+     "outcome": "Architect data platforms, training/serving infra, and pass staff-level interviews.",
+     "cap": "ml-system-design",
+     "steps": [
+        _step("ml-foundations", "Refresh the modeling fundamentals you'll design around."),
+        _step("mlops", "Production mechanics: serving, monitoring, CI/CD."),
+        _step("ml-system-design", "Frame any 'Design X' problem and defend the tradeoffs."),
+        _step("data-engineering", "The data platform every ML system depends on.")]},
+    {"key": "principal-ml-engineer", "role": "Principal ML Engineer", "accent": "#dc2626",
+     "tagline": "Operate at org scale with the judgment of 15+ years.",
+     "who": "You're a senior/staff ML engineer aiming for principal (L7+/E7+): strategy, "
+            "platform architecture, economics, governance, and influence.",
+     "outcome": "Write strategy, make defensible build-vs-buy calls, and pass principal loops.",
+     "cap": "principal-ml-engineer",
+     "steps": [
+        _step("ml-system-design", "The system-design foundation this builds above."),
+        _step("mlops", "Production and reliability at the level a principal owns."),
+        _step("principal-ml-engineer", "The senior-to-principal delta, compressed.")]},
+]
+ROADMAP_BY_KEY = {r["key"]: r for r in ROADMAPS}
+
 CATEGORY_OF = {slug: name for name, slugs in CATEGORIES for slug in slugs}
 
 CONTENT_DIR = Path(__file__).parent / "content"
@@ -340,6 +505,35 @@ def course_view(slug):
     v["category"] = CATEGORY_OF.get(slug, "Other")
     v["has_content"] = bool(v["modules"])
     v["module_count"] = len(v["modules"]) if v["modules"] else len(v["syllabus"])
+    v["program"] = c.get("program")            # "Nanodegree" | "Specialization" | None
+    v["role"] = c.get("role")
+    v["prereqs"] = [_prereq_ref(s) for s in c.get("prereqs", [])]
+    return v
+
+
+def _prereq_ref(slug):
+    """Light reference to a prerequisite course, for linking from a course/roadmap."""
+    c = COURSE_BY_SLUG.get(slug)
+    if not c:
+        return {"slug": slug, "title": slug, "foundation": True, "program": None}
+    return {"slug": slug, "title": c["title"],
+            "foundation": c.get("foundation", False), "program": c.get("program")}
+
+
+def roadmap_view(r):
+    """Roadmap dict with each step resolved to a full course_view + kind badge."""
+    steps = []
+    for i, s in enumerate(r["steps"], 1):
+        cv = course_view(s["slug"])
+        if not cv:
+            continue
+        kind = "Free" if cv["foundation"] else (cv.get("program") or "Certificate")
+        steps.append({"n": i, "why": s["why"], "kind": kind, "course": cv})
+    v = dict(r)
+    v["steps"] = steps
+    v["n_steps"] = len(steps)
+    v["hours"] = sum(int(s["course"].get("hours", 0) or 0) for s in steps)
+    v["cap_course"] = course_view(r["cap"]) if r.get("cap") else None
     return v
 
 
@@ -395,15 +589,25 @@ def mint_code(course, year):
 # ---------------------------------------------------------------- public
 @app.route("/")
 def index():
-    path_cards = sorted((course_view(c["slug"]) for c in COURSES),
-                        key=lambda c: c["order"])
+    nanodegrees = sorted((course_view(c["slug"]) for c in COURSES),
+                         key=lambda c: c["order"])
+    specializations = sorted((course_view(c["slug"]) for c in CLOUD),
+                             key=lambda c: c["order"])
     foundations = sorted((course_view(c["slug"]) for c in FOUNDATIONS),
                          key=lambda c: c["order"])
     grouped = [(name, [course_view(s) for s in slugs]) for name, slugs in CATEGORIES]
+    roadmaps = [roadmap_view(r) for r in ROADMAPS]
     total_modules = sum(len(MODULES.get(c["slug"], [])) for c in ALL_COURSES)
-    return render_template("index.html", courses=path_cards, foundations=foundations,
-                           grouped=grouped, n_courses=len(ALL_COURSES),
-                           total_modules=total_modules)
+    return render_template("index.html", courses=nanodegrees, nanodegrees=nanodegrees,
+                           specializations=specializations, foundations=foundations,
+                           roadmaps=roadmaps, grouped=grouped,
+                           n_courses=len(ALL_COURSES), total_modules=total_modules)
+
+
+@app.route("/roadmaps")
+def roadmaps():
+    views = [roadmap_view(r) for r in ROADMAPS]
+    return render_template("roadmaps.html", roadmaps=views)
 
 
 @app.route("/course/<slug>")
@@ -514,6 +718,61 @@ def dashboard():
         resume = e.last_module or (c["modules"][0]["id"] if c["modules"] else None)
         enrolled.append({"course": c, "enrollment": e, "resume": resume})
     return render_template("dashboard.html", enrolled=enrolled)
+
+
+# ---------------------------------------------------------------- capstone
+URL_RE = re.compile(r"^https?://[^\s]+\.[^\s]+$")
+
+
+def _parse_artifact_urls(raw):
+    """One URL per line; keep well-formed ones, cap count and length."""
+    out = []
+    for line in (raw or "").splitlines():
+        u = line.strip()
+        if u and URL_RE.match(u):
+            out.append(u[:400])
+        if len(out) >= 10:
+            break
+    return out
+
+
+@app.route("/course/<slug>/capstone", methods=["GET", "POST"])
+@login_required
+def capstone(slug):
+    c = course_view(slug)
+    if not c:
+        abort(404)
+    if not c["certificate"]:
+        flash("Open foundation courses don't have a capstone.")
+        return redirect(url_for("course_detail", slug=slug))
+    user = current_user()
+    if not enrollment_of(user, slug):
+        flash("Enroll in this course before submitting a capstone.")
+        return redirect(url_for("course_detail", slug=slug))
+    existing = data.get_capstone(user.id, slug)
+
+    if request.method == "POST":
+        if existing and existing.status in ("submitted", "under_review", "passed"):
+            flash("Your capstone is already " + existing.status
+                  + " — you can't resubmit right now.")
+            return redirect(url_for("capstone", slug=slug))
+        repo_url = request.form.get("repo_url", "").strip()
+        summary = request.form.get("summary", "").strip()
+        artifacts = _parse_artifact_urls(request.form.get("artifact_urls", ""))
+        if not URL_RE.match(repo_url):
+            flash("Enter a valid project URL (starting with http:// or https://).")
+            return render_template("capstone.html", course=c, capstone=existing,
+                                   repo_url=repo_url, summary=summary)
+        if len(summary) < 50:
+            flash("Write a summary of at least 50 characters describing what you built.")
+            return render_template("capstone.html", course=c, capstone=existing,
+                                   repo_url=repo_url, summary=summary)
+        data.submit_capstone(user.id, slug, repo_url[:400], summary[:5000], artifacts)
+        flash("Capstone submitted. It's now in review.")
+        return redirect(url_for("capstone", slug=slug))
+
+    return render_template("capstone.html", course=c, capstone=existing,
+                           repo_url="", summary="")
 
 
 # ---------------------------------------------------------------- student auth
@@ -669,6 +928,58 @@ def admin_toggle(code):
         abort(404)
     flash(("Revoked " if cert.revoked else "Restored ") + code + ".")
     return redirect(url_for("admin"))
+
+
+@app.route("/admin/capstones")
+def admin_capstones():
+    if not logged_in():
+        return redirect(url_for("admin_login"))
+    rows = []
+    for cap in data.list_capstones():
+        c = COURSE_BY_SLUG.get(cap.course_slug)
+        author = data.get_user(cap.user_id)
+        rows.append({"cap": cap,
+                     "course_title": c["title"] if c else cap.course_slug,
+                     "course_hours": (c or {}).get("hours", ""),
+                     "author_name": author.name if author else "(unknown)",
+                     "author_email": author.email if author else ""})
+    return render_template("admin_capstones.html", rows=rows,
+                           today=date.today().isoformat())
+
+
+@app.route("/admin/capstones/<uid>/<slug>/decide", methods=["POST"])
+def admin_capstone_decide(uid, slug):
+    if not logged_in():
+        abort(403)
+    cap = data.get_capstone(uid, slug)
+    if not cap:
+        abort(404)
+    action = request.form.get("action", "")
+    c = COURSE_BY_SLUG.get(slug)
+    if action == "pass":
+        try:
+            score = int(request.form.get("score", ""))
+        except ValueError:
+            score = -1
+        if score < PASS_MARK:
+            flash(f"Score {score}% is below the {PASS_MARK}% pass mark — not passing.")
+            return redirect(url_for("admin_capstones"))
+        author = data.get_user(uid)
+        title = c["title"] if c else slug
+        year = date.today().isoformat()[:4]
+        code = mint_code(title, year)
+        data.create_certificate(code, author.name if author else "(unknown)", title,
+                                 score, (c or {}).get("hours", ""),
+                                 date.today().isoformat(), kind="course")
+        data.decide_capstone(uid, slug, "passed", score=score, verdict="pass")
+        flash(f"Passed capstone and issued {code}.")
+    elif action == "fail":
+        data.decide_capstone(uid, slug, "failed", verdict="fail")
+        flash("Capstone marked failed — the learner can revise and resubmit.")
+    elif action == "review":
+        data.decide_capstone(uid, slug, "under_review", verdict=None)
+        flash("Marked under review.")
+    return redirect(url_for("admin_capstones"))
 
 
 @app.errorhandler(404)

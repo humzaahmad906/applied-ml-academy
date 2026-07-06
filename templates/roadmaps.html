@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}Career paths · {{ BRAND }}{% endblock %}
+{% block body %}
+
+<section class="hero compact">
+  <div class="wrap">
+    <div class="pill">Goal-first learning</div>
+    <h1>Career paths</h1>
+    <p class="lead" style="max-width:640px">Pick the role you want to grow into. Each path
+       is an ordered plan that mixes free foundations with the Nanodegree that gets you
+       there — do them top to bottom, or jump in wherever you already have the skills.</p>
+    <div class="rm-jump">
+      {% for r in roadmaps %}
+      <a href="#{{ r.key }}" style="--accent:{{ r.accent }}">{{ r.role }}</a>
+      {% endfor %}
+    </div>
+  </div>
+</section>
+
+<div class="wrap">
+  {% for r in roadmaps %}
+  <section class="rm-detail" id="{{ r.key }}" style="--accent:{{ r.accent }}">
+    <div class="rm-detail-head">
+      <div>
+        <div class="eyebrow">Career path</div>
+        <h2 class="section">Become a {{ r.role }}</h2>
+        <p class="lead">{{ r.who }}</p>
+        <p class="rm-outcome"><b>You'll be able to:</b> {{ r.outcome }}</p>
+      </div>
+      <div class="rm-detail-stats">
+        <div><b>{{ r.n_steps }}</b><span>courses</span></div>
+        <div><b>~{{ r.hours }}</b><span>hours</span></div>
+      </div>
+    </div>
+
+    <ol class="rm-path">
+      {% for s in r.steps %}
+      <li class="rm-step" style="--accent:{{ s.course.accent }}">
+        <div class="rm-step-num">{{ s.n }}</div>
+        <a class="rm-step-body" href="{{ url_for('course_detail', slug=s.course.slug) }}">
+          <div class="rm-step-head">
+            <h3>{{ s.course.title }}</h3>
+            <span class="rm-kind {{ s.kind|lower }}">{{ s.kind }}</span>
+          </div>
+          <p class="rm-why">{{ s.why }}</p>
+          <div class="rm-step-meta">
+            {{ s.course.module_count }} {{ 'lessons' if s.course.foundation else 'modules' }}
+            · {{ s.course.hours }} hrs · {{ s.course.level }}
+          </div>
+        </a>
+      </li>
+      {% endfor %}
+    </ol>
+
+    <div class="rm-cap">
+      <span class="rm-cap-flag">Destination</span>
+      <p>Finish with the <b>{{ r.cap_course.title }}</b> and you're ready to work as a
+         {{ r.role }}.
+        {% if user %}
+        <a href="{{ url_for('course_detail', slug=r.cap_course.slug) }}">Jump to it →</a>
+        {% else %}
+        <a href="{{ url_for('register') }}">Sign up free to start →</a>
+        {% endif %}
+      </p>
+    </div>
+  </section>
+  {% endfor %}
+</div>
+
+{% endblock %}
