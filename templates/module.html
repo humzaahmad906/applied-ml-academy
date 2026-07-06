@@ -18,6 +18,10 @@
   </aside>
 
   <div class="reader-main">
+    <div class="reader-tools">
+      <button id="focusStart" class="focus-start" type="button">🎯 Focus mode</button>
+      <span class="focus-hint">Reads the lesson line by line, then prompts you for notes after each section.</span>
+    </div>
     <article class="md" id="mdbody">{{ body|safe }}</article>
 
     <section class="notes" id="notes">
@@ -188,6 +192,189 @@
     if (box.value !== lastSaved){
       navigator.sendBeacon(url, new Blob([JSON.stringify({body: box.value})],
                            {type:'application/json'})); }
+  });
+})();
+</script>
+
+<!-- focus mode: control bar + per-section notes modal -->
+<div id="focusBar">
+  <button id="fPrev" title="Previous line (←)">◀</button>
+  <button id="fPlay" title="Pause / play (space)">⏸</button>
+  <button id="fNext" title="Next line (→)">▶</button>
+  <span class="f-prog"><b id="fSec">1</b> / <span id="fSecN">1</span> · line <b id="fLine">1</b>/<span id="fLineN">1</span></span>
+  <span class="f-title" id="fTitle"></span>
+  <button id="fNotes" class="ghost" title="Write notes for this section now">Notes</button>
+  <button id="fEnd" class="ghost" title="Exit focus mode (Esc)">End</button>
+</div>
+
+<div id="focusNoteModal">
+  <div class="fn-card">
+    <div class="fn-head">
+      <span class="fn-eyebrow">Section notes</span>
+      <h3 class="fn-title">Notes</h3>
+    </div>
+    <p class="fn-sub">Write what you took from this section — saved to your private lesson notes.</p>
+    <textarea class="fn-text" placeholder="Your notes for this section…"></textarea>
+    <div class="fn-actions">
+      <button id="fnBack" class="ghost" type="button">Back to reading</button>
+      <span>
+        <button id="fnSkip" class="ghost" type="button">Skip</button>
+        <button id="fnNext" class="primary" type="button">Save &amp; next section →</button>
+      </span>
+    </div>
+  </div>
+</div>
+<div id="focusToast"></div>
+
+<script>
+/* ---------- focus mode: line-by-line reading + per-section notes ---------- */
+(function(){
+  var art = document.getElementById('mdbody');
+  var noteBox = document.getElementById('noteBox');
+  var bar = document.getElementById('focusBar');
+  var modal = document.getElementById('focusNoteModal');
+  var toast = document.getElementById('focusToast');
+  var STEP_MS = 7000;
+  var FOCUS_HDR = '## 🎯 Focus session notes';
+
+  var sections = [], si = 0, li = 0, timer = null, paused = false, active = false;
+
+  // Split the article's block children into sections at each <h2>.
+  function buildSections(){
+    var kids = Array.prototype.slice.call(art.children);
+    var out = [], cur = null;
+    var h1 = art.querySelector('h1');
+    kids.forEach(function(el){
+      if (!el.textContent.trim() && !el.querySelector('img,pre,table')) return;
+      var isH2 = el.tagName === 'H2';
+      if (isH2 || !cur){
+        cur = { title: isH2 ? el.textContent.trim()
+                            : (h1 ? h1.textContent.trim() : 'Introduction'),
+                lines: [] };
+        out.push(cur);
+      }
+      cur.lines.push(el);
+    });
+    return out;
+  }
+
+  function clearLine(){
+    art.querySelectorAll('.focus-line').forEach(function(e){ e.classList.remove('focus-line'); });
+  }
+  function updateBar(){
+    var sec = sections[si];
+    document.getElementById('fSec').textContent = si + 1;
+    document.getElementById('fSecN').textContent = sections.length;
+    document.getElementById('fLine').textContent = li + 1;
+    document.getElementById('fLineN').textContent = sec.lines.length;
+    document.getElementById('fTitle').textContent = sec.title;
+    document.getElementById('fPlay').textContent = paused ? '▶' : '⏸';
+  }
+  function showLine(){
+    clearLine();
+    var el = sections[si].lines[li];
+    el.classList.add('focus-line');
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    updateBar();
+  }
+  function schedule(){
+    clearTimeout(timer);
+    if (!paused && active && !modal.classList.contains('on')) timer = setTimeout(step, STEP_MS);
+  }
+  function step(){
+    var sec = sections[si];
+    if (li < sec.lines.length - 1){ li++; showLine(); schedule(); }
+    else { clearTimeout(timer); openNotes(); }
+  }
+  function prev(){ if (li > 0){ li--; showLine(); schedule(); } }
+
+  /* ---- notes: merge into the single module note under a managed region ---- */
+  function parseNotes(){
+    var v = noteBox.value || '';
+    var i = v.indexOf(FOCUS_HDR);
+    var preamble = i < 0 ? v : v.slice(0, i);
+    var region = i < 0 ? '' : v.slice(i + FOCUS_HDR.length);
+    var map = {};
+    region.split(/\n### /).forEach(function(chunk, idx){
+      if (idx === 0 && !chunk.trim()) return;
+      var nl = chunk.indexOf('\n');
+      var title = (nl < 0 ? chunk : chunk.slice(0, nl)).trim();
+      var bodyt = nl < 0 ? '' : chunk.slice(nl + 1).replace(/\s+$/, '');
+      if (title) map[title] = bodyt;
+    });
+    return { preamble: preamble.replace(/\s+$/, ''), map: map };
+  }
+  function writeNotes(preamble, map){
+    var parts = [], seen = {};
+    sections.forEach(function(s){
+      if (s.title in map && !seen[s.title]){ parts.push('### ' + s.title + '\n' + (map[s.title] || '')); seen[s.title] = 1; }
+    });
+    Object.keys(map).forEach(function(t){
+      if (!seen[t]) parts.push('### ' + t + '\n' + (map[t] || ''));
+    });
+    var region = parts.length ? ('\n\n' + FOCUS_HDR + '\n\n' + parts.join('\n\n') + '\n') : '';
+    noteBox.value = (preamble || '') + region;
+    noteBox.dispatchEvent(new Event('input', { bubbles: true }));  // triggers existing autosave
+  }
+  function openNotes(){
+    var sec = sections[si], p = parseNotes(), last = si >= sections.length - 1;
+    modal.querySelector('.fn-title').textContent = 'Notes — ' + sec.title;
+    modal.querySelector('.fn-text').value = p.map[sec.title] || '';
+    document.getElementById('fnNext').textContent = last ? 'Save & finish ✓' : 'Save & next section →';
+    bar.classList.remove('on');
+    modal.classList.add('on');
+    modal.querySelector('.fn-text').focus();
+  }
+  function commitNotes(){
+    var sec = sections[si], p = parseNotes();
+    p.map[sec.title] = modal.querySelector('.fn-text').value.trim();
+    writeNotes(p.preamble, p.map);
+  }
+  function nextSection(save){
+    if (save) commitNotes();
+    modal.classList.remove('on');
+    if (si < sections.length - 1){ si++; li = 0; bar.classList.add('on'); showLine(); schedule(); }
+    else { finish(); }
+  }
+
+  function showToast(msg){
+    toast.textContent = msg; toast.classList.add('on');
+    setTimeout(function(){ toast.classList.remove('on'); }, 2600);
+  }
+  function enter(){
+    sections = buildSections();
+    if (!sections.length) return;
+    active = true; paused = false; si = 0; li = 0;
+    document.body.classList.add('focus-on');
+    bar.classList.add('on');
+    showLine(); schedule();
+  }
+  function finish(){ exit(); showToast('Lesson focus complete 🎉  Your section notes are saved.'); }
+  function exit(){
+    active = false; clearTimeout(timer);
+    document.body.classList.remove('focus-on');
+    bar.classList.remove('on'); modal.classList.remove('on');
+    clearLine();
+  }
+
+  document.getElementById('focusStart').onclick = enter;
+  document.getElementById('fPrev').onclick = prev;
+  document.getElementById('fNext').onclick = function(){ clearTimeout(timer); step(); };
+  document.getElementById('fPlay').onclick = function(){ paused = !paused; updateBar(); schedule(); };
+  document.getElementById('fNotes').onclick = function(){ clearTimeout(timer); openNotes(); };
+  document.getElementById('fEnd').onclick = exit;
+  document.getElementById('fnNext').onclick = function(){ nextSection(true); };
+  document.getElementById('fnSkip').onclick = function(){ nextSection(false); };
+  document.getElementById('fnBack').onclick = function(){
+    modal.classList.remove('on'); bar.classList.add('on'); paused = true; updateBar();
+  };
+  document.addEventListener('keydown', function(e){
+    if (!active) return;
+    if (modal.classList.contains('on')){ if (e.key === 'Escape'){ e.preventDefault(); modal.classList.remove('on'); bar.classList.add('on'); paused = true; updateBar(); } return; }
+    if (e.key === 'Escape'){ e.preventDefault(); exit(); }
+    else if (e.key === 'ArrowRight'){ e.preventDefault(); clearTimeout(timer); step(); }
+    else if (e.key === 'ArrowLeft'){ e.preventDefault(); prev(); }
+    else if (e.key === ' '){ e.preventDefault(); paused = !paused; updateBar(); schedule(); }
   });
 })();
 </script>
