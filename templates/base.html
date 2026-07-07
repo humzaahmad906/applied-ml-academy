@@ -23,8 +23,11 @@
       <a href="{{ url_for('roadmaps') }}">Career paths</a>
       <a href="{{ url_for('verify') }}">Verify</a>
       {% if user %}
+        <a href="{{ url_for('leaderboard') }}">Leaderboard</a>
         <a href="{{ url_for('dashboard') }}">My learning</a>
-        <span class="who">Hi, {{ user.name.split(' ')[0] }}</span>
+        <span class="xp-chip" title="Your XP and current streak">
+          <b>{{ user.xp or 0 }}</b> XP{% if (user.streak or 0) > 0 %} · 🔥{{ user.streak }}{% endif %}
+        </span>
         <a class="ghostlink" href="{{ url_for('logout') }}">Log out</a>
       {% else %}
         <a href="{{ url_for('login') }}">Log in</a>

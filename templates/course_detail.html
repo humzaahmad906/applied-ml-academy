@@ -17,6 +17,12 @@
       {% elif course.program == 'Specialization' %}<span class="free">Specialization</span>
       {% else %}<span class="free">Certificate</span>{% endif %}
     </div>
+    {% if enrollment and progress and progress.total %}
+    <div class="ch-progress">
+      <div class="chp-bar"><span style="width:{{ progress.pct }}%"></span></div>
+      <span class="chp-label">{{ progress.done }} / {{ progress.total }} complete · {{ progress.pct }}%</span>
+    </div>
+    {% endif %}
   </div>
 </section>
 
@@ -48,11 +54,11 @@
       {% if course.has_content %}
       <ol class="curriculum">
         {% for m in course.modules %}
-        <li>
-          <span class="num">{{ "%02d"|format(loop.index) }}</span>
+        <li class="{{ 'done' if m.id in completed else '' }}">
+          <span class="num">{{ "✓" if m.id in completed else "%02d"|format(loop.index) }}</span>
           <span class="mt">{{ m.title }}</span>
           {% if enrollment %}
-          <a class="open" href="{{ url_for('module', slug=course.slug, module_id=m.id) }}">Open →</a>
+          <a class="open" href="{{ url_for('module', slug=course.slug, module_id=m.id) }}">{{ 'Review →' if m.id in completed else 'Open →' }}</a>
           {% else %}
           <span class="lock">🔒</span>
           {% endif %}

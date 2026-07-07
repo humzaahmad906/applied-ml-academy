@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Leaderboard · {{ BRAND }}{% endblock %}
+{% block body %}
+<div class="wrap">
+  <section>
+    <div class="eyebrow">Leaderboard</div>
+    <h2 class="section">Top learners by XP</h2>
+    <p class="lead">XP is earned by completing lessons (+50) and finishing courses (+200 bonus).
+       Keep a daily streak going to climb.</p>
+
+    {% if board %}
+    <ol class="lb">
+      {% for r in board %}
+      <li class="lb-row{{ ' me' if r.is_me else '' }}{{ ' top' if r.rank <= 3 else '' }}">
+        <span class="lb-rank">{% if r.rank == 1 %}🥇{% elif r.rank == 2 %}🥈{% elif r.rank == 3 %}🥉{% else %}{{ r.rank }}{% endif %}</span>
+        <span class="lb-name">{{ r.name }}{% if r.is_me %} <em>(you)</em>{% endif %}</span>
+        <span class="lb-xp"><b>{{ r.xp }}</b> XP</span>
+      </li>
+      {% endfor %}
+    </ol>
+    {% if not in_board %}
+    <div class="lb-you">You have <b>{{ my_xp }}</b> XP — complete more lessons to reach the top 25.</div>
+    {% endif %}
+    {% else %}
+    <p class="lead">No one's on the board yet. Complete a lesson to be the first.</p>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

@@ -17,7 +17,7 @@ Collections:
 import os
 import json
 from types import SimpleNamespace
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import firebase_admin
 from firebase_admin import credentials, firestore
@@ -120,6 +120,78 @@ def count_enrollments():
     return get_db().collection("enrollments").count().get()[0][0].value
 
 
+# ---------------------------------------------------------------- progress + gamification
+# Completion lives on the enrollment doc (completed: [module_id]); XP/streak/badges
+# live on the user doc so a single read (current_user) already carries xp/streak.
+def _today():
+    return datetime.utcnow().date().isoformat()
+
+
+def _yesterday():
+    return (datetime.utcnow().date() - timedelta(days=1)).isoformat()
+
+
+def mark_module_complete(uid, slug, module_id):
+    """Add module to enrollment.completed if not already there. Returns True if newly added."""
+    ref = get_db().collection("enrollments").document(_enroll_id(uid, slug))
+    snap = ref.get()
+    if not snap.exists:
+        return False
+    if module_id in (snap.to_dict().get("completed") or []):
+        return False
+    ref.update({"completed": firestore.ArrayUnion([module_id])})
+    return True
+
+
+def completed_modules(uid, slug):
+    if not uid:
+        return set()
+    snap = get_db().collection("enrollments").document(_enroll_id(uid, slug)).get()
+    return set(snap.to_dict().get("completed") or []) if snap.exists else set()
+
+
+def completed_counts(uid):
+    """slug -> number of completed modules, across all enrollments (for the dashboard)."""
+    return {e.course_slug: len(getattr(e, "completed", []) or []) for e in list_enrollments(uid)}
+
+
+def award_activity(uid, xp_gain):
+    """Add XP and roll the daily streak forward. Returns the updated stats."""
+    ref = get_db().collection("users").document(uid)
+    d = ref.get().to_dict() or {}
+    last = d.get("last_active")
+    streak = d.get("streak", 0) or 0
+    if last == _today():
+        pass                      # already counted today
+    elif last == _yesterday():
+        streak += 1
+    else:
+        streak = 1                # first activity, or a day was missed
+    longest = max(d.get("longest_streak", 0) or 0, streak)
+    xp = (d.get("xp", 0) or 0) + xp_gain
+    ref.update({"xp": xp, "streak": streak, "longest_streak": longest, "last_active": _today()})
+    return {"xp": xp, "streak": streak, "longest_streak": longest}
+
+
+def get_user_stats(uid):
+    d = get_db().collection("users").document(uid).get().to_dict() or {}
+    return {"xp": d.get("xp", 0) or 0, "streak": d.get("streak", 0) or 0,
+            "longest_streak": d.get("longest_streak", 0) or 0,
+            "badges": d.get("badges", []) or [], "last_active": d.get("last_active")}
+
+
+def add_badges(uid, badge_ids):
+    if badge_ids:
+        get_db().collection("users").document(uid).update(
+            {"badges": firestore.ArrayUnion(list(badge_ids))})
+
+
+def leaderboard(limit=20):
+    q = (get_db().collection("users")
+         .order_by("xp", direction=firestore.Query.DESCENDING).limit(limit).stream())
+    return [_ns(s.id, s.to_dict()) for s in q]
+
+
 # ---------------------------------------------------------------- notes + highlights
 def _note_id(uid, slug, module_id):
     return f"{uid}__{slug}__{module_id}"
@@ -167,10 +239,10 @@ def certificate_exists(code):
     return get_db().collection("certificates").document(code).get().exists
 
 
-def create_certificate(code, name, course, score, hours, issued_on):
+def create_certificate(code, name, course, score, hours, issued_on, kind="course"):
     get_db().collection("certificates").document(code).set(
         {"code": code, "name": name, "course": course, "score": score,
-         "hours": hours, "issued_on": issued_on, "revoked": False,
+         "hours": hours, "issued_on": issued_on, "revoked": False, "kind": kind,
          "created_at": firestore.SERVER_TIMESTAMP})
 
 
@@ -189,3 +261,53 @@ def toggle_certificate(code):
     revoked = not snap.to_dict().get("revoked", False)
     ref.update({"revoked": revoked})
     return _cert_ns(snap.id, {**snap.to_dict(), "revoked": revoked})
+
+
+# ---------------------------------------------------------------- capstones
+# One capstone submission per (user, certificate-course). doc id = uid__slug.
+# Phase 1: learners submit; an admin reviews and decides. Peer/AI review is layered
+# on later (see CAPSTONE_REVIEW_SPEC.md) — no grading logic lives here yet.
+def _capstone_id(uid, slug):
+    return f"{uid}__{slug}"
+
+
+def get_capstone(uid, slug):
+    if not uid:
+        return None
+    snap = get_db().collection("capstones").document(_capstone_id(uid, slug)).get()
+    return _ns(snap.id, snap.to_dict()) if snap.exists else None
+
+
+def submit_capstone(uid, slug, repo_url, summary, artifact_urls):
+    """Create or re-submit a capstone. Resubmitting bumps the version and resets
+    the review state back to `submitted` (clearing any prior decision)."""
+    ref = get_db().collection("capstones").document(_capstone_id(uid, slug))
+    snap = ref.get()
+    version = (snap.to_dict().get("version", 0) + 1) if snap.exists else 1
+    doc = {"user_id": uid, "course_slug": slug, "repo_url": repo_url,
+           "summary": summary, "artifact_urls": artifact_urls, "version": version,
+           "status": "submitted", "score": None, "verdict": None, "decided_at": None,
+           "submitted_at": firestore.SERVER_TIMESTAMP}
+    if not snap.exists:
+        doc["created_at"] = firestore.SERVER_TIMESTAMP
+    ref.set(doc, merge=True)
+    return version
+
+
+def list_capstones():
+    """All submissions, newest submission first (admin review queue)."""
+    q = get_db().collection("capstones").stream()
+    items = [_ns(s.id, s.to_dict()) for s in q]
+    items.sort(key=lambda c: getattr(c, "submitted_at", None) or datetime.min, reverse=True)
+    return items
+
+
+def decide_capstone(uid, slug, status, score=None, verdict=None):
+    ref = get_db().collection("capstones").document(_capstone_id(uid, slug))
+    if not ref.get().exists:
+        return None
+    upd = {"status": status, "verdict": verdict, "decided_at": firestore.SERVER_TIMESTAMP}
+    if score is not None:
+        upd["score"] = score
+    ref.update(upd)
+    return get_capstone(uid, slug)

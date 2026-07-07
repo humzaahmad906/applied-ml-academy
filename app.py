@@ -537,6 +537,49 @@ def roadmap_view(r):
     return v
 
 
+# ---------------------------------------------------------------- gamification
+# Milestone badges. Kept professional (skills/mastery), not childish. Criteria are
+# recomputed from live state on each completion; ids are stored on the user doc.
+BADGES = {
+    "first-steps":     {"title": "First Steps",   "icon": "🌱", "desc": "Completed your first lesson"},
+    "getting-serious": {"title": "Getting Serious","icon": "📚", "desc": "Completed 10 lessons"},
+    "scholar":         {"title": "Scholar",        "icon": "🎓", "desc": "Completed 50 lessons"},
+    "streak-7":        {"title": "On a Roll",      "icon": "🔥", "desc": "7-day learning streak"},
+    "streak-30":       {"title": "Unstoppable",    "icon": "⚡", "desc": "30-day learning streak"},
+    "xp-500":          {"title": "Rising",         "icon": "⭐", "desc": "Earned 500 XP"},
+    "xp-2500":         {"title": "Elite",          "icon": "💎", "desc": "Earned 2,500 XP"},
+    "explorer":        {"title": "Explorer",       "icon": "🧭", "desc": "Active in 3+ courses"},
+    "finisher":        {"title": "Finisher",       "icon": "🏁", "desc": "Completed a full course"},
+}
+XP_PER_LESSON = 50
+XP_COURSE_BONUS = 200
+
+
+def _earned_badges(uid):
+    """Recompute the full set of badge ids the user currently qualifies for."""
+    stats = data.get_user_stats(uid)
+    total_done, courses_touched, any_course_done = 0, 0, False
+    for e in data.list_enrollments(uid):
+        done = set(getattr(e, "completed", []) or [])
+        total_done += len(done)
+        if done:
+            courses_touched += 1
+        total = len(MODULES.get(e.course_slug, []))
+        if total and len(done) >= total:
+            any_course_done = True
+    earned = set()
+    if total_done >= 1:  earned.add("first-steps")
+    if total_done >= 10: earned.add("getting-serious")
+    if total_done >= 50: earned.add("scholar")
+    if max(stats["streak"], stats["longest_streak"]) >= 7:  earned.add("streak-7")
+    if stats["longest_streak"] >= 30: earned.add("streak-30")
+    if stats["xp"] >= 500:  earned.add("xp-500")
+    if stats["xp"] >= 2500: earned.add("xp-2500")
+    if courses_touched >= 3: earned.add("explorer")
+    if any_course_done: earned.add("finisher")
+    return earned
+
+
 # ---------------------------------------------------------------- auth
 def current_user():
     uid = session.get("uid")
@@ -615,8 +658,14 @@ def course_detail(slug):
     c = course_view(slug)
     if not c:
         abort(404)
-    enr = enrollment_of(current_user(), slug)
-    return render_template("course_detail.html", course=c, enrollment=enr)
+    user = current_user()
+    enr = enrollment_of(user, slug)
+    done = data.completed_modules(user.id, slug) if (user and enr) else set()
+    total = len(c["modules"])
+    progress = {"done": len(done), "total": total,
+                "pct": int(len(done) * 100 / total) if total else 0}
+    return render_template("course_detail.html", course=c, enrollment=enr,
+                           completed=list(done), progress=progress)
 
 
 @app.route("/course/<slug>/enroll", methods=["POST"])
@@ -657,10 +706,13 @@ def module(slug, module_id):
     # remember last position for "continue"
     data.set_last_module(user.id, slug, module_id)
     note = data.get_note(user.id, slug, module_id)
+    done = data.completed_modules(user.id, slug)
     return render_template("module.html", course=c, current=c["modules"][idx],
                            body=html, prev_m=prev_m, next_m=next_m, index=idx,
                            note_body=(note.body if note else ""),
-                           note_highlights=json.dumps(note.highlights if note else []))
+                           note_highlights=json.dumps(note.highlights if note else []),
+                           completed=list(done), is_done=(module_id in done),
+                           done_count=len(done), total_count=len(c["modules"]))
 
 
 def _module_guard(user, slug, module_id):
@@ -706,18 +758,63 @@ def save_highlights(slug, module_id):
     return {"ok": True, "count": len(clean)}
 
 
+@app.route("/course/<slug>/<module_id>/complete", methods=["POST"])
+@login_required
+def complete_module(slug, module_id):
+    user = current_user()
+    _module_guard(user, slug, module_id)
+    newly = data.mark_module_complete(user.id, slug, module_id)
+    done = data.completed_modules(user.id, slug)
+    total = len(MODULES.get(slug, []))
+    course_completed = bool(total and len(done) >= total)
+    resp = {"ok": True, "newly": newly, "course_done": len(done),
+            "course_total": total, "course_completed": course_completed, "new_badges": []}
+    if newly:
+        gain = XP_PER_LESSON + (XP_COURSE_BONUS if course_completed else 0)
+        stats = data.award_activity(user.id, gain)
+        before = set(data.get_user_stats(user.id)["badges"])
+        new = _earned_badges(user.id) - before
+        data.add_badges(user.id, new)
+        resp.update({"xp": stats["xp"], "streak": stats["streak"], "xp_gained": gain,
+                     "new_badges": [dict(id=b, **BADGES[b]) for b in new if b in BADGES]})
+    else:
+        st = data.get_user_stats(user.id)
+        resp.update({"xp": st["xp"], "streak": st["streak"], "xp_gained": 0})
+    return resp
+
+
+@app.route("/leaderboard")
+@login_required
+def leaderboard():
+    user = current_user()
+    rows = data.leaderboard(25)
+    board = [{"rank": i + 1, "name": getattr(r, "name", "Learner"),
+              "xp": getattr(r, "xp", 0) or 0, "is_me": r.id == user.id}
+             for i, r in enumerate(rows)]
+    my_xp = getattr(user, "xp", 0) or 0
+    return render_template("leaderboard.html", board=board, my_xp=my_xp,
+                           in_board=any(b["is_me"] for b in board))
+
+
 @app.route("/dashboard")
 @login_required
 def dashboard():
     user = current_user()
+    stats = data.get_user_stats(user.id)
+    counts = data.completed_counts(user.id)
     enrolled = []
     for e in data.list_enrollments(user.id):
         c = course_view(e.course_slug)
         if not c:
             continue
         resume = e.last_module or (c["modules"][0]["id"] if c["modules"] else None)
-        enrolled.append({"course": c, "enrollment": e, "resume": resume})
-    return render_template("dashboard.html", enrolled=enrolled)
+        total = len(c["modules"])
+        dn = counts.get(e.course_slug, 0)
+        enrolled.append({"course": c, "enrollment": e, "resume": resume,
+                         "done": dn, "total": total,
+                         "pct": int(dn * 100 / total) if total else 0})
+    badges = [dict(id=b, **BADGES[b]) for b in stats["badges"] if b in BADGES]
+    return render_template("dashboard.html", enrolled=enrolled, stats=stats, badges=badges)
 
 
 # ---------------------------------------------------------------- capstone

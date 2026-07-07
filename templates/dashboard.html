@@ -7,8 +7,23 @@
     <h2 class="section">Welcome back, {{ user.name.split(' ')[0] }}.</h2>
 
     {% if enrolled %}
-    <p class="lead">Pick up where you left off, or enroll in something new from the
-       <a href="{{ url_for('index') }}#courses">catalog</a>.</p>
+    <div class="stat-row">
+      <div class="stat"><b>{{ stats.xp }}</b><span>Total XP</span></div>
+      <div class="stat"><b>🔥 {{ stats.streak }}</b><span>Day streak</span></div>
+      <div class="stat"><b>{{ badges|length }}</b><span>Badges</span></div>
+      <div class="stat"><b>{{ enrolled|length }}</b><span>Courses</span></div>
+    </div>
+
+    {% if badges %}
+    <div class="badge-grid">
+      {% for b in badges %}
+      <div class="badge" title="{{ b.desc }}"><span class="b-icon">{{ b.icon }}</span><span class="b-name">{{ b.title }}</span></div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <p class="lead" style="margin-top:30px">Pick up where you left off, or enroll in something new from the
+       <a href="{{ url_for('index') }}#programs">catalog</a>.</p>
     <div class="courses">
       {% for e in enrolled %}
       <a class="course" href="{{ url_for('module', slug=e.course.slug, module_id=e.resume) }}">
@@ -19,9 +34,15 @@
         <div class="body">
           <h3>{{ e.course.title }}</h3>
           <p>{{ e.course.module_count }} modules · {{ e.course.hours }} hrs · {{ e.course.level }}</p>
-          <div class="meta"><span>Enrolled {{ e.enrollment.created_at.strftime('%d %b %Y') }}</span></div>
+          <div class="dash-prog">
+            <div class="dp-bar"><span style="width:{{ e.pct }}%;--accent:{{ e.course.accent }}"></span></div>
+            <span class="dp-label">{{ e.done }}/{{ e.total }} · {{ e.pct }}%</span>
+          </div>
         </div>
-        <div class="foot"><span class="free">Enrolled</span><span class="go">Continue →</span></div>
+        <div class="foot">
+          <span class="free">{{ 'Completed ✓' if e.pct == 100 else 'In progress' }}</span>
+          <span class="go">{{ 'Review →' if e.pct == 100 else 'Continue →' }}</span>
+        </div>
       </a>
       {% endfor %}
     </div>
@@ -29,7 +50,7 @@
     <p class="lead">You haven't enrolled in anything yet.</p>
     <div class="empty">
       <p>Browse the catalog and enroll in your first course — it's free.</p>
-      <a class="btn" href="{{ url_for('index') }}#courses">Browse courses</a>
+      <a class="btn" href="{{ url_for('index') }}#programs">Browse courses</a>
     </div>
     {% endif %}
   </section>

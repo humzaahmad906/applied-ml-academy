@@ -8,9 +8,9 @@
     <div class="rn-prog">{{ index + 1 }} / {{ course.module_count }}</div>
     <ol class="rn-list">
       {% for m in course.modules %}
-      <li class="{{ 'active' if m.id == current.id else '' }}">
+      <li class="{{ 'active' if m.id == current.id else '' }}{{ ' rn-done' if m.id in completed else '' }}">
         <a href="{{ url_for('module', slug=course.slug, module_id=m.id) }}">
-          <span class="rn-num">{{ "%02d"|format(loop.index) }}</span>{{ m.title }}
+          <span class="rn-num">{{ "✓" if m.id in completed else "%02d"|format(loop.index) }}</span>{{ m.title }}
         </a>
       </li>
       {% endfor %}
@@ -31,6 +31,13 @@
       </div>
       <textarea id="noteBox" placeholder="Jot down anything from this module — your notes are private to your account and saved automatically.">{{ note_body }}</textarea>
     </section>
+
+    <div class="lesson-done">
+      <button id="markDone" class="btn done-btn{{ ' is-done' if is_done else '' }}" type="button">
+        {{ '✓ Completed' if is_done else 'Mark complete · +50 XP' }}
+      </button>
+      <span class="ld-prog">{{ done_count }} / {{ total_count }} lessons done in this course</span>
+    </div>
 
     <nav class="pager">
       {% if prev_m %}
@@ -227,6 +234,74 @@
 <div id="focusToast"></div>
 
 <script>
+/* ---------- lesson completion + XP / streak / badge toasts ---------- */
+(function(){
+  var btn = document.getElementById('markDone');
+  var url = "{{ url_for('complete_module', slug=course.slug, module_id=current.id) }}";
+  var done = {{ 'true' if is_done else 'false' }};
+  var art = document.getElementById('mdbody');
+  var toastEl = document.getElementById('focusToast');
+  var q = [], busy = false;
+
+  function gnotify(msg){ q.push(msg); if (!busy) drain(); }
+  function drain(){
+    if (!q.length){ busy = false; return; }
+    busy = true; toastEl.textContent = q.shift(); toastEl.classList.add('on');
+    setTimeout(function(){ toastEl.classList.remove('on'); setTimeout(drain, 350); }, 2200);
+  }
+  window.gnotify = gnotify;
+
+  function mark(){
+    if (done) return; done = true;
+    fetch(url, { method:'POST', headers:{'Content-Type':'application/json'}, body:'{}' })
+      .then(function(r){ return r.json(); })
+      .then(function(d){
+        if (!d || !d.ok){ done = false; return; }
+        if (btn){ btn.classList.add('is-done'); btn.textContent = '✓ Completed'; }
+        var li = document.querySelector('.rn-list li.active'); if (li) li.classList.add('rn-done');
+        var sp = li && li.querySelector('.rn-num'); if (sp) sp.textContent = '✓';
+        if (d.newly){
+          gnotify('+' + d.xp_gained + ' XP' + (d.streak > 1 ? '   ·   🔥 ' + d.streak + '-day streak' : ''));
+          (d.new_badges || []).forEach(function(b){ gnotify(b.icon + '  Badge unlocked — ' + b.title); });
+          if (d.course_completed) gnotify('🏁 Course complete! Bonus XP awarded.');
+          var chip = document.querySelector('.xp-chip b'); if (chip) chip.textContent = d.xp;
+        }
+      })
+      .catch(function(){ done = false; });
+  }
+  window.__markComplete = mark;
+  if (btn) btn.addEventListener('click', mark);
+
+  // auto-complete once the learner scrolls to the end of the article
+  function onScroll(){
+    if (done){ window.removeEventListener('scroll', onScroll); return; }
+    if (art.getBoundingClientRect().bottom < window.innerHeight + 60) mark();
+  }
+  window.addEventListener('scroll', onScroll, { passive:true });
+})();
+</script>
+
+<!-- diagrams (Mermaid) + math (KaTeX), rendered client-side -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<script type="module">
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+  // python-markdown renders ```mermaid as <pre><code class="language-mermaid">…</code></pre>
+  document.querySelectorAll('pre > code.language-mermaid').forEach(function(code){
+    var d = document.createElement('div'); d.className = 'mermaid';
+    d.textContent = code.textContent; code.parentNode.replaceWith(d);
+  });
+  mermaid.initialize({ startOnLoad: false, theme: 'neutral', securityLevel: 'strict' });
+  try { await mermaid.run(); } catch(e){}
+</script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"
+        onload="renderMathInElement(document.getElementById('mdbody'), {delimiters:[
+          {left:'$$',right:'$$',display:true},
+          {left:'\\[',right:'\\]',display:true},
+          {left:'\\(',right:'\\)',display:false},
+          {left:'$',right:'$',display:false}], throwOnError:false});"></script>
+
+<script>
 /* ---------- focus mode: line-by-line reading + per-section notes ---------- */
 (function(){
   var art = document.getElementById('mdbody');
@@ -349,7 +424,7 @@
     bar.classList.add('on');
     showLine(); schedule();
   }
-  function finish(){ exit(); showToast('Lesson focus complete 🎉  Your section notes are saved.'); }
+  function finish(){ exit(); if (window.__markComplete) window.__markComplete(); showToast('Lesson focus complete 🎉  Notes saved.'); }
   function exit(){
     active = false; clearTimeout(timer);
     document.body.classList.remove('focus-on');
