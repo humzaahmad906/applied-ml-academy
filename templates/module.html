@@ -203,31 +203,71 @@
 })();
 </script>
 
-<!-- focus mode: control bar + per-section notes modal -->
-<div id="focusBar">
-  <button id="fPrev" title="Previous line (←)">◀</button>
-  <button id="fPlay" title="Pause / play (space)">⏸</button>
-  <button id="fNext" title="Next line (→)">▶</button>
-  <span class="f-prog"><b id="fSec">1</b> / <span id="fSecN">1</span> · line <b id="fLine">1</b>/<span id="fLineN">1</span></span>
-  <span class="f-title" id="fTitle"></span>
-  <button id="fNotes" class="ghost" title="Write notes for this section now">Notes</button>
-  <button id="fEnd" class="ghost" title="Exit focus mode (Esc)">End</button>
-</div>
+<!-- focus mode: immersive full-viewport overlay -->
+<div id="focusOverlay" aria-hidden="true">
+  <div id="fThreshold"><div class="ft-breath"></div><span class="ft-word">Ready</span></div>
 
-<div id="focusNoteModal">
-  <div class="fn-card">
-    <div class="fn-head">
+  <div id="fTopbar"><span id="fTopbarFill"></span></div>
+
+  <div id="fDepth" aria-hidden="true">
+    <svg id="fRing" width="40" height="40" viewBox="0 0 40 40">
+      <circle class="fr-track" cx="20" cy="20" r="17" fill="none" stroke-width="3"/>
+      <circle class="fr-fill" cx="20" cy="20" r="17" fill="none" stroke-width="3"
+              stroke-linecap="round" transform="rotate(-90 20 20)"
+              stroke-dasharray="106.8" stroke-dashoffset="106.8"/>
+    </svg>
+    <span id="fClock" class="mono"></span>
+    <div id="fDots"></div>
+    <span id="fRemain" class="mono"></span>
+  </div>
+
+  <div id="fReader"><div id="fReadInner"></div></div>
+
+  <div id="fPill">
+    <button id="fTimerBtn" title="Start / pause Pomodoro">▷ Timer</button>
+    <button id="fAuto" title="Toggle auto-advance reading">Auto-read: off</button>
+    <button id="fSlower" title="Slower (−)">−</button>
+    <span id="fSpeed" class="mono">1.0×</span>
+    <button id="fFaster" title="Faster (+)">+</button>
+    <button id="fNotesBtn" title="Notes for this section">Notes</button>
+    <button id="fExit" class="ghost" title="Exit focus mode (Esc)">Exit</button>
+  </div>
+
+  <div id="fNoteModal">
+    <div class="fn-card">
       <span class="fn-eyebrow">Section notes</span>
       <h3 class="fn-title">Notes</h3>
+      <p class="fn-sub">What did you take from this section? Saved to your private lesson notes.</p>
+      <textarea class="fn-text" placeholder="Your notes for this section…"></textarea>
+      <div class="fn-actions">
+        <button id="fnBack" class="ghost" type="button">Back to reading</button>
+        <span>
+          <button id="fnSkip" class="ghost" type="button">Skip</button>
+          <button id="fnNext" class="primary" type="button">Save &amp; continue →</button>
+        </span>
+      </div>
     </div>
-    <p class="fn-sub">Write what you took from this section — saved to your private lesson notes.</p>
-    <textarea class="fn-text" placeholder="Your notes for this section…"></textarea>
-    <div class="fn-actions">
-      <button id="fnBack" class="ghost" type="button">Back to reading</button>
-      <span>
-        <button id="fnSkip" class="ghost" type="button">Skip</button>
-        <button id="fnNext" class="primary" type="button">Save &amp; next section →</button>
-      </span>
+  </div>
+
+  <div id="fBreak">
+    <div class="fb-breath"></div>
+    <h3 id="fBreakTitle">Break time</h3>
+    <p id="fBreakSub">Rest for a few minutes — look away from the screen.</p>
+    <button id="fBreakSkip" class="ghost" type="button">Skip break</button>
+  </div>
+
+  <div id="fDebrief">
+    <div class="fd-card">
+      <span class="fn-eyebrow">Session debrief</span>
+      <h3>Nice focus session.</h3>
+      <div class="fd-stats">
+        <div><b id="fdTime">0m</b><span>focused</span></div>
+        <div><b id="fdSec">0/0</b><span>sections</span></div>
+        <div><b id="fdNotes">0</b><span>notes</span></div>
+      </div>
+      <p class="fd-prompt" id="fdPrompt"></p>
+      <textarea class="fd-reflect" placeholder="One line — saved to your notes…"></textarea>
+      <button id="fdDone" class="primary" type="button">Return</button>
     </div>
   </div>
 </div>
@@ -302,154 +342,268 @@
           {left:'$',right:'$',display:false}], throwOnError:false});"></script>
 
 <script>
-/* ---------- focus mode: line-by-line reading + per-section notes ---------- */
+/* ---------- focus mode: immersive reading + pomodoro + rituals ---------- */
 (function(){
-  var art = document.getElementById('mdbody');
+  var startBtn = document.getElementById('focusStart');
+  var overlay  = document.getElementById('focusOverlay');
+  if (!startBtn || !overlay) return;
+  var art     = document.getElementById('mdbody');
   var noteBox = document.getElementById('noteBox');
-  var bar = document.getElementById('focusBar');
-  var modal = document.getElementById('focusNoteModal');
-  var toast = document.getElementById('focusToast');
-  var STEP_MS = 7000;
+  var reader  = document.getElementById('fReader');
+  var inner   = document.getElementById('fReadInner');
+  var modal   = document.getElementById('fNoteModal');
+  var threshold = document.getElementById('fThreshold');
+  var debrief = document.getElementById('fDebrief');
+  var breakEl = document.getElementById('fBreak');
+  var dotsEl  = document.getElementById('fDots');
+  var ringFill= overlay.querySelector('.fr-fill');
+  var clockEl = document.getElementById('fClock');
+  var remainEl= document.getElementById('fRemain');
+  var topFill = document.getElementById('fTopbarFill');
+  var reduce  = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var RING_C  = 106.8;   // 2*pi*17
+
   var FOCUS_HDR = '## 🎯 Focus session notes';
+  var PROMPTS = [
+    'What is the one idea from this lesson you could explain to a colleague?',
+    'Which concept felt least intuitive? That is where review pays off.',
+    'If you had to use one thing from this lesson tomorrow, what would it be?',
+    'What question do you still have after this lesson?',
+    'Summarize this lesson in a single sentence.'
+  ];
 
-  var sections = [], si = 0, li = 0, timer = null, paused = false, active = false;
+  var origParent = null, origNext = null;
+  var sections = [], si = 0;
+  var active = false, auto = false, speed = 1, dwellTimer = null;
+  var startedAt = 0, maxScrollPct = 0, noteCount = 0, estMinutes = 10;
+  var lines = [], lineIdx = 0;
+  // pomodoro
+  var FOCUS_MIN = 25, BREAK_MIN = 5;
+  var timerOn = false, onBreak = false, timerStart = 0, timerElapsed = 0, timerTick = null;
+  var audioCtx = null;
 
-  // Split the article's block children into sections at each <h2>.
+  /* ---- audio chime (zero-asset) ---- */
+  function chime(){
+    try{
+      audioCtx = audioCtx || new (window.AudioContext||window.webkitAudioContext)();
+      var now = audioCtx.currentTime;
+      [523.25, 659.25, 783.99].forEach(function(f,i){
+        var o = audioCtx.createOscillator(), g = audioCtx.createGain();
+        o.type='sine'; o.frequency.value=f;
+        g.gain.setValueAtTime(0.0001, now+i*0.12);
+        g.gain.exponentialRampToValueAtTime(0.14, now+i*0.12+0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001, now+i*0.12+1.5);
+        o.connect(g); g.connect(audioCtx.destination);
+        o.start(now+i*0.12); o.stop(now+i*0.12+1.6);
+      });
+    }catch(e){}
+  }
+
+  /* ---- sections + depth dots ---- */
   function buildSections(){
-    var kids = Array.prototype.slice.call(art.children);
-    var out = [], cur = null;
-    var h1 = art.querySelector('h1');
+    var kids = Array.prototype.slice.call(inner.children), out=[], cur=null;
+    var h1 = inner.querySelector('h1');
     kids.forEach(function(el){
-      if (!el.textContent.trim() && !el.querySelector('img,pre,table')) return;
-      var isH2 = el.tagName === 'H2';
-      if (isH2 || !cur){
-        cur = { title: isH2 ? el.textContent.trim()
-                            : (h1 ? h1.textContent.trim() : 'Introduction'),
-                lines: [] };
-        out.push(cur);
-      }
+      if (!el.textContent.trim() && !el.querySelector('img,pre,table,svg,.mermaid')) return;
+      var isH2 = el.tagName==='H2';
+      if (isH2 || !cur){ cur={title:isH2?el.textContent.trim():(h1?h1.textContent.trim():'Introduction'), lines:[], el:el}; out.push(cur); }
       cur.lines.push(el);
     });
     return out;
   }
+  function buildDots(){
+    dotsEl.innerHTML='';
+    sections.forEach(function(s,i){
+      var d=document.createElement('span'); d.className='f-dot'; d.title=s.title; dotsEl.appendChild(d);
+    });
+  }
+  function sectionAtScroll(){
+    var y = reader.scrollTop + reader.clientHeight*0.33, idx=0;
+    sections.forEach(function(s,i){ if (s.el.offsetTop <= y) idx=i; });
+    return idx;
+  }
+  function estimateMinutes(){
+    var words = (inner.textContent||'').trim().split(/\s+/).length;
+    estMinutes = Math.max(1, Math.round(words/200));
+  }
+  function refreshProgress(){
+    var h = reader.scrollHeight - reader.clientHeight;
+    var pct = h>0 ? reader.scrollTop/h : 0;
+    if (pct>maxScrollPct) maxScrollPct=pct;
+    topFill.style.width = (pct*100).toFixed(1)+'%';
+    var cur = sectionAtScroll(); si = cur;
+    var dots = dotsEl.querySelectorAll('.f-dot');
+    for (var i=0;i<dots.length;i++){ dots[i].className='f-dot'+(i<cur?' done':'')+(i===cur?' cur':''); }
+    var mins = Math.max(0, Math.round((1-pct) * estMinutes));
+    remainEl.textContent = mins>0 ? '~'+mins+'m' : 'done';
+  }
 
-  function clearLine(){
-    art.querySelectorAll('.focus-line').forEach(function(e){ e.classList.remove('focus-line'); });
+  /* ---- auto-advance (spotlight) ---- */
+  function spotlight(el){
+    inner.querySelectorAll('.f-spot').forEach(function(e){ e.classList.remove('f-spot'); });
+    el.classList.add('f-spot');
+    el.scrollIntoView({behavior: reduce?'auto':'smooth', block:'center'});
   }
-  function updateBar(){
-    var sec = sections[si];
-    document.getElementById('fSec').textContent = si + 1;
-    document.getElementById('fSecN').textContent = sections.length;
-    document.getElementById('fLine').textContent = li + 1;
-    document.getElementById('fLineN').textContent = sec.lines.length;
-    document.getElementById('fTitle').textContent = sec.title;
-    document.getElementById('fPlay').textContent = paused ? '▶' : '⏸';
+  function dwellMs(el){
+    var w = (el.textContent||'').trim().split(/\s+/).length;
+    var base = (w/150)*60000 + 1200;
+    if (el.tagName==='PRE'||el.tagName==='TABLE'||el.querySelector('pre,table,.mermaid')) base*=2;
+    return Math.max(1800, base/speed);
   }
-  function showLine(){
-    clearLine();
-    var el = sections[si].lines[li];
-    el.classList.add('focus-line');
-    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    updateBar();
+  function flatLines(){ var a=[]; sections.forEach(function(s){ s.lines.forEach(function(l){ a.push(l); }); }); return a; }
+  function autoStep(){
+    if (!auto || !active) return;
+    if (lineIdx >= lines.length){ setAuto(false); return; }
+    spotlight(lines[lineIdx]); refreshProgress();
+    dwellTimer = setTimeout(function(){ lineIdx++; autoStep(); }, dwellMs(lines[lineIdx]));
   }
-  function schedule(){
-    clearTimeout(timer);
-    if (!paused && active && !modal.classList.contains('on')) timer = setTimeout(step, STEP_MS);
+  function setAuto(on){
+    auto = on; clearTimeout(dwellTimer);
+    reader.classList.toggle('spotting', on);
+    if (on){
+      lines = flatLines(); lineIdx = 0;
+      for (var i=0;i<lines.length;i++){ if (lines[i].offsetTop >= reader.scrollTop-10){ lineIdx=i; break; } }
+      autoStep();
+    } else {
+      inner.querySelectorAll('.f-spot').forEach(function(e){ e.classList.remove('f-spot'); });
+    }
+    syncButtons();
   }
-  function step(){
-    var sec = sections[si];
-    if (li < sec.lines.length - 1){ li++; showLine(); schedule(); }
-    else { clearTimeout(timer); openNotes(); }
+  function syncButtons(){
+    document.getElementById('fAuto').textContent = 'Auto-read: ' + (auto?'on':'off');
+    document.getElementById('fSpeed').textContent = speed.toFixed(1)+'×';
   }
-  function prev(){ if (li > 0){ li--; showLine(); schedule(); } }
 
-  /* ---- notes: merge into the single module note under a managed region ---- */
+  /* ---- pomodoro ---- */
+  function fmt(s){ var m=Math.floor(s/60), r=Math.floor(s%60); return m+':'+(r<10?'0':'')+r; }
+  function ringSet(p){ ringFill.style.strokeDashoffset = (RING_C*(1-p)).toFixed(1); }
+  function tick(){
+    var total = (onBreak?BREAK_MIN:FOCUS_MIN)*60;
+    var el = timerElapsed + (Date.now()-timerStart)/1000;
+    if (el >= total){ ringSet(1); clockEl.textContent=fmt(total); phaseEnd(); return; }
+    ringSet(el/total); clockEl.textContent = fmt(el);
+  }
+  function startTimer(){
+    if (timerOn){
+      timerOn=false; timerElapsed += (Date.now()-timerStart)/1000; clearInterval(timerTick);
+      document.getElementById('fTimerBtn').textContent='▷ Resume';
+    } else {
+      if (!audioCtx){ try{ audioCtx=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} }
+      timerOn=true; timerStart=Date.now(); timerTick=setInterval(tick, 1000); tick();
+      document.getElementById('fTimerBtn').textContent='❚❚ '+(onBreak?'Break':'Focus');
+    }
+  }
+  function phaseEnd(){
+    clearInterval(timerTick); timerOn=false; timerElapsed=0; chime();
+    if (!onBreak){ onBreak=true; showBreak(); }
+    else { onBreak=false; breakEl.classList.remove('on'); ringSet(0); clockEl.textContent='';
+           document.getElementById('fTimerBtn').textContent='▷ Timer'; }
+  }
+  function showBreak(){
+    breakEl.classList.add('on'); ringSet(0);
+    timerStart=Date.now(); timerElapsed=0; timerOn=true; timerTick=setInterval(tick,1000); tick();
+    document.getElementById('fTimerBtn').textContent='❚❚ Break';
+  }
+
+  /* ---- notes merge (shares the free-form note store) ---- */
   function parseNotes(){
-    var v = noteBox.value || '';
-    var i = v.indexOf(FOCUS_HDR);
-    var preamble = i < 0 ? v : v.slice(0, i);
-    var region = i < 0 ? '' : v.slice(i + FOCUS_HDR.length);
-    var map = {};
-    region.split(/\n### /).forEach(function(chunk, idx){
-      if (idx === 0 && !chunk.trim()) return;
-      var nl = chunk.indexOf('\n');
-      var title = (nl < 0 ? chunk : chunk.slice(0, nl)).trim();
-      var bodyt = nl < 0 ? '' : chunk.slice(nl + 1).replace(/\s+$/, '');
-      if (title) map[title] = bodyt;
-    });
-    return { preamble: preamble.replace(/\s+$/, ''), map: map };
+    var v=noteBox.value||'', i=v.indexOf(FOCUS_HDR);
+    var pre = i<0?v:v.slice(0,i), region=i<0?'':v.slice(i+FOCUS_HDR.length), map={};
+    region.split(/\n### /).forEach(function(c,idx){ if(idx===0&&!c.trim())return;
+      var nl=c.indexOf('\n'); var t=(nl<0?c:c.slice(0,nl)).trim(); var b=nl<0?'':c.slice(nl+1).replace(/\s+$/,'');
+      if(t) map[t]=b; });
+    return {pre:pre.replace(/\s+$/,''), map:map};
   }
-  function writeNotes(preamble, map){
-    var parts = [], seen = {};
-    sections.forEach(function(s){
-      if (s.title in map && !seen[s.title]){ parts.push('### ' + s.title + '\n' + (map[s.title] || '')); seen[s.title] = 1; }
-    });
-    Object.keys(map).forEach(function(t){
-      if (!seen[t]) parts.push('### ' + t + '\n' + (map[t] || ''));
-    });
-    var region = parts.length ? ('\n\n' + FOCUS_HDR + '\n\n' + parts.join('\n\n') + '\n') : '';
-    noteBox.value = (preamble || '') + region;
-    noteBox.dispatchEvent(new Event('input', { bubbles: true }));  // triggers existing autosave
+  function writeNotes(pre, map){
+    var parts=[], seen={};
+    sections.forEach(function(s){ if(s.title in map && !seen[s.title]){ parts.push('### '+s.title+'\n'+(map[s.title]||'')); seen[s.title]=1; } });
+    Object.keys(map).forEach(function(t){ if(!seen[t]) parts.push('### '+t+'\n'+(map[t]||'')); });
+    var region = parts.length ? ('\n\n'+FOCUS_HDR+'\n\n'+parts.join('\n\n')+'\n') : '';
+    noteBox.value = (pre||'')+region;
+    noteBox.dispatchEvent(new Event('input',{bubbles:true}));
   }
   function openNotes(){
-    var sec = sections[si], p = parseNotes(), last = si >= sections.length - 1;
-    modal.querySelector('.fn-title').textContent = 'Notes — ' + sec.title;
-    modal.querySelector('.fn-text').value = p.map[sec.title] || '';
-    document.getElementById('fnNext').textContent = last ? 'Save & finish ✓' : 'Save & next section →';
-    bar.classList.remove('on');
-    modal.classList.add('on');
-    modal.querySelector('.fn-text').focus();
+    var t = sections[si] ? sections[si].title : 'Notes', p=parseNotes();
+    modal.querySelector('.fn-title').textContent='Notes — '+t;
+    modal.querySelector('.fn-text').value = p.map[t]||'';
+    clearTimeout(dwellTimer);
+    modal.classList.add('on'); modal.querySelector('.fn-text').focus();
   }
-  function commitNotes(){
-    var sec = sections[si], p = parseNotes();
-    p.map[sec.title] = modal.querySelector('.fn-text').value.trim();
-    writeNotes(p.preamble, p.map);
-  }
-  function nextSection(save){
-    if (save) commitNotes();
-    modal.classList.remove('on');
-    if (si < sections.length - 1){ si++; li = 0; bar.classList.add('on'); showLine(); schedule(); }
-    else { finish(); }
+  function saveNotes(){
+    var t = sections[si]?sections[si].title:'Notes', p=parseNotes(), val=modal.querySelector('.fn-text').value.trim();
+    var had = !!p.map[t]; p.map[t]=val; writeNotes(p.pre,p.map);
+    if (val && !had) noteCount++;
   }
 
-  function showToast(msg){
-    toast.textContent = msg; toast.classList.add('on');
-    setTimeout(function(){ toast.classList.remove('on'); }, 2600);
-  }
+  /* ---- enter / exit + the Threshold ritual ---- */
   function enter(){
-    sections = buildSections();
-    if (!sections.length) return;
-    active = true; paused = false; si = 0; li = 0;
-    document.body.classList.add('focus-on');
-    bar.classList.add('on');
-    showLine(); schedule();
+    if (active) return; active=true;
+    origParent = art.parentNode; origNext = art.nextSibling;
+    inner.appendChild(art);                       // move rendered content (keeps mermaid/katex/highlights)
+    overlay.classList.add('on'); overlay.setAttribute('aria-hidden','false');
+    document.body.classList.add('focus-lock');
+    sections = buildSections(); si=0; buildDots(); estimateMinutes();
+    startedAt = Date.now(); maxScrollPct=0; noteCount=0; auto=false; speed=1; syncButtons();
+    reader.scrollTop = 0; refreshProgress();
+    if (!reduce){ threshold.classList.add('run'); setTimeout(function(){ threshold.classList.remove('run'); }, 2600); }
   }
-  function finish(){ exit(); if (window.__markComplete) window.__markComplete(); showToast('Lesson focus complete 🎉  Notes saved.'); }
+  function reallyExit(){
+    active=false; auto=false; clearTimeout(dwellTimer); clearInterval(timerTick);
+    timerOn=false; onBreak=false; timerElapsed=0;
+    reader.classList.remove('spotting');
+    inner.querySelectorAll('.f-spot').forEach(function(e){ e.classList.remove('f-spot'); });
+    if (origParent) origParent.insertBefore(art, origNext);   // restore content in place
+    overlay.classList.remove('on'); overlay.setAttribute('aria-hidden','true');
+    debrief.classList.remove('on'); breakEl.classList.remove('on'); modal.classList.remove('on');
+    threshold.classList.remove('run');
+    document.body.classList.remove('focus-lock');
+  }
   function exit(){
-    active = false; clearTimeout(timer);
-    document.body.classList.remove('focus-on');
-    bar.classList.remove('on'); modal.classList.remove('on');
-    clearLine();
+    if (!active) return;
+    if (maxScrollPct > 0.4 || noteCount > 0) showDebrief();
+    else reallyExit();
+  }
+  function showDebrief(){
+    clearTimeout(dwellTimer); clearInterval(timerTick); timerOn=false;
+    if (window.__markComplete) window.__markComplete();   // reading a lesson in focus completes it
+    var mins = Math.max(1, Math.round((Date.now()-startedAt)/60000));
+    document.getElementById('fdTime').textContent = mins+'m';
+    document.getElementById('fdSec').textContent = (si+1)+'/'+sections.length;
+    document.getElementById('fdNotes').textContent = noteCount;
+    document.getElementById('fdPrompt').textContent = PROMPTS[(mins+si) % PROMPTS.length];
+    debrief.querySelector('.fd-reflect').value='';
+    debrief.classList.add('on');
+  }
+  function finishDebrief(){
+    var r = debrief.querySelector('.fd-reflect').value.trim();
+    if (r){ var p=parseNotes(); p.map['Reflection']=(p.map['Reflection']?p.map['Reflection']+'\n':'')+r; writeNotes(p.pre,p.map); }
+    reallyExit();
   }
 
-  document.getElementById('focusStart').onclick = enter;
-  document.getElementById('fPrev').onclick = prev;
-  document.getElementById('fNext').onclick = function(){ clearTimeout(timer); step(); };
-  document.getElementById('fPlay').onclick = function(){ paused = !paused; updateBar(); schedule(); };
-  document.getElementById('fNotes').onclick = function(){ clearTimeout(timer); openNotes(); };
-  document.getElementById('fEnd').onclick = exit;
-  document.getElementById('fnNext').onclick = function(){ nextSection(true); };
-  document.getElementById('fnSkip').onclick = function(){ nextSection(false); };
-  document.getElementById('fnBack').onclick = function(){
-    modal.classList.remove('on'); bar.classList.add('on'); paused = true; updateBar();
-  };
+  /* ---- wire up ---- */
+  startBtn.addEventListener('click', enter);
+  document.getElementById('fExit').addEventListener('click', exit);
+  document.getElementById('fTimerBtn').addEventListener('click', startTimer);
+  document.getElementById('fAuto').addEventListener('click', function(){ setAuto(!auto); });
+  document.getElementById('fFaster').addEventListener('click', function(){ speed=Math.min(2,speed+0.25); syncButtons(); });
+  document.getElementById('fSlower').addEventListener('click', function(){ speed=Math.max(0.5,speed-0.25); syncButtons(); });
+  document.getElementById('fNotesBtn').addEventListener('click', openNotes);
+  document.getElementById('fnNext').addEventListener('click', function(){ saveNotes(); modal.classList.remove('on'); });
+  document.getElementById('fnSkip').addEventListener('click', function(){ modal.classList.remove('on'); });
+  document.getElementById('fnBack').addEventListener('click', function(){ modal.classList.remove('on'); });
+  document.getElementById('fBreakSkip').addEventListener('click', function(){
+    clearInterval(timerTick); timerOn=false; onBreak=false; breakEl.classList.remove('on');
+    ringSet(0); clockEl.textContent=''; document.getElementById('fTimerBtn').textContent='▷ Timer'; });
+  document.getElementById('fdDone').addEventListener('click', finishDebrief);
+  reader.addEventListener('scroll', function(){ if(active) requestAnimationFrame(refreshProgress); }, {passive:true});
   document.addEventListener('keydown', function(e){
     if (!active) return;
-    if (modal.classList.contains('on')){ if (e.key === 'Escape'){ e.preventDefault(); modal.classList.remove('on'); bar.classList.add('on'); paused = true; updateBar(); } return; }
-    if (e.key === 'Escape'){ e.preventDefault(); exit(); }
-    else if (e.key === 'ArrowRight'){ e.preventDefault(); clearTimeout(timer); step(); }
-    else if (e.key === 'ArrowLeft'){ e.preventDefault(); prev(); }
-    else if (e.key === ' '){ e.preventDefault(); paused = !paused; updateBar(); schedule(); }
+    if (modal.classList.contains('on')){ if(e.key==='Escape') modal.classList.remove('on'); return; }
+    if (debrief.classList.contains('on')){ if(e.key==='Escape') finishDebrief(); return; }
+    if (e.key==='Escape'){ e.preventDefault(); exit(); }
+    else if (e.key==='+'||e.key==='='){ speed=Math.min(2,speed+0.25); syncButtons(); }
+    else if (e.key==='-'){ speed=Math.max(0.5,speed-0.25); syncButtons(); }
+    else if (e.key===' '){ e.preventDefault(); setAuto(!auto); }
   });
 })();
 </script>
