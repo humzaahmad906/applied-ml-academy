@@ -341,6 +341,31 @@
           {left:'\\(',right:'\\)',display:false},
           {left:'$',right:'$',display:false}], throwOnError:false});"></script>
 
+<!-- code syntax highlighting (dark, VS Code-like) + copy buttons -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets@11.10.0/styles/github-dark.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets@11.10.0/highlight.min.js"></script>
+<script>
+window.addEventListener('load', function(){
+  var art = document.getElementById('mdbody');
+  if (!art) return;
+  art.querySelectorAll('pre > code').forEach(function(code){
+    if (code.classList.contains('language-mermaid')) return;      // mermaid is rendered as a diagram
+    if (window.hljs){ try { hljs.highlightElement(code); } catch(e){} }
+    var pre = code.parentElement;
+    if (pre.querySelector('.code-copy')) return;
+    var btn = document.createElement('button');
+    btn.className = 'code-copy'; btn.type = 'button'; btn.textContent = 'Copy';
+    btn.addEventListener('click', function(){
+      navigator.clipboard.writeText(code.textContent).then(function(){
+        btn.textContent = 'Copied ✓';
+        setTimeout(function(){ btn.textContent = 'Copy'; }, 1500);
+      }).catch(function(){});
+    });
+    pre.appendChild(btn);
+  });
+});
+</script>
+
 <script>
 /* ---------- focus mode: immersive reading + pomodoro + rituals ---------- */
 (function(){

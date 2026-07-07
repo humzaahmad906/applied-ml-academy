@@ -616,6 +616,22 @@ body.focus-lock{overflow:hidden}
 .mermaid{margin:20px 0;text-align:center}
 .mermaid svg{max-width:100%;height:auto}
 
+/* dark, VS Code-like code blocks (highlight.js github-dark) + copy button */
+.md pre{position:relative;background:#0d1117;border:1px solid #21262d;border-radius:10px;
+  padding:16px 18px;overflow-x:auto}
+.md pre code,.md pre code.hljs{background:transparent;padding:0;color:#e6edf3;font-size:13.5px;
+  font-family:'JetBrains Mono',monospace;line-height:1.6}
+.md pre .code-copy{position:absolute;top:8px;right:8px;background:#21262d;color:#c9d1d9;border:1px solid #30363d;
+  border-radius:6px;font-family:'JetBrains Mono',monospace;font-size:11px;padding:4px 9px;cursor:pointer;
+  opacity:0;transition:.15s}
+.md pre:hover .code-copy{opacity:1}
+.md pre .code-copy:hover{background:#30363d;color:#fff}
+/* inline code stays light on the page */
+.md :not(pre)>code{background:var(--bg2);color:var(--ink);border-radius:5px;padding:1px 6px;font-size:.9em}
+/* keep code dark inside focus mode too (override the paper pre styling) */
+#focusOverlay .md pre{background:#0d1117;border-color:#21262d}
+#focusOverlay .md pre code{color:#e6edf3}
+
 @media(max-width:900px){
   .hero-grid{grid-template-columns:1fr;gap:30px}
   .detail-grid{grid-template-columns:1fr}
