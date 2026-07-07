@@ -1,5 +1,9 @@
 # Lab 2 — Decoding and LoRA Fine-Tuning
 
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/humzaahmad906/applied-ml-academy/blob/main/content/vlm-guide/notebooks/11_lab_llms.ipynb)
+
+**Follow along in a runnable notebook** — free GPU on Colab, no local setup. The full write-up and stack alternatives are below.
+
 Load a real instruct model, compare every decoding strategy, inspect how temperature reshapes the logit distribution, apply chat templating correctly, then run a full LoRA fine-tune loop and verify generation before and after. Makes the [LLMs chapter](02_llms.md) concrete.
 
 ## Setup

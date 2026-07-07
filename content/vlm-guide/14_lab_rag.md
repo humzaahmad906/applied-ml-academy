@@ -1,5 +1,9 @@
 # Lab 5 — Build a RAG Pipeline End to End
 
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/humzaahmad906/applied-ml-academy/blob/main/content/vlm-guide/notebooks/14_lab_rag.ipynb)
+
+**Follow along in a runnable notebook** — free GPU on Colab, no local setup. The full write-up and stack alternatives are below.
+
 This lab makes the [RAG chapter](05_rag.md) concrete. Build every component from scratch — word-overlap chunker, dense bi-encoder, FAISS index, cross-encoder reranker, local instruct generator, BM25 hybrid retrieval, and a hit-rate eval — so the mechanics are fully visible before reaching for a framework.
 
 ## Setup

@@ -1,5 +1,9 @@
 # Lab 7 — Capstone: Serve a Local RAG Agent Behind an API
 
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/humzaahmad906/applied-ml-academy/blob/main/content/vlm-guide/notebooks/16_lab_capstone.ipynb)
+
+**Follow along in a runnable notebook** — free GPU on Colab, no local setup. The full write-up and stack alternatives are below.
+
 You wire Lab 5's FAISS retrieval index and Lab 6's ReAct agent into a single FastAPI service: a `POST /chat` endpoint that runs the agent (with a `retrieve_context` tool backed by the vector index) and a `GET /health` check. Models load once at startup via FastAPI's `lifespan` hook; the API surface stays stable across backend swaps. Makes the RAG and Agents theory chapters concrete as a deployed system.
 
 ## Setup

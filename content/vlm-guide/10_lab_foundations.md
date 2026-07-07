@@ -1,5 +1,9 @@
 # Lab 1 — Build a Tokenizer, Attention, and a Transformer Block
 
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/humzaahmad906/applied-ml-academy/blob/main/content/vlm-guide/notebooks/10_lab_foundations.ipynb)
+
+**Follow along in a runnable notebook** — free GPU on Colab, no local setup. The full write-up and stack alternatives are below.
+
 Build every core piece of a modern decoder-only transformer from scratch: a byte-level BPE tokenizer, scaled multi-head attention with RoPE, and a pre-norm SwiGLU decoder block stacked into a tiny LM. Makes the [Foundations chapter](01_foundations.md) concrete.
 
 ## Setup

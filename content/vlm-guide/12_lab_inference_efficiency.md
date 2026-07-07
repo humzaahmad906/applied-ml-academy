@@ -1,5 +1,9 @@
 # Lab 3 — KV Cache, Quantization, and Benchmarking
 
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/humzaahmad906/applied-ml-academy/blob/main/content/vlm-guide/notebooks/12_lab_inference_efficiency.ipynb)
+
+**Follow along in a runnable notebook** — free GPU on Colab, no local setup. The full write-up and stack alternatives are below.
+
 Measure the KV cache speedup directly, quantize the same model three ways for three hardware targets, benchmark tokens/sec and peak memory, then run speculative decoding. Makes the [Inference & Efficiency chapter](03_inference_and_efficiency.md) concrete.
 
 ## Setup

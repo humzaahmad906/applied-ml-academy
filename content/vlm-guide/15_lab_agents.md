@@ -1,5 +1,9 @@
 # Lab 6 — Build a ReAct Agent with Tool Use
 
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/humzaahmad906/applied-ml-academy/blob/main/content/vlm-guide/notebooks/15_lab_agents.ipynb)
+
+**Follow along in a runnable notebook** — free GPU on Colab, no local setup. The full write-up and stack alternatives are below.
+
 You implement a ReAct (Reason + Act) agent from scratch: a Qwen2.5-1.5B-Instruct model in a Thought→Action→Observation loop with three real tools, a registry/dispatch layer, a regex parser, and guards against common failure modes. Makes the Agents theory chapter concrete.
 
 ## Setup

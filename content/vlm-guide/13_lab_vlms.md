@@ -1,5 +1,9 @@
 # Lab 4 — Vision-Language Models: CLIP Similarity and a Small VLM
 
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/humzaahmad906/applied-ml-academy/blob/main/content/vlm-guide/notebooks/13_lab_vlms.ipynb)
+
+**Follow along in a runnable notebook** — free GPU on Colab, no local setup. The full write-up and stack alternatives are below.
+
 This lab makes the [VLMs chapter](04_vlms.md) concrete. Part A uses CLIP to build an image–text similarity explorer — zero-shot classification, similarity matrix, shared embedding space intuition. Part B loads SmolVLM to caption an image and answer a visual question, tracing how the projector maps patch tokens into the language model's input space.
 
 ## Setup
