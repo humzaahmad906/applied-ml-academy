@@ -456,8 +456,7 @@ body.focus-lock{overflow:hidden}
 #focusOverlay .md h2{font-size:23px;border:none;padding:0;margin:1.6em 0 .5em;color:var(--focus-ink)}
 #focusOverlay .md h3{font-size:19px;margin:1.3em 0 .4em}
 #focusOverlay .md p,#focusOverlay .md li{color:var(--focus-ink)}
-#focusOverlay .md pre{background:var(--focus-code);border-color:var(--focus-line)}
-#focusOverlay .md code{background:var(--focus-code)}
+#focusOverlay .md :not(pre)>code{background:var(--focus-code)}
 #focusOverlay .md blockquote{border-left:3px solid var(--focus-accent);background:transparent}
 #focusOverlay .md a{color:var(--focus-accent)}
 /* spotlight: dim everything but the current block during auto-read */
@@ -630,7 +629,7 @@ body.focus-lock{overflow:hidden}
 .md :not(pre)>code{background:var(--bg2);color:var(--ink);border-radius:5px;padding:1px 6px;font-size:.9em}
 /* keep code dark inside focus mode too (override the paper pre styling) */
 #focusOverlay .md pre{background:#0d1117;border-color:#21262d}
-#focusOverlay .md pre code{color:#e6edf3}
+#focusOverlay .md pre code,#focusOverlay .md pre code.hljs{background:transparent;color:#e6edf3}
 
 @media(max-width:900px){
   .hero-grid{grid-template-columns:1fr;gap:30px}
