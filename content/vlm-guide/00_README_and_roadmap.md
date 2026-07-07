@@ -19,37 +19,28 @@ This is written for someone with a working ML/engineering background. It does no
 
 ## The dependency graph (what you actually need before what)
 
-```text
-                 Linear algebra + probability + calculus (assumed)
-                                  |
-                          [FOUNDATIONS]
-              tokenization -> embeddings -> attention -> transformer
-                       -> normalization/activations -> RoPE
-                                  |
-        +-------------------------+--------------------------+
-        |                         |                          |
-     [LLMs]                    [VLMs]                    (shared)
-  arch variants            vision encoders
-  pretraining              fusion + projectors
-  post-training (RL)       multimodal training
-  reasoning                visual tokenization
-        |                         |
-        +-----------+-------------+
-                    |
-        [INFERENCE & EFFICIENCY]   <- applies to both LLMs and VLMs
-        KV cache, quant, serving, on-device
-                    |
-        +-----------+-----------+
-        |                       |
-      [RAG]                 [AGENTS]
-   retrieval +            loop + tools +
-   reranking +            planning + memory
-   graph/agentic          context engineering
-        \                     /
-         \                   /
-          (agentic RAG sits in the overlap)
-                    |
-        [READING PAPERS + GLOSSARY]
+```mermaid
+flowchart TD
+    MATH["Linear algebra + probability + calculus (assumed)"]
+    FOUND["FOUNDATIONS<br/>tokenization -> embeddings -> attention -> transformer<br/>normalization/activations -> RoPE"]
+    LLM["LLMs<br/>arch variants · pretraining<br/>post-training RL · reasoning"]
+    VLM["VLMs<br/>vision encoders · fusion + projectors<br/>multimodal training · visual tokenization"]
+    INF["INFERENCE & EFFICIENCY<br/>KV cache, quant, serving, on-device<br/>applies to both LLMs and VLMs"]
+    RAG["RAG<br/>retrieval + reranking + graph/agentic"]
+    AGENTS["AGENTS<br/>loop + tools + planning + memory<br/>context engineering"]
+    ARAG["agentic RAG sits in the overlap"]
+    PAPERS["READING PAPERS + GLOSSARY"]
+
+    MATH --> FOUND
+    FOUND --> LLM
+    FOUND --> VLM
+    LLM --> INF
+    VLM --> INF
+    INF --> RAG
+    INF --> AGENTS
+    RAG --> ARAG
+    AGENTS --> ARAG
+    ARAG --> PAPERS
 ```
 
 ## The mental model that ties everything together

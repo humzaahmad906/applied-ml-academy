@@ -56,10 +56,10 @@ Two identities are worth memorizing because they explain the cost of everything 
 Here is an explicit, simple cost model for the bytes each rank sends. For a tensor of
 `size_bytes` on a group of `world_size` ranks using ring algorithms:
 
-- **Reduce-scatter:** `sent_bytes = size_bytes * (world_size - 1) / world_size` per rank per pass;
-  in the simplified accounting here, the dominant term is `size_bytes * (world_size - 1)`.
+- **Reduce-scatter:** $\text{sent\_bytes} = \text{size\_bytes}\cdot\frac{W - 1}{W}$ per rank per pass
+  (writing $W$ for `world_size`); in the simplified accounting here, the dominant term is $\text{size\_bytes}\cdot(W - 1)$.
 - **All-gather:** the same as reduce-scatter — one pass around the ring.
-- **All-reduce:** `sent_bytes = size_bytes * 2 * (world_size - 1)` — the 2× is exactly the
+- **All-reduce:** $\text{sent\_bytes} = \text{size\_bytes}\cdot 2\,(W - 1)$ — the $2\times$ is exactly the
   reduce-scatter + all-gather decomposition.
 
 The crucial feature of the ring formulation is that the bytes each rank sends are *independent of
@@ -205,9 +205,9 @@ and end. The fix is **micro-batches**: split the batch into `m` micro-batches an
 an assembly line, so all stages stay busy on different micro-batches at once. With `P` pipeline
 stages and `m` micro-batches the idle fraction is
 
-```text
-bubble_fraction = (P - 1) / (m + P - 1)
-```
+$$
+\text{bubble\_fraction} = \frac{P - 1}{m + P - 1}
+$$
 
 so you shrink the bubble by making `m` large relative to `P`. You never eliminate it. **GPipe**
 runs all forwards then all backwards (simple, but holds all micro-batch activations in memory).
@@ -293,3 +293,15 @@ Pipeline parallelism shards depth with cheap point-to-point activations and a bu
 Sequence/context parallelism splits long sequences. 3D parallelism assigns each axis to the link
 whose bandwidth matches its volume; MoE adds expert parallelism and its all-to-all cost. There is
 no fixed recipe — it is a fit-and-utilization optimization that changes with the hardware.
+
+## You can now
+
+- state the ring cost model for the collectives and explain why an all-reduce costs exactly `2×` a reduce-scatter.
+- explain why data-parallel per-link communication volume stays roughly constant as you add GPUs, while all-to-all volume grows with `world_size`.
+- distinguish the three ZeRO/FSDP stages by what each shards (optimizer state, then gradients, then parameters) and the resulting per-device memory.
+- map tensor, pipeline, sequence/context, and expert parallelism onto the interconnect links whose bandwidth matches each one's communication volume.
+- work through the decision order — DDP, FSDP, tensor, pipeline, sequence, expert — for choosing a parallelism strategy for a given model and cluster.
+
+## Try it
+
+Bring up `torch.distributed` with the `gloo` backend across a few processes on one machine and time an all-reduce against a reduce-scatter on a large tensor (warm up, then `dist.barrier()` and `torch.cuda.synchronize()` around the timed region). Confirm the roughly `2×` byte ratio the ring cost model predicts. Then implement naive data parallelism (one big all-reduce after backward) and bucketed-overlap DDP on a tiny model, and measure whether overlap actually wins on your interconnect — on a weak link you may find distributed training is *slower* than a single device, exactly as the cost model warns.

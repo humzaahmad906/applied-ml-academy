@@ -923,3 +923,14 @@ Don't move on until you can answer these without googling:
 If any is shaky, go back. You're not behind; you're being thorough.
 
 When all eight feel solid, move on to the Medium Guide.
+
+---
+
+## You can now
+
+- Scaffold a production-shaped Python ML project from day one — `uv` lock file, deterministic seeds, `pydantic-settings` config, and a layout that a reviewer recognizes instantly.
+- Track every experiment in MLflow with its params, metrics, model signature, and input example, and drive the compare-runs view to pick a winner.
+- Version data and reproducible pipelines with DVC — `dvc add`, a `dvc.yaml` with `prepare`/`train` stages, and `dvc exp` for hyperparameter comparison.
+- Containerize a model with a multi-stage, non-root Dockerfile and bring up a full local stack (MLflow + Postgres + MinIO + your API) with one `docker compose up`.
+- Serve a model behind FastAPI with `/health`, `/ready`, `/predict`, `/predict_batch`, and `/metrics`, loading the model once at startup and validating inputs strictly.
+- Ship a GitHub Actions CI pipeline that lints, type-checks, tests, and builds a versioned image, then deploy the service to a real URL and smoke-test it.

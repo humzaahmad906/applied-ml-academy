@@ -135,8 +135,8 @@ model trained on it. Report how much data survives each stage and inspect what y
   with reward 1, SFT on those, repeat (default ~5 EI steps, 100 SFT steps each). Watch accuracy
   climb as the model bootstraps onto problems it could not solve before.
 - **GRPO** (`test_grpo.py`, the graded core): sample a group of `G=8` responses per prompt, set each
-  advantage to the group-normalized reward `A_i = (r_i − mean)/(std + ε)`, and optimize the
-  per-token clipped surrogate `min(ratio·A, clip(ratio, 1±0.2)·A)` with `ratio = π/π_old`. Implement
+  advantage to the group-normalized reward $A_i = (r_i - \operatorname{mean})/(\operatorname{std} + \varepsilon)$, and optimize the
+  per-token clipped surrogate $\min(\text{ratio} \cdot A,\, \operatorname{clip}(\text{ratio}, 1 \pm 0.2) \cdot A)$ with $\text{ratio} = \pi/\pi_{\text{old}}$. Implement
   the naive, unclipped, and clipped modes to see the difference; compute reference/old log-probs
   under `torch.no_grad()`.
 - **Optional:** DPO and the supplemental safety/RLHF track.
@@ -163,3 +163,14 @@ The natural next step for your work specifically is to take Build 2 (kernels, me
 and Build 5's alignment ladder and apply them to your on-device VLM: fused dequant-matmul kernels for
 your quantized models, and expert-iteration-style outcome training on your verifiable
 structured-extraction task. Those two are where this curriculum touches your day job most directly.
+
+## You can now
+
+Having worked the five builds, you can now:
+
+- implement a byte-level BPE tokenizer and a decoder-only Transformer (RMSNorm, RoPE attention, SwiGLU, AdamW) from primitives, and drive validation perplexity down under a fixed compute budget.
+- write a fused Triton kernel and FlashAttention-2 forward *and* backward, then distribute training with hand-rolled collectives, a bucketed DDP wrapper, and ZeRO-1 optimizer-state sharding.
+- fit a scaling law from IsoFLOP profiles under a hard FLOPs budget and extrapolate the compute-optimal configuration to a target run you were never allowed to execute.
+- build the Common Crawl data pipeline end to end — language ID, heuristic and classifier quality filters, PII masking, and exact plus MinHash/LSH deduplication — and prove the output by the loss of a model trained on it.
+- run the full post-training ladder on a real math model — masked SFT, a format-plus-correctness reward, expert iteration, and GRPO with the group-normalized advantage and clipped surrogate — with each stage measurably beating the last on a held-out set kept clean throughout.
+- see a frontier model not as magic but as a known list of engineering choices you could reproduce given the compute.

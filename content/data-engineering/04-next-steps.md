@@ -511,3 +511,13 @@ You should have:
 - A bookshelf with DDIA, Fundamentals of DE, and one more book
 
 Now you're ready to build something that lands you a Fortune 100 role — the portfolio projects come next.
+
+---
+
+## You can now
+
+- Port a GCP-based stack to AWS — S3, Athena/Glue, EMR or Glue jobs, Redshift, Kinesis — and reason about IAM least-privilege and the cost traps unique to AWS.
+- Orchestrate pipelines in Airflow 3.x with the TaskFlow API and asset-aware scheduling, and name what changed from Airflow 2 (`logical_date`, no SubDAGs, DAG versioning).
+- Operate Snowflake or Databricks as your warehouse/lakehouse, and port a dbt project across warehouses by swapping only the connection profile.
+- Work with open table formats in practice: create Iceberg tables, use time travel and snapshots, and evolve schemas without rewriting files.
+- Layer real data quality, observability, incident runbooks, governance, FinOps cost discipline, and CI/CD onto a project — the operational maturity that separates senior from junior.

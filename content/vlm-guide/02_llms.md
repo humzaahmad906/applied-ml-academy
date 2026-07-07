@@ -195,10 +195,11 @@ Reading takeaway: when you see a paper on "process supervision," map it to (a) h
 
 The clean mental hierarchy of training signals:
 
-```text
-next-token (pretrain)  →  imitate good answers (SFT)
-   →  prefer better answers (RLHF / DPO)
-      →  get verifiably-correct answers (RLVR / GRPO)
+```mermaid
+flowchart TD
+    A["next-token prediction<br/>(pretrain)"] --> B["imitate good answers<br/>(SFT)"]
+    B --> C["prefer better answers<br/>(RLHF / DPO)"]
+    C --> D["get verifiably-correct answers<br/>(RLVR / GRPO)"]
 ```
 Each layer adds a richer, more targeted signal. New "training method" papers almost always slot into one of these and tweak the signal source or the optimizer.
 
@@ -292,3 +293,17 @@ This is also exactly the tension that motivates RAG: rather than stuff everythin
 - **Scale & data:** params, tokens, tokens/param (vs Chinchilla ~20), data mix, synthetic data.
 - **Context:** trained length, extended length, *and* how they show it actually uses it (not just runs).
 - **The one-sentence contribution**, and **the tradeoff they paid.**
+
+---
+
+## You can now
+
+- Decompose any modern LLM into its four axes — attention variant (MHA/MQA/GQA/MLA), FFN variant (dense vs MoE), sequence mixer (full vs linear/SSM/hybrid), and positional/norm details — and read a model card as a set of deliberate tradeoffs.
+- Explain the KV-cache pressure that drives the MHA→MQA→GQA→MLA ladder, and why MoE decouples total parameters from compute-per-token.
+- Place any post-training method on the signal hierarchy — SFT imitates, RLHF/DPO prefer, RLVR/GRPO verify — and explain why GRPO drops PPO's critic by using the group mean as a baseline.
+- Reason about test-time compute scaling: when a smaller model that thinks longer beats a bigger one, and how budget forcing and adaptive allocation control the cost.
+- Choose decoding knobs (temperature, top-p, min-p, constrained decoding) for a task, and separate "can run at length n" from "can actually use length n" in long-context claims.
+
+## Try it
+
+Pick a recent open model's technical report (e.g. Qwen3, DeepSeek-V3/V4, Kimi, GLM) and fill in the §9 reading checklist end to end: name its attention variant and KV-cache strategy, whether it is dense or MoE (total vs active params, tokens/param vs Chinchilla ~20), its exact post-training recipe and reward signal, whether it is a reasoning model and how "thinking" is bounded, and its trained-vs-extended context plus the evidence it actually *uses* that context. Finish with one sentence stating the paper's core contribution and the tradeoff it paid. If any axis is unclear from the report, note that as a gap — that itself is a finding.

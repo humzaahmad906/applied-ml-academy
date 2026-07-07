@@ -25,7 +25,7 @@ exponentiate, sum, and divide into a single kernel, cutting the HBM element read
 it stops writing and re-reading the intermediate tensors.
 
 You can write a raw CUDA kernel for this (consider one for GELU: a `__global__` function
-where each thread computes one output element `0.5 * x * (1 + tanh(0.79788456 * (x + 0.044715 x^3)))`,
+where each thread computes one output element $0.5\,x\,\big(1 + \tanh(0.79788456\,(x + 0.044715\,x^3))\big)$,
 indexed by `blockIdx * blockDim + threadIdx`, compiled and bound into Python via PyBind11). It
 works, but you manage threads, blocks, indexing, and memory coalescing by hand. Triton exists so
 you rarely have to.
@@ -178,14 +178,16 @@ the forward pass, it **recomputes** them on the fly, reconstructing the softmax 
 saved logsumexp `L`. Concretely, for each tile it recomputes `S = QK^T`, gets `P = exp(S - L)` (no
 running max needed this time — `L` already encodes it), and then forms the gradients:
 
-```
-D  = rowsum(dO * O)                # one scalar per query row
-dV = P^T @ dO
-dP = dO @ V^T
-dS = P * (dP - D)                  # softmax Jacobian, collapsed
-dQ = dS @ K
-dK = dS^T @ Q
-```
+$$
+\begin{aligned}
+D  &= \text{rowsum}(dO \odot O) &&\text{(one scalar per query row)}\\
+dV &= P^\top\, dO\\
+dP &= dO\, V^\top\\
+dS &= P \odot (dP - D) &&\text{(softmax Jacobian, collapsed)}\\
+dQ &= dS\, K\\
+dK &= dS^\top Q
+\end{aligned}
+$$
 
 Recomputing the scores trades a little extra compute for a large memory saving, which is a good
 trade because attention was memory-bound to begin with — you had spare compute. The
@@ -254,3 +256,15 @@ approximately. Its backward pass recomputes the scores from a saved logsumexp ra
 them, trading spare compute for memory. Implementing the online softmax and its backward yourself,
 then benchmarking it against naive attention and torch SDPA, is the point of the systems build — the
 running-max rescale is the subtle part, and the memory profile is the proof.
+
+## You can now
+
+- explain why fusing a chain of memory-bound operations into one kernel collapses many HBM round-trips into one, and where the speedup actually comes from.
+- write a simple fused Triton kernel using `tl.program_id`, `tl.load`/`tl.store`, `tl.dot`, and `constexpr` tile sizes.
+- derive the online-softmax running-max rescale that lets FlashAttention accumulate the output without ever materializing the `L×L` scores.
+- explain how the backward pass recomputes scores from the saved logsumexp, and why the two-kernel (query-tile / key-tile) split avoids `tl.atomic_add`.
+- decide when a custom kernel is worth the maintenance cost versus leaning on `torch.compile` and framework-fused SDPA.
+
+## Try it
+
+Implement a fused softmax in Triton — max, subtract, exponentiate, sum, divide, all in one kernel — and benchmark it against the eager PyTorch chain and a `torch.compile`d version on a large `M×N` tensor. Time forward only, with warmup and `torch.cuda.synchronize()`, and also record `torch.cuda.max_memory_allocated()`. Confirm the fused kernel's speedup tracks the number of HBM round-trips it eliminated (roughly `5MN + M` element reads down to `MN`), not any change in FLOPs.

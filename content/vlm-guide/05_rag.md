@@ -141,3 +141,17 @@ The two failure modes to always separate: **retrieval failure** (right info neve
 - **The one-sentence contribution and its cost** (usually indexing cost, latency, or added complexity).
 
 > **RAG vs long-context vs fine-tuning** — the perennial design question. *RAG*: dynamic/changing knowledge, need citations/provenance, large corpora. *Long context* (the long-context material from the LLM chapter): the relevant info fits and you want the model to reason over all of it jointly. *Fine-tuning* (the SFT/PEFT material from the LLM chapter): teach *behavior/format/style* or deeply internalize a stable domain — not for injecting fast-changing facts. In practice these compose (e.g. retrieve into a long context; fine-tune the retriever or the generator's grounding behavior).
+
+---
+
+## You can now
+
+- Build the naive index-then-retrieve-then-generate pipeline and name the specific way each step fails, which is what every §4–8 technique repairs.
+- Choose retrieval components deliberately: dense vs sparse vs hybrid, bi-encoder for retrieval vs cross-encoder for reranking, and an ANN index (HNSW/IVF/PQ) as a point on the recall–latency–memory triangle.
+- Treat chunking as the highest-leverage knob — pick fixed/recursive/semantic/parent-child/late chunking for a document type — and add query transforms (rewrite, multi-query, HyDE, decomposition) when the raw query is a poor search key.
+- Match an advanced architecture to a query type: flat retrieval for single facts, RAPTOR/GraphRAG for corpus-wide synthesis, agentic/iterative RAG for multi-hop reasoning.
+- Diagnose a failing RAG system by separating retrieval failure from generation failure, and evaluate each half with the right metric (Recall@k/MRR/nDCG vs faithfulness/RAGAS).
+
+## Try it
+
+Build a minimal RAG over a small document set you care about (a dozen PDFs, a docs site, or your own notes). Index it two ways — fixed-size chunks and parent-child chunks — and run the same 15-20 questions through both. Crucially, log the *retrieved chunks*, not just the final answers, so you can score retrieval (did the right chunk appear in the top-k?) separately from generation (did the model use it faithfully?). Then add a cross-encoder reranker over the top-50 and measure whether top-3 precision improves. You will feel directly why chunking and reranking are the two highest-leverage knobs, and you will have built the retrieval-vs-generation diagnosis habit that §9 calls the most useful skill in RAG.

@@ -398,3 +398,15 @@ Pick one:
 - Interview prep using the question bank above and the theory and interview bank chapter
 
 This puts you, twelve months from a serious start, in a credible position for senior DL-MLOps / ML platform engineer roles at any F50 that does serious deep learning.
+
+## You can now
+
+- Remap the tabular-centric base curriculum onto a CV or NLP worldview — choosing DL-native tier-1/2/3 projects and knowing which classical-ML topics to de-emphasize.
+- Build a preprocessing-parity test that pins tokenizer or image-transform behavior bit-for-bit between training and serving, and put it in CI.
+- Choose the right distributed-training strategy (DDP, FSDP, DeepSpeed ZeRO-3) and parameter-efficient method (LoRA, QLoRA) for a given model size and GPU budget.
+- Select an export path for your target — ONNX → TensorRT for CV serving, vLLM or TensorRT-LLM for LLMs, CoreML / GGUF / MLX for edge — and justify it.
+- Design embedding-versioning, drift-monitoring, and generation-hygiene strategies that keep a deployed DL system correct beyond its first few months.
+
+## Try it
+
+Take one small pretrained model — `distilbert-base-uncased` for NLP or a `timm` ResNet-50 for CV — and write the preprocessing-parity test described in the "Preprocessing parity" section. Define a single tokenizer (or `transforms.Compose`) object, pick 10 fixed inputs, and assert that the exact output produced at train time is bit-identical to the output produced by whatever your serving code would call. Then deliberately introduce a realistic skew (change `max_length`, swap bilinear for bicubic interpolation, or drop the `.convert("RGB")` step) and confirm the test fails. Wire the passing version into a `pytest` file so it runs in CI. This one exercise builds the muscle that prevents the most common "works in eval, fails in prod" DL failure.

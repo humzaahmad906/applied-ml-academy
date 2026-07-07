@@ -181,3 +181,15 @@ A quick reference for the interview:
 - **Sim-to-real mitigation:** initial training on synthetic campus-environment data (domain-randomized lighting, pedestrian textures, weather conditions) plus fine-tuning on real campus captures; a sim-to-real gap metric (detection mAP on real validation captures vs synthetic) tracked per training run.
 - **ODD enforcement:** a lightweight ODD monitor runs in parallel — detects rain intensity from camera image statistics, estimates ambient light level, and flags ODD boundary conditions; on ODD exit, the robot decelerates to a stop and requests human takeover rather than running inference outside its validated envelope.
 - **Failure modes to volunteer:** camera lens contamination (mud, rain droplets) degrades image quality silently — monitor reconstruction error or image statistics for early detection; LiDAR point-density drop under heavy rain; tracking ID-switch events when pedestrians cross (requires appearance re-ID); sim-to-real gap for construction zones (novel scene types not in training distribution — monitor detection confidence distribution for new semantic classes).
+
+## You can now
+
+- identify which levers bend in an unfamiliar domain — regulation, latency budget, cost asymmetry, failure tolerance — while reusing the domain-invariant core (funnels, eval-driven development, feedback loops, skew monitoring).
+- design a HIPAA/SaMD-compliant medical-imaging triager, including pixel-PHI de-identification, calibration as a first-class output, and the algorithm-change-protocol constraint that turns iteration into a months-long regulated loop.
+- design an ECOA/SR 11-7-compliant credit system with point-in-time-correct features, TreeSHAP adverse-action reasons, disparate-impact auditing, and an independent model-risk-management gate.
+- design a safety-critical edge perception stack with redundant sensor fusion, ODD enforcement with safe-state handoff, and sim-to-real mitigation via domain randomization plus real fine-tuning.
+- choose anomaly-detection-over-supervised approaches and hierarchical (reconciled) forecasting for label-scarce industrial settings, and state the cost asymmetry that sets the decision threshold.
+
+## Try it
+
+Pick one domain from this module and rewrite the real-time fraud mock (Mock 5 in the interview-playbook chapter) for that domain's constraints. In one page: name the specific regulation that gates deployment, the cost asymmetry that sets your decision threshold, the one feature-freshness or latency change the domain forces relative to the fraud baseline, and the single failure mode an interviewer is most likely to probe. Then defend your threshold and cascade choice against a curveball — "what changes if scale grows 10×?" or "what breaks when the regulator locks your model version?" — and write the two-sentence answer you'd give out loud.

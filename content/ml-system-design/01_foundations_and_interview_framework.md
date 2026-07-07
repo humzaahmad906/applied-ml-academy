@@ -48,33 +48,33 @@ Interviewers at cost-conscious companies now expect you to produce a $/request e
 
 ### (a) API cost
 
-```text
-cost/day = (input_tokens/req × input_rate + output_tokens/req × output_rate) × req/day
-```
+$$
+\text{cost/day} = \left(\frac{\text{input\_tokens}}{\text{req}} \times \text{input\_rate} + \frac{\text{output\_tokens}}{\text{req}} \times \text{output\_rate}\right) \times \text{req/day}
+$$
 
 Input and output rates differ by roughly **3–5×** on all major providers (output tokens are generated autoregressively, one at a time; they cost more compute per token). Always decompose. Example: 2 000 input tokens at $1/1M + 500 output tokens at $4/1M × 100k req/day = $(2.0 + 2.0)/day × 100k = $400/day. Forgetting the asymmetry underestimates cost by 2–3×.
 
 ### (b) Self-hosted cost per token
 
-```text
-$/token = GPU_cost_per_hr / (throughput_tok_s × 3600 × utilization)
-```
+$$
+\frac{\$}{\text{token}} = \frac{\text{GPU\_cost\_per\_hr}}{\text{throughput\_tok/s} \times 3600 \times \text{utilization}}
+$$
 
 Planning numbers: H100 SXM ≈ **$2–4/hr** cloud spot/reserved; vLLM on a 7B model at interactive SLOs ≈ **3 000–8 000 decode tok/s** per GPU (FP8, prefix caching on, well-tuned — measure your own). At $3/hr and 5 000 tok/s, 80% utilization: $3 / (5 000 × 3 600 × 0.8) ≈ **$0.21/1M tokens**. That is 5–20× cheaper than frontier APIs at the same volume — but only holds at sustained high utilization. Idle GPUs destroy the math.
 
 ### (c) Cache-hit impact
 
-```text
-effective_cost = (1 − hit_rate × prefix_share) × base_cost
-```
+$$
+\text{effective\_cost} = (1 - \text{hit\_rate} \times \text{prefix\_share}) \times \text{base\_cost}
+$$
 
 `prefix_share` is the fraction of input tokens that sit in the cached prefix (system prompt, few-shot examples, agent preamble). If your system prompt is 800 of 2 000 input tokens (prefix_share = 0.40) and you hit cache 70% of the time: effective_cost = (1 − 0.70 × 0.40) × base = 0.72 × base — a 28% reduction. Structuring prompts to maximize stable-prefix length (stable preamble first, volatile query last) is an engineering decision with a dollar value you can compute.
 
 ### (d) Cascade economics
 
-```text
-cost/req = Σ_i (share_i × cost_i)
-```
+$$
+\text{cost/req} = \sum_i \left(\text{share}_i \times \text{cost}_i\right)
+$$
 
 where share_i is the fraction of requests reaching tier i, and cost_i is the all-in cost at that tier. Example: 80% to a fast small model at $0.50/1M, 18% escalated to a mid-tier at $3/1M, 2% to frontier at $15/1M → blended cost ≈ (0.80 × 0.5 + 0.18 × 3 + 0.02 × 15)/1M ≈ $1.24/1M output tokens — versus $15/1M for all-frontier. The confidence threshold that controls `share_1` is the primary economic dial. When you tighten it (escalate more), quality rises and cost rises; loosen it, the reverse. That threshold is a product decision, not just an ML decision.
 
@@ -144,16 +144,26 @@ The planes in section 1 are the right mental model; this box makes the *joints* 
 
 **The classic recommender request path:**
 
-```text
-raw request → candidate generation → ranking → policy/filter → response
+```mermaid
+flowchart LR
+    A[raw request] --> B[candidate generation]
+    B --> C[ranking]
+    C --> D[policy / filter]
+    D --> E[response]
 ```
 
 Candidate generation is a recall problem (ANN retrieval over an embedding index, or rule-based filtering) — it runs in roughly 5–20 ms and must return hundreds of items. Ranking is a precision problem (a scoring model over (user, item) pairs) — it consumes another 20–60 ms of the budget. Policy/filter is deterministic business logic: deduplication, diversification, content moderation, A/B treatment assignment, price eligibility. The joint between candidate gen and ranking is where **embedding freshness** matters: if items were encoded with a 24-hour-old model but the ranker expects the current embedding space, you get silent quality regression with no error signal. The joint between ranking and policy is where **business-logic creep** lives — requirements that started as "just one small filter" accumulate into a 300-line rule set that contradicts the ranker's optimization objective.
 
 **The GenAI request path:**
 
-```text
-raw request → retrieval → reranking → context assembly → generation → guardrail → response
+```mermaid
+flowchart LR
+    A[raw request] --> B[retrieval]
+    B --> C[reranking]
+    C --> D[context assembly]
+    D --> E[generation]
+    E --> F[guardrail]
+    F --> G[response]
 ```
 
 Retrieval (vector search plus optional BM25 hybrid) costs roughly 5–50 ms. A cross-encoder reranker adds another 20–100 ms but dramatically improves precision. Context assembly is O(1) text manipulation — but it is where **prompt-assembly bugs** live: wrong document order, truncated chunks, or a system-prompt collision that shifts the model's behavior mid-conversation. Generation is where most of the latency and cost sit (TTFT plus decode time). The guardrail is the last synchronous gate and must be fast — a small classifier or regex layer, not a second frontier-model call, or it blows the latency budget. The joint between context assembly and generation is where **context-length economics** play out: adding one more retrieval chunk to improve recall costs proportionally more in decode latency due to attention's quadratic scaling over input length (though linear-attention variants are shifting this — see the serving chapter).
@@ -221,3 +231,11 @@ Template for both: Problem → Requirements & assumptions → Metrics (offline/o
 
 **Q5. Frontier LLM API vs self-hosted open model — how do you reason about it?**
 **A.** Decision axes: (1) **Capability gap** — does the task actually need frontier quality, or does a fine-tuned 4–8B model match it on *your narrow distribution*? For most extraction/classification/routing tasks it does after fine-tuning. (2) **Unit economics** — compute $/1M tokens both ways; self-hosting wins only at sustained high utilization, because idle GPUs destroy the math. (3) **Latency & deployment surface** — on-device, on-prem, or data-residency requirements force self-hosting. (4) **Data flywheel** — fine-tuning your own model converts proprietary data into a compounding asset; API usage doesn't. (5) **Operational cost** — a serving team, eval infra, and upgrade treadmill are real costs juniors underestimate. The standard 2026 answer: prototype with the API to find product-market fit and collect interaction data, then distill/fine-tune a small model for the high-volume narrow path while keeping the API for the long tail — a **cascade**.
+
+## You can now
+
+- Decompose any production ML system into offline and online planes, locate the feedback loop, and articulate why the data flywheel is a defensible moat that compounds over time.
+- Structure a 45-minute system-design interview using the five-phase framework — requirements, metrics, architecture, deep dives, bottlenecks — with the correct time allocation for each phase.
+- Produce a $/request cost estimate on the fly, separating API token economics from self-hosted TCO, and identify the traffic crossover point at which self-hosting becomes rational.
+- Reason through the build-vs-buy fork using capability gap, unit economics, latency constraints, data-flywheel value, and operational cost as explicit decision axes.
+- Identify the failure-prone joints in a classic recommender pipeline and a GenAI request path — embedding freshness, candidate-set skew, prompt-assembly bugs, guardrail latency — and name the standard mitigation for each.

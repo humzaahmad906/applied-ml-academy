@@ -171,3 +171,11 @@ The code lives in the per-module projects. This document is a project spec: it t
 This capstone reflects how real systems actually get assembled — incrementally, phase by phase, with integration bugs at every seam. The bugs are the education. A feature store that passes Phase 1's point-in-time test will still produce training-serving skew that Phase 7's monitor catches. A model that trains cleanly in Phase 2 will fail the parity check in Phase 3 before you tune the quantization settings. The serving deployment in Phase 4 will produce a latency-throughput curve with an unexpected shape that requires debugging the batching configuration. The agent in Phase 6 will fail your first injection test. None of this is failure — it is the curriculum. The war stories that make an interview answer senior are not invented; they come from having seen these failure modes yourself.
 
 Build it. Break it. Measure the breaks. That is the portfolio.
+
+## You can now
+
+- assemble a full ML system across eight integrated phases where each layer's output is the next layer's input, and defend the seams where they break under an interviewer's questioning.
+- prove point-in-time correctness with an offline/online feature-parity test, and demonstrate the AUC inflation a deliberate leakage scenario produces.
+- take a small model through SFT → DPO → GRPO end-to-end and produce the cross-stage reward curve that most candidates cannot show.
+- produce the portfolio artifacts interviewers actually probe: a quantization sensitivity map, a latency-throughput frontier, a RAG eval table with ablations, an agent eval harness with a documented injection test, and a CI eval gate that catches a planted regression.
+- write and defend a 1–3 page system design doc covering all five rubric axes, backed by numbers you measured yourself rather than asserted.

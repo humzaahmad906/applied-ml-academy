@@ -17,12 +17,11 @@ Inference is where ML systems spend their money and where users feel quality. Th
 
 The per-token-decode bytes-moved equation has two terms:
 
-```text
-bytes_per_token = (params × bytes_per_param)                                         # weights
-                + (2 × n_layers × n_kv_heads × head_dim × bytes_kv × seq_len)        # KV cache
-```
+$$
+\text{bytes\_per\_token} = \underbrace{(\text{params} \times \text{bytes\_per\_param})}_{\text{weights}} + \underbrace{(2 \times n_{\text{layers}} \times n_{\text{kv\_heads}} \times \text{head\_dim} \times \text{bytes\_kv} \times \text{seq\_len})}_{\text{KV cache}}
+$$
 
-At short context the KV term is small and weights dominate; as context grows the KV term can match or exceed the weight term (see the Q2 answer below for the 8B 32k calculation). The decode throughput ceiling is therefore `tokens/s ≤ HBM_bandwidth_GB/s / bytes_per_token`.
+At short context the KV term is small and weights dominate; as context grows the KV term can match or exceed the weight term (see the Q2 answer below for the 8B 32k calculation). The decode throughput ceiling is therefore $\text{tokens/s} \leq \dfrac{\text{HBM\_bandwidth (GB/s)}}{\text{bytes\_per\_token}}$.
 
 Worked example — 8B model on an A100 80GB SXM4 (2.0 TB/s measured HBM bandwidth), short context so weights dominate:
 
@@ -272,3 +271,11 @@ For step 1: if your batch=1 tok/s is below 50% of the theoretical ceiling from t
 
 **Q5. You must run a 2B VLM on both iOS and Android. Walk through your engineering plan.**
 **A.** Start from constraints: memory (4-bit weights ≈ 1 GB + KV + vision encoder activations — fits modern flagships), bandwidth-derived tok/s target, and thermal sustainability for multi-image sessions. Then **verify exportability per platform before any fine-tuning**: iOS — MLX (flexible, handles novel/hybrid architectures, GPU via Metal) vs Core ML (ANE speed but rigid ops); Android — MNN or ExecuTorch vs ONNX Runtime, where hybrid attention/SSM blocks frequently hit unsupported ops, so prototype the export with the *exact* architecture first; if blocked, choose a different base model rather than fighting the toolchain. Quantize with the sensitivity-map approach (4-bit MLPs, 8-bit fragile projections; QAT during the fine-tune); keep the vision encoder in 8-bit (vision towers are quantization-sensitive). Optimize prefill (the mobile UX killer): resize/tile images conservatively, cache the system prompt, consider NPU for prefill. Ship with on-device task evals in CI for both artifacts — iOS and Android builds *will* diverge numerically — plus telemetry for tok/s, thermal state, and OOM rates per device tier.
+
+## You can now
+
+- Derive the decode throughput ceiling for any Transformer from first principles — compute weight bytes, add KV cache growth with context length, and divide into measured HBM bandwidth — and use the gap between theoretical and achieved bandwidth to diagnose serving-stack inefficiencies.
+- Apply GPTQ, AWQ, and GGUF quantization workflows end-to-end, verify numerical correctness with a max-absolute-logit parity check, and build a per-layer sensitivity map to construct a mixed-precision recipe that holds precision where it matters.
+- Configure speculative decoding with EAGLE heads or an independent drafter via vLLM/SGLang, interpret the acceptance-rate metric, and correctly predict the batch-size and temperature regimes where it improves latency versus harms throughput.
+- Choose and validate an on-device inference stack (llama.cpp, MLX, Core ML, ExecuTorch, MNN) for a target platform and architecture, checking exportability before fine-tuning to avoid toolchain dead ends.
+- Design a tiered VLM document-processing pipeline with visual token budgeting, tiling strategies, cascade routing across cheap-OCR and frontier-API tiers, and a separate vision-encoding pool — and reason through cost per page at each tier.

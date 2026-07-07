@@ -55,17 +55,15 @@ This is the calculation the foundations chapter calls "the crossover argument" a
 
 ### The formula
 
-```text
-self_hosted_cost_per_1M = (GPU_cluster_$/hr) /
-                          (throughput_tok_s × 3600 × utilization × 10⁻⁶)
-```
+$$
+\text{cost}_{\text{self-hosted per 1M}} = \frac{\text{GPU cluster } \$/\text{hr}}{\text{throughput}_{\text{tok/s}} \times 3600 \times \text{utilization} \times 10^{-6}}
+$$
 
-Self-hosting beats API when `self_hosted_cost_per_1M < API_output_$/1M`. Rearranging for the minimum utilization required to break even:
+Self-hosting beats API when $\text{cost}_{\text{self-hosted per 1M}} < \text{API output } \$/\text{1M}$. Rearranging for the minimum utilization required to break even:
 
-```text
-utilization_crossover = GPU_cluster_$/hr /
-                        (throughput_tok_s × 3600 × 10⁻⁶ × API_output_$/1M)
-```
+$$
+\text{utilization}_{\text{crossover}} = \frac{\text{GPU cluster } \$/\text{hr}}{\text{throughput}_{\text{tok/s}} \times 3600 \times 10^{-6} \times \text{API output } \$/\text{1M}}
+$$
 
 ### Worked example: 70B model, one 4×H100 cluster
 
@@ -78,9 +76,9 @@ utilization_crossover = GPU_cluster_$/hr /
 
 Setting self-hosted cost = API cost to find the crossover utilization:
 
-```text
-$5.19 / U = $10  →  U = 0.52 → ~52% GPU utilization
-```
+$$
+\frac{\$5.19}{U} = \$10 \quad\Rightarrow\quad U = 0.52 \quad\Rightarrow\quad {\sim}52\%\ \text{GPU utilization}
+$$
 
 **Interpretation:** if this 4×H100 node sustains more than ~52% utilization serving output tokens, self-hosting beats the API on pure compute cost. Below 52%, the API is cheaper — and easier, since it comes with no ops burden.
 
@@ -167,3 +165,11 @@ Pick any system you have designed in a previous module's project (support assist
 **Q3. Your team is debating fine-tuned API vs self-hosted fine-tuned open model. Walk through the decision framework.**
 
 **A.** Four axes. (1) Token economics: compute the crossover utilization as above; self-hosting wins only above ~50–60% sustained GPU utilization, which typically means 200k+ req/day for a mid-size cluster. Fine-tuned API premium is 1.5–3× the base rate, which raises the crossover — the math may still favor self-hosting at lower volume if the premium is steep. (2) Data residency and IP: fine-tuning an API means sending proprietary training data to the vendor; some teams are blocked by security or legal review. Self-hosting keeps both the training data and the resulting weights in-house. (3) Quality ceiling: fine-tuned open models are often competitive with fine-tuned API models for narrow tasks after enough task-specific data — but starting from a weaker base model and closing the gap requires genuine fine-tuning expertise (SFT → DPO or RLVR, eval-driven iteration), not just uploading a JSONL file. (4) Ops reality: a self-hosted fine-tuned model requires serving infrastructure, regression testing on each base-model upgrade, and someone to own the model quality over time. The standard 2026 answer: prototype on the API to confirm product-market fit; collect interaction data; fine-tune an open model for the high-volume narrow path once you have both the traffic and the data to improve the model; keep the API for the long-tail edge cases the narrow model handles poorly.
+
+## You can now
+
+- compute the self-hosted \$/1M-token cost and the break-even GPU utilization for a given cluster cost, throughput, and API price from memory.
+- convert a utilization crossover into a QPS and requests/day threshold, and state the traffic volume at which self-hosting overtakes an API.
+- name the four factors the naive crossover math misses — spiky utilization, hidden ops headcount, the data flywheel, and latency/control requirements — and adjust the build-vs-buy decision accordingly.
+- fill a full TCO worksheet and flag the three rows juniors leave blank (egress, observability, ops headcount).
+- explain why each feature-freshness tier costs roughly an order of magnitude more than the previous one, and decide when the streaming upgrade is actually worth it.

@@ -404,25 +404,13 @@ Phase 3 (months 9–12): Architecture.
 
 **The architecture target:**
 
-```
-[Sources: Epic, claims, lab, imaging, research]
-       │
-       ▼
-[Bronze: raw, immutable, in HDFS-replacement (S3/ADLS) as Iceberg]
-       │
-       ▼
-[Silver: cleaned, conformed, PHI-classified]
-       │
-       ▼
-[Gold: domain-specific marts; the consumer-facing layer]
-       │
-       ▼
-[Consumption: SQL via Databricks SQL / Snowflake / Trino;
- BI via Tableau, ThoughtSpot; research via Jupyter on Databricks]
-       │
-       ▼
-[Governance plane: catalog, lineage, access control,
- PHI scanning, audit logs]
+```mermaid
+flowchart TD
+    SRC["Sources: Epic, claims, lab, imaging, research"] --> BRONZE["Bronze: raw, immutable, on S3/ADLS as Iceberg"]
+    BRONZE --> SILVER["Silver: cleaned, conformed, PHI-classified"]
+    SILVER --> GOLD["Gold: domain-specific marts (consumer-facing)"]
+    GOLD --> CONS["Consumption: SQL via Databricks/Snowflake/Trino; BI via Tableau/ThoughtSpot; research via Jupyter"]
+    CONS --> GOV["Governance plane: catalog, lineage, access control, PHI scanning, audit logs"]
 ```
 
 **The architect's specific moves:**
@@ -534,32 +522,15 @@ A staff data architect at the retailer thinks:
 
 The architect splits the architecture:
 
-```
-[Sources: app, web, POS, CRM, marketing, loyalty, support]
-       │
-       ▼
-[Event hub: Kafka — every source emits canonical customer events]
-       │
-       ▼
-[Identity resolution service: maintains customer-id mappings,
- reconciles new identifiers to existing customer]
-       │
-       ▼
-[Streaming aggregation: Flink computes rolling features
- per customer (last_purchase_at, ltv_to_date, recent_categories)]
-       │
-       ▼
-[Customer state store: Redis / DynamoDB / Aerospike for
- real-time lookup at <10ms]
-       │
-       ▼
-[Customer events lake: Iceberg / Delta on S3 for historical
- analytics and ML training]
-       │
-       ┌────────────┴─────────────┐
-       ▼                          ▼
-[Marketing platform           [BI / reporting via
-consumers via API]            warehouse on top of the lake]
+```mermaid
+flowchart TD
+    SRC["Sources: app, web, POS, CRM, marketing, loyalty, support"] --> HUB["Event hub: Kafka — canonical customer events"]
+    HUB --> IDR["Identity resolution service — reconciles identifiers to one customer"]
+    IDR --> AGG["Streaming aggregation: Flink rolling features per customer"]
+    AGG --> STATE["Customer state store: Redis/DynamoDB/Aerospike, sub-10ms lookup"]
+    STATE --> LAKE["Customer events lake: Iceberg/Delta on S3"]
+    LAKE --> MKT["Marketing platform consumers via API"]
+    LAKE --> BI["BI / reporting via warehouse on the lake"]
 ```
 
 **Critical decisions:**
@@ -828,22 +799,15 @@ A staff data engineer reframes:
 
 **The architecture intervention:**
 
-```
-[Customer event sources]
-       │
-       ▼
-[Snowflake — system of record, scheduled jobs, ad-hoc queries]
-       │
-       ├──► [Pre-aggregation pipeline: dbt + scheduled materializations
-       │     for the top-N dashboards across tenants]
-       │
-       ├──► [Real-time OLAP: ClickHouse / Apache Pinot / Apache Druid
-       │     for hot-path queries; sub-second latency]
-       │
-       └──► [Caching layer: Cube.js / Materialize / custom Redis
-             for repeated queries with TTL]
-
-[Embedded analytics: queries the right tier based on the dashboard]
+```mermaid
+flowchart TD
+    SRC["Customer event sources"] --> SF["Snowflake — system of record, scheduled + ad-hoc queries"]
+    SF --> PRE["Pre-aggregation: dbt scheduled materializations for top-N dashboards"]
+    SF --> OLAP["Real-time OLAP: ClickHouse/Pinot/Druid, sub-second hot path"]
+    SF --> CACHE["Caching layer: Cube.js/Materialize/Redis with TTL"]
+    PRE --> EMB["Embedded analytics — queries the right tier per dashboard"]
+    OLAP --> EMB
+    CACHE --> EMB
 ```
 
 **Key decisions:**
@@ -1212,18 +1176,13 @@ The IC architect's first move is almost always:
 
 When data investments don't produce business value, walk backwards:
 
-```
-Business outcome (P&L impact, customer NPS, regulatory standing)
-   ↑
-Decision based on data
-   ↑
-Insight surfaced to decision-maker
-   ↑
-Query / dashboard / model output
-   ↑
-Data pipeline
-   ↑
-Source data
+```mermaid
+flowchart BT
+    SRC["Source data"] --> PIPE["Data pipeline"]
+    PIPE --> OUT["Query / dashboard / model output"]
+    OUT --> INS["Insight surfaced to decision-maker"]
+    INS --> DEC["Decision based on data"]
+    DEC --> BIZ["Business outcome (P&L, NPS, regulatory standing)"]
 ```
 
 The break is rarely in the pipeline. It's usually at "insight reaches decision-maker" or "decision-maker acts on insight" or "business outcome captured by the right party."

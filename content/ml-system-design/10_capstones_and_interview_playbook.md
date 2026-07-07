@@ -179,4 +179,14 @@ This chapter is deliberately scoped to in-interview mechanics: the rubric, the m
 
 ---
 
+## You can now
+
+- grade any system-design answer against the five-axis rubric (problem navigation, breadth, depth-on-demand, tradeoff reasoning, practicality) and self-score assumptions stated, tradeoffs compared, numbers produced, and failure modes volunteered.
+- reconstruct any of the seven mock designs — assistant serving, document extraction, video recs, semantic search, real-time fraud, coding agent, clinical voice — from requirements through capacity math to volunteered failure modes.
+- adapt the same design for a product, research, or infra/platform interviewer by shifting vocabulary and emphasis without sacrificing analytical depth.
+- catch the ten most common interview mistakes in your own recorded answers and apply the stated fix for each.
+- scope a 3–4 weekend capstone (A, B, or C) that turns "I know about this" into "I built this — here's what surprised me."
+
+---
+
 *End of course. Build the projects, do the mocks out loud, and remember: the interview is a conversation about tradeoffs, not a recitation of architectures.*

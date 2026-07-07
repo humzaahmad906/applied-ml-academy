@@ -388,17 +388,12 @@ Kafka is messaging. Flink is processing. The earlier guides covered Kafka and Ka
 
 ### Flink Architecture
 
-```
-              ┌─────────────────┐
-              │   JobManager    │  (coordinator: scheduling, checkpointing)
-              └────────┬────────┘
-                       │
-        ┌──────────────┼──────────────┐
-        ▼              ▼              ▼
-  ┌──────────┐   ┌──────────┐   ┌──────────┐
-  │TaskMgr 1 │   │TaskMgr 2 │   │TaskMgr 3 │
-  │ slots... │   │ slots... │   │ slots... │
-  └──────────┘   └──────────┘   └──────────┘
+```mermaid
+flowchart TD
+    JM["JobManager — scheduling, checkpointing, failure handling"]
+    JM --> TM1["TaskManager 1 (slots)"]
+    JM --> TM2["TaskManager 2 (slots)"]
+    JM --> TM3["TaskManager 3 (slots)"]
 ```
 
 - **JobManager:** coordinator — schedules tasks, manages checkpoints, handles failures
@@ -541,10 +536,14 @@ Warehouses are for "queries over historical data, latency in seconds." Real-time
 
 In 2026, the leading-edge stack often looks like:
 
-```
-Kafka ──► Flink (transform + enrich) ──► ClickHouse (hot) ──► User-facing dashboards
-                                    │
-                                    └──► Iceberg (warm/cold) ──► dbt ──► Snowflake (analyst-facing)
+```mermaid
+flowchart LR
+    Kafka --> Flink["Flink (transform + enrich)"]
+    Flink --> CH["ClickHouse (hot)"]
+    CH --> DASH["User-facing dashboards"]
+    Flink --> ICE["Iceberg (warm/cold)"]
+    ICE --> DBT["dbt"]
+    DBT --> SF["Snowflake (analyst-facing)"]
 ```
 
 Real-time path serves hot dashboards. Batch path serves analytical workloads. Two stores, same source-of-truth events.
@@ -827,16 +826,16 @@ You don't need to implement these. You need to know:
 
 ### The Pipeline a DE Owns
 
-```
-[Source documents] ──► [Chunking] ──► [Embedding model] ──► [Vector DB]
-                              │
-                              └──► [Metadata extraction] ──► [Vector DB metadata]
-                                                                │
-                                                                ▼
-                                                      [Filter + ANN search]
-                                                                │
-                                                                ▼
-                                                      [LLM with retrieved context]
+```mermaid
+flowchart TD
+    SRC["Source documents"] --> CHUNK["Chunking"]
+    CHUNK --> EMB["Embedding model"]
+    EMB --> VDB["Vector DB"]
+    CHUNK --> META["Metadata extraction"]
+    META --> VMETA["Vector DB metadata"]
+    VDB --> SEARCH["Filter + ANN search"]
+    VMETA --> SEARCH
+    SEARCH --> LLM["LLM with retrieved context"]
 ```
 
 The DE part: chunking strategy, embedding pipeline (batched, idempotent, incremental on new documents), reindexing on model upgrades, metadata schema for filtering, monitoring retrieval quality.
@@ -845,9 +844,7 @@ The DE part: chunking strategy, embedding pipeline (batched, idempotent, increme
 
 Pure vector search is bad at exact matches (product codes, names). Pure keyword search is bad at semantics. Hybrid search combines them:
 
-```
-final_score = α * vector_similarity + (1-α) * keyword_score
-```
+$$\text{final\_score} = \alpha \cdot \text{vector\_similarity} + (1-\alpha) \cdot \text{keyword\_score}$$
 
 Weaviate, OpenSearch, Elasticsearch (with v8+), Vespa all support hybrid natively. Your job: pick α based on the use case.
 
@@ -896,16 +893,18 @@ Trino (formerly PrestoSQL) is the dominant **federated query engine** — query 
 
 ### Architecture
 
-```
-                    [Coordinator]  (parses, plans, schedules)
-                          │
-        ┌─────────────────┼─────────────────┐
-        ▼                 ▼                 ▼
-   [Worker 1]        [Worker 2]        [Worker 3]
-        │                 │                 │
-   ┌────┴────┐       ┌────┴────┐       ┌────┴────┐
-   ▼         ▼       ▼         ▼       ▼         ▼
- [S3]   [Postgres] [Iceberg] [Kafka] [MySQL] [Snowflake]
+```mermaid
+flowchart TD
+    C["Coordinator — parses, plans, schedules"]
+    C --> W1["Worker 1"]
+    C --> W2["Worker 2"]
+    C --> W3["Worker 3"]
+    W1 --> S3["S3"]
+    W1 --> PG["Postgres"]
+    W2 --> ICE["Iceberg"]
+    W2 --> KAFKA["Kafka"]
+    W3 --> MYSQL["MySQL"]
+    W3 --> SNOW["Snowflake"]
 ```
 
 Connectors are the magic — Trino has ~50 of them. Each translates SQL operations into the source's native language.
@@ -1268,6 +1267,16 @@ The skills that become more valuable: systems thinking (understanding what a cor
 The skills that become less valuable: remembering API syntax, boilerplate pipeline scaffolding, writing the same incremental dlt resource for the 50th time.
 
 The honest summary: data engineering is not being automated away. The hard parts — designing the right data model, specifying correct incremental logic, owning quality and cost, responding to incidents — all require judgment that agents don't have. The easy parts — scaffolding, boilerplate, format conversion — are largely gone. Senior DEs who adapt become more productive. Junior DEs who only knew the easy parts have a harder path.
+
+---
+
+## You can now
+
+- Reason from distributed-systems first principles — CAP/PACELC, consistency models, replication and partitioning strategies — and slot any new datastore into that mental model in minutes.
+- Write the SQL that separates senior from mid: sessionization, recursive CTEs, MERGE/upsert, and reading a query plan to find the expensive step.
+- Explain storage internals (Parquet row groups, statistics, encodings; Arrow zero-copy) well enough to make file-layout and compression choices that change query cost.
+- Compare lakehouse formats and catalogs, operate Flink for stateful exactly-once streaming, and pick a real-time OLAP store (ClickHouse/Druid/Pinot) when latency demands it.
+- Put guardrails around agent-generated SQL and route LLM queries through a semantic layer — the DE-owned surface of the 2026 AI/DE convergence.
 
 ---
 

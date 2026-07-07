@@ -8,11 +8,33 @@ Despite the LLM era, the single most common interview question at large consumer
 
 Corpus of 10⁷–10⁹ items → **(1) Candidate generation / retrieval**: several cheap sources each pull hundreds of candidates in ~10 ms (two-tower ANN, collaborative "users-also-liked", follows/subscriptions, fresh/trending, geo) → **(2) Ranking**: one model scores the merged ~1–5k candidates with full features, ~10–20 ms → **(3) Re-ranking / policy**: diversity (MMR / determinantal methods), freshness boosts, deduplication, business and integrity rules, exploration injection → top ~50 served. Why stages: you cannot run an expressive model over a billion items per request; the funnel spends compute proportional to candidate quality. (Recognize this shape from the retrieval chapter — retrieve→rerank is the same idea.)
 
+```mermaid
+flowchart LR
+    A["Corpus<br/>10⁷–10⁹ items"] --> B["Candidate Generation<br/>~10 ms<br/>two-tower ANN · collab · trending"]
+    B --> C["Ranking<br/>1–5k candidates<br/>~10–20 ms<br/>cross-features · multi-task"]
+    C --> D["Re-ranking / Policy<br/>diversity · dedup · rules<br/>exploration injection"]
+    D --> E["Top ~50 served"]
+```
+
 ## 2. Candidate generation — the two-tower workhorse
 
 - **Architecture:** user tower (profile + behavior sequence → embedding) and item tower (content + stats → embedding), trained so that positive (user, item) pairs score high by dot product. Item embeddings are precomputed into an **ANN index** (the same HNSW/IVF machinery from the retrieval chapter); user embedding computed per request; retrieval = ANN lookup. The towers *must not* see cross-features (anything combining user×item) — that's exactly what makes precomputation and ANN possible, and articulating this constraint is a classic interview checkpoint.
 - **Training:** sampled softmax with **in-batch negatives** (other items in the batch serve as negatives — free, but biased toward popular items since popular items appear in batches more often) corrected via **logQ correction** (subtract log of item's sampling probability from its logit); add **hard negatives** (impressed-but-not-clicked, or mined near-misses) to sharpen the boundary. This is the standard two-tower training recipe used in large-scale industrial retrieval.
 - **Multiple generators are the norm** — a learned two-tower plus heuristic sources (recency, social graph, trending) merged downstream; resilience and coverage beat elegance.
+
+```mermaid
+flowchart TB
+    subgraph user_tower[User Tower]
+        U["Profile + behavior sequence"] --> UE["User Embedding<br/>(computed per request)"]
+    end
+    subgraph item_tower[Item Tower - offline]
+        I["Content + stats"] --> IE["Item Embeddings<br/>(precomputed)"]
+    end
+    IE --> ANN["ANN Index<br/>HNSW / IVF"]
+    UE --> Lookup["Dot product → ANN lookup"]
+    ANN --> Lookup
+    Lookup --> R["Top-K Candidates<br/>(hundreds, ~10 ms)"]
+```
 
 ## 3. Ranking
 
@@ -84,9 +106,9 @@ def assert_serving_position_constant(positions: torch.Tensor) -> None:
 
 **The formula.** In-batch negatives treat each positive item in a training batch as a negative for all other queries in that batch — free and fast, but biased: popular items appear in batches at rate proportional to their corpus frequency Q(item), so they are over-represented as negatives. The **logQ correction** subtracts `log Q(item_j)` from every logit in column j before softmax, recovering an unbiased estimate of the full-corpus cross-entropy:
 
-```text
-corrected_logit[i, j] = sim(query_i, item_j) − log Q(item_j)
-```
+$$
+\text{corrected\_logit}[i,\, j] \;=\; \text{sim}(\mathbf{q}_i,\, \mathbf{e}_j) \;-\; \log Q(\text{item}_j)
+$$
 
 The diagonal (query_i paired with its own positive item_i) also gets the column correction applied — that is correct, because the positive item also appears as an in-batch negative in other rows and its contribution to the partition function should be de-biased there too.
 
@@ -226,3 +248,11 @@ Running `calibration_check` on the held-out labels: old model MACE ≈ 0.009; ne
 
 **Q5. What are generative recommenders (HSTU/semantic IDs), and when would you actually adopt them?**
 **A.** The reformulation: instead of stage-separated models over engineered features, treat the user's full interaction stream as a token sequence and train a large transformer-style sequential transduction model to predict next actions — HSTU-style architectures are the flagship: a modified attention design handling high-cardinality, non-stationary action vocabularies, scaled to trillion-parameter regimes, exhibiting LLM-like scaling laws, and deployed with double-digit online engagement gains while replacing chunks of the legacy DLRM stack. **Semantic IDs** complement it: quantize item *content* embeddings (RQ-VAE) into short discrete codes replacing arbitrary item IDs, so new items inherit meaningful tokens (cold-start fix) and retrieval can be *generative* (decode the next item's code directly). Adoption calculus: pro — strongest known scaling path, sequence modeling captures temporal dynamics feature pipelines miss, collapses feature-engineering debt; con — serving cost (autoregressive inference per request vs a dot product + MLP — needs the full inference/serving toolbox: caching, quantization, distillation), training-data scale requirements (billions of interactions before the scaling advantage shows), and organizational rewiring of a revenue-critical stack. Honest answer: at the largest consumer scale it's the trajectory, and it has been proven in production; at mid-scale, a SASRec-style sequence encoder *inside* the ranker captures much of the gain at a fraction of the risk — and proposing that staged migration is the senior answer.
+
+## You can now
+
+- Design a multi-stage recommendation funnel end-to-end: articulate why candidate generation must factorize user and item representations, what the ranker gains by seeing only thousands of candidates, and what the policy layer adds beyond score order.
+- Train a two-tower retrieval model with in-batch negatives and logQ correction, explain the popularity-bias failure mode each component addresses, and export item embeddings to an ANN index for sub-10 ms retrieval.
+- Diagnose and fix position bias in ranking training data using position-as-feature with a fixed serving constant, name the two common skew failures that corrupt scores silently, and write the integration test that catches them.
+- Evaluate a recommender or ads system beyond AUC: compute MACE, interpret a reliability diagram, and block a deploy on calibration failure even when ranking metrics are stable.
+- Extend the same funnel skeleton to adjacent domains — search (query understanding, BM25 + dense hybrid, LTR objectives) and fraud (class imbalance, GNN entity graphs, velocity features, step-up-auth decision layer).

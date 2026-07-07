@@ -161,3 +161,18 @@ AlpacaEval); LLM-as-judge scales them but has position, length, and self-prefere
 control and calibrate. Prefer realistic information-seeking tasks and report cost alongside
 capability, and track several task metrics on your own target-domain data, because lower loss does
 not guarantee a better product.
+
+## You can now
+
+You can now:
+
+- decompose any evaluation into the four explicit decisions — input design, model invocation, output scoring, result interpretation — and diagnose a suspicious benchmark by finding which one it left implicit.
+- compute perplexity as `exp` of the mean per-token NLL and state its exact scope: right for tracking a run and comparing same-tokenizer siblings, wrong for ranking model families without per-byte/per-word normalization.
+- explain how a multiple-choice scoring protocol (answer-letter vs answer-text likelihood vs generate-and-parse, length-normalized or not) shifts model rankings, and why harnesses like LM-Eval-Harness and HELM fix the protocol.
+- detect and defend against contamination — exchangeability likelihood tests, n-gram decontamination, and a private held-out set that never influences training or tuning.
+- design an LLM-as-judge setup that controls for position, length, and self-preference bias and is calibrated against human labels rather than trusted as ground truth.
+- build a product evaluation you can defend: real target-domain held-out data, exact metrics where checkable, several sliced metrics, and cost reported alongside capability.
+
+## Try it
+
+Take one open multiple-choice benchmark (a 20-question MMLU slice is enough) and two small instruction models you can run locally. Score the same questions three ways — the log-likelihood of the answer *letter*, the log-likelihood of the answer *text*, and generate-and-parse — and tabulate each model's accuracy under each protocol. Then length-normalize the option likelihoods and re-score. You will almost certainly see the *ranking* of the two models flip under at least one protocol change. Write one paragraph on which number you would report and why, and what that says about any leaderboard comparison that does not disclose its scoring rule.

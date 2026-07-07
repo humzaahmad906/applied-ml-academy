@@ -96,9 +96,9 @@ For each token, produce three vectors via learned linear projections of the hidd
 
 Then:
 
-```text
-Attention(Q, K, V) = softmax( Q Kᵀ / √d_k ) V
-```
+$$
+\text{Attention}(Q, K, V) = \text{softmax}\!\left(\frac{Q K^\top}{\sqrt{d_k}}\right) V
+$$
 
 Step by step:
 - `Q Kᵀ` → `[n, n]` matrix of raw scores; entry `(i,j)` = how much token `i` should attend to token `j` (it's a dot product = similarity).
@@ -112,10 +112,12 @@ In a decoder, token `i` must not see tokens `j > i` (the future), or training wo
 ### Multi-Head Attention (MHA)
 Instead of one attention with dimension `d_model`, split into `h` **heads**, each operating in dimension `d_model/h`, run in parallel, then concatenate and project. Why: different heads can specialize (one tracks syntax, one tracks coreference, one is an "induction head" copying repeated patterns, etc.). Each head has its own `W_Q, W_K, W_V`.
 
-```text
-head_i = Attention(x W_Q^i, x W_K^i, x W_V^i)
-MHA(x) = Concat(head_1, ..., head_h) W_O
-```
+$$
+\text{head}_i = \text{Attention}(x W_Q^i,\ x W_K^i,\ x W_V^i)
+$$
+$$
+\text{MHA}(x) = \text{Concat}(\text{head}_1, \dots, \text{head}_h)\, W_O
+$$
 
 ### Complexity — the central problem of the field
 The `Q Kᵀ` matrix is `[n, n]`. So attention is **O(n²)** in compute and memory w.r.t. sequence length `n`. This quadratic cost is *the* bottleneck that drives a huge fraction of all research: long-context techniques, FlashAttention (in the inference chapter), linear attention and SSMs (in the LLM chapter), etc. Whenever a paper is about efficiency or long context, it's almost always attacking this `n²`.
@@ -129,15 +131,15 @@ Same mechanism, but `Q` comes from one sequence and `K, V` from another. Decoder
 
 ### Feed-Forward Network (FFN / MLP)
 Applied independently to each position. Classic form: two linear layers with a nonlinearity:
-```text
-FFN(x) = W_2 · σ(W_1 · x)
-```
+$$
+\text{FFN}(x) = W_2 \, \sigma(W_1 x)
+$$
 The hidden dimension `d_ff` is typically **4× `d_model`** (an expand-then-contract). This is where most parameters live in a dense model.
 
 **SwiGLU** (now standard, from Llama onward) replaces the simple MLP with a *gated* variant:
-```text
-FFN(x) = W_2 · ( SiLU(W_1 · x) ⊙ (W_3 · x) )
-```
+$$
+\text{FFN}(x) = W_2 \left( \text{SiLU}(W_1 x) \odot (W_3 x) \right)
+$$
 Three matrices instead of two; one branch acts as a learned gate (element-wise multiply `⊙`) on the other. Empirically better per-parameter. (To keep param count constant, `d_ff` is scaled down, often to ~⅔·4·`d_model`.) When a paper says "SwiGLU FFN," this is it.
 
 ### Normalization
@@ -179,9 +181,9 @@ RoPE encodes position by **rotating** the query and key vectors by an angle prop
 Mechanically: split each head's vector into 2D pairs `(x_0,x_1), (x_2,x_3), ...`. For a token at position `m`, rotate pair `k` by angle `m·θ_k`, where the frequencies `θ_k = base^(−2k/d)` (base typically 10000) range from fast (early pairs) to slow (later pairs). Different pairs rotate at different rates — like clock hands of different speeds — so the pattern of rotations uniquely (within a range) encodes position, multi-scale.
 
 The key algebraic property:
-```text
-⟨ RoPE(q, m), RoPE(k, n) ⟩  depends only on (m − n)
-```
+$$
+\langle\, \text{RoPE}(q, m),\ \text{RoPE}(k, n) \,\rangle \quad \text{depends only on } (m - n)
+$$
 That's why RoPE simultaneously gives you *absolute* position injection and *relative* position behavior in attention scores, with **zero learned parameters**.
 
 ### Why RoPE matters so much in practice (and in papers)
@@ -198,6 +200,14 @@ That's why RoPE simultaneously gives you *absolute* position injection and *rela
 If you understand RoPE — rotation in 2D subspaces, relative-from-absolute, frequency spectrum, and how context-extension tricks perturb it — you'll comprehend a startling fraction of architecture and long-context papers with no further effort.
 
 ---
+
+## You can now
+
+- Track tensor shapes through a forward pass and read `softmax(QKᵀ/√d_k)V` as scaled dot-product similarity rather than jargon.
+- Explain why byte-level BPE never hits an out-of-vocabulary token, and why a model's weights are inseparable from its tokenizer.
+- Draw the decoder-only skeleton from memory — embed → N × (pre-norm attention + pre-norm FFN, both residual) → final norm → LM head — and say what each sub-layer is *for*.
+- Implement scaled dot-product attention, causal masking, multi-head splitting, and a SwiGLU FFN from their specs.
+- Explain RoPE as rotation in 2D subspaces that turns absolute position into relative behaviour, and why context-extension tricks (PI / NTK / YaRN) are all frequency manipulations.
 
 ## 7. Self-check: can you read this block spec?
 

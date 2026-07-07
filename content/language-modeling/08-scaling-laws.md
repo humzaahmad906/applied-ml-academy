@@ -21,11 +21,11 @@ reading off a curve you already measured.
 
 The single-variable forms, when the other resource is not the bottleneck, are pure power laws:
 
-```text
-L(N) ∝ N^(-α)     with  α ≈ 0.076
-L(D) ∝ D^(-β)     with  β ≈ 0.095
-L(C) ∝ C^(-γ)     with  γ ≈ 0.057
-```
+$$
+L(N)\propto N^{-\alpha}\ (\alpha\approx0.076),
+\qquad L(D)\propto D^{-\beta}\ (\beta\approx0.095),
+\qquad L(C)\propto C^{-\gamma}\ (\gamma\approx0.057)
+$$
 
 (These are the Kaplan et al. 2020 exponents.) A power law in log-log space is a straight
 line whose *slope* is the exponent, so fitting a scaling law is, at heart, fitting a line to a few
@@ -36,9 +36,9 @@ points — the whole difficulty is in doing it honestly.
 The single-variable laws are special cases of a joint form that separates the two ways a model can
 be starved. Chinchilla (Hoffmann et al. 2022) writes:
 
-```text
-L(N, D) = E + A / N^α + B / D^β
-```
+$$
+L(N, D) = E + \frac{A}{N^\alpha} + \frac{B}{D^\beta}
+$$
 
 Read it term by term:
 
@@ -66,10 +66,11 @@ minimize over `N`. Because the two penalty terms trade off — shrinking `N` inf
 the freed compute grows `D` and shrinks `B/D^β` — there is an interior minimum, and it scales as a
 power of `C`:
 
-```text
-N_opt ∝ C^a     with  a = β / (α + β) ≈ 0.46 ≈ 1/2
-D_opt ∝ C^b     with  b = α / (α + β) ≈ 0.54 ≈ 1/2
-```
+$$
+N_{\text{opt}}\propto C^{a},\ \ a = \frac{\beta}{\alpha + \beta}\approx 0.46\approx \tfrac12;
+\qquad
+D_{\text{opt}}\propto C^{b},\ \ b = \frac{\alpha}{\alpha + \beta}\approx 0.54\approx \tfrac12
+$$
 
 So **both parameters and tokens scale as roughly the square root of compute** — you grow them
 *together*, in lock-step, as the budget grows. Equivalently `N_opt ∝ D_opt^(α/β) ≈ D_opt^0.8`.
@@ -198,3 +199,11 @@ parametric loss directly — and they must agree before you trust an extrapolati
 over-reaching the measured range, changing the recipe, and under-tuned small runs. Finally,
 compute-optimal minimizes *training* cost only; when you will serve the model heavily — above all
 on-device — overtrain a smaller model past its Chinchilla point to cut lifetime inference cost.
+
+## You can now
+
+- write the single-variable power laws and the joint Chinchilla form `L(N,D) = E + A/N^α + B/D^β`, and interpret each term.
+- solve the compute-optimal allocation under `C ≈ 6ND` and recover both the `√C` scaling of `N` and `D` and the `~20 tokens/param` rule.
+- explain why Kaplan and Chinchilla disagreed, and what methodological fix (per-run schedule tuning, proper token-count sweeps) changed the answer.
+- fit a scaling law three ways — minimum over training curves, IsoFLOP bowls, and direct parametric regression — and cross-check them before trusting an extrapolation.
+- decide when to deliberately overtrain a smaller model past its Chinchilla point to minimize lifetime inference cost, especially for on-device deployment.

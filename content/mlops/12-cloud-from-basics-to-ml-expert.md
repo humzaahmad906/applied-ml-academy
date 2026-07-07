@@ -1037,17 +1037,11 @@ defense in depth.
 
 **Setup overview**:
 
-```
-EKS cluster (account C)        Account A (data)         Account B (online store)
-─────────────────────          ────────────────         ────────────────────────
-Pod
-└── SA: ml-pipeline ──IRSA──► EksPipelineRole (in C)
-                                      │
-                                      ├─AssumeRole──► CrossAccountReadRole (A)
-                                      │                    └── policy: s3:Get on bucket
-                                      │
-                                      └─AssumeRole──► CrossAccountWriteRole (B)
-                                                          └── policy: dynamodb:Put on table
+```mermaid
+flowchart LR
+    SA["Pod SA: ml-pipeline<br/>(account C)"] -->|IRSA| ROLE["EksPipelineRole (in C)"]
+    ROLE -->|AssumeRole| READ["CrossAccountReadRole (A)<br/>policy: s3:Get on bucket"]
+    ROLE -->|AssumeRole| WRITE["CrossAccountWriteRole (B)<br/>policy: dynamodb:Put on table"]
 ```
 
 **Step by step**:
@@ -2459,37 +2453,20 @@ the same eval suite as you migrate from Bedrock KB to DIY.
 
 **The architecture**:
 
-```
-        Events @ 100K/s
-              │
-              ▼
-   [Kinesis Data Streams OR MSK Kafka]
-       │              │
-       ▼              ▼
-[Kinesis Firehose]  [MSK Connect / Flink on EKS]
-       │              │
-       │              ├─► Streaming features → ElastiCache Redis
-       │              │   (online store)
-       │              │
-       │              └─► Aggregated tables → Iceberg on S3
-       ▼
-[S3 raw landing zone — Iceberg tables, hour-partitioned]
-       │
-       ▼
-[Glue Catalog + Lake Formation governance]
-       │
-       ├────────────────────────────┐
-       ▼                            ▼
-[EMR / EMR Serverless Spark]   [Athena ad-hoc SQL]
-       │
-       ▼
-[Iceberg curated tables — batch features]
-       │
-       ▼
-[SageMaker Feature Store OR custom] → Training datasets
-       │
-       ▼
-[SageMaker Training / EKS PyTorchJob]
+```mermaid
+flowchart TD
+    E["Events @ 100K/s"] --> ING["Kinesis Data Streams OR MSK Kafka"]
+    ING --> FH["Kinesis Firehose"]
+    ING --> FLINK["MSK Connect / Flink on EKS"]
+    FLINK --> REDIS["Streaming features → ElastiCache Redis (online store)"]
+    FLINK --> AGG["Aggregated tables → Iceberg on S3"]
+    FH --> RAW["S3 raw landing zone — Iceberg tables, hour-partitioned"]
+    RAW --> GOV["Glue Catalog + Lake Formation governance"]
+    GOV --> EMR["EMR / EMR Serverless Spark"]
+    GOV --> ATHENA["Athena ad-hoc SQL"]
+    EMR --> CURATED["Iceberg curated tables — batch features"]
+    CURATED --> FS["SageMaker Feature Store OR custom → Training datasets"]
+    FS --> TRAIN["SageMaker Training / EKS PyTorchJob"]
 ```
 
 **Each service's role**:
@@ -3412,23 +3389,19 @@ For LLM token data specifically, the modern best practice is:
 
 **The 64-worker read pattern**:
 
+```mermaid
+flowchart TD
+    S3["S3 (source of truth, 3 TB)"] -->|one-time hydration; FSx auto-imports| FSX["FSx for Lustre (3 TB persistent)"]
+    FSX --> N1["Node 1 (8 workers)"]
+    FSX --> N2["Node 2 (8 workers)"]
+    FSX --> N8["Node 8 (8 workers)"]
 ```
-                S3 (source of truth, 3 TB)
-                       │
-                       ▼  (one-time hydration; FSx auto-imports)
-            FSx for Lustre (3 TB persistent)
-              │
-              ├──► Node 1 (8 workers)
-              ├──► Node 2 (8 workers)
-              ...
-              └──► Node 8 (8 workers)
 
 Each worker:
-  - Reads disjoint shard URLs (computed deterministically from rank +
-    epoch + seed)
-  - Streams shards sequentially from FSx mount
-  - Optionally caches to local NVMe after first epoch
-```
+
+- Reads disjoint shard URLs (computed deterministically from rank + epoch + seed)
+- Streams shards sequentially from FSx mount
+- Optionally caches to local NVMe after first epoch
 
 **Throughput math**:
 
@@ -3650,8 +3623,7 @@ spec:
 **SA-level twist**: at 200 users / 25 RPS the *Bedrock Llama 3.1 70B*
 option is genuinely competitive: ~$0.00265 input + $0.0035 output
 per 1K tokens, no infra. At average 700 tokens per request and 25
-RPS, monthly Bedrock cost ≈ 25 × 60 × 60 × 24 × 30 × 700/1000 ×
-$0.003 ≈ $36K/month. Comparable to your self-hosted setup, with
+RPS, monthly Bedrock cost is $25 \times 60 \times 60 \times 24 \times 30 \times \frac{700}{1000} \times \$0.003 \approx \$36\text{K/month}$. Comparable to your self-hosted setup, with
 zero ops. The break-even on self-hosting is somewhere around 100
 RPS sustained. Under that, Bedrock often wins on total cost of
 ownership.
@@ -3835,6 +3807,16 @@ In total, this chapter is about 8–12 hours of careful reading + practice. Done
 
 The remaining DL specializations — RAG architecture, fine-tuning factory, multi-tenant LLM platform, real-time CV serving — are covered in the practitioner and specialization chapters of this course. With the cloud vocabulary from this chapter, you can consume all of them at depth.
 
+
+---
+
+## You can now
+
+- Design a multi-account AWS topology with OUs, SCPs, and least-privilege IAM — distinguishing trust from permission policies and wiring up IRSA, cross-account AssumeRole, and OIDC federation for CI.
+- Size VPCs and subnets with CIDR math, and cut data-transfer cost by routing S3 / ECR / DynamoDB traffic through VPC endpoints instead of NAT.
+- Pick the right GPU instance, storage tier, and serving path for a workload — reasoning through SageMaker vs Bedrock vs self-hosted vLLM on EKS with real cost and latency numbers.
+- Diagnose distributed-training and inference bottlenecks: silent NCCL-over-TCP fallback, placement-group misconfiguration, DataLoader starvation, and GPU under-utilization.
+- Run a GPU FinOps program end to end — tagging, right-sizing, spot with checkpointing, reserved capacity, and scale-to-zero — to cut spend without a quality regression.
 
 ---
 

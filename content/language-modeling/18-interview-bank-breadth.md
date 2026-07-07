@@ -116,7 +116,7 @@ only get gradients through the softmax gate weights on the chosen experts, so an
 gets trained more, gets better, and gets picked more — a self-reinforcing loop. Left alone, a handful
 of experts absorb all the traffic and the rest are dead parameters that never train (collapse). The
 standard fix is the **auxiliary load-balancing loss** (Switch/GShard):
-`L_aux = α · E · Σ_i (f_i · P_i)`, where `f_i` is the *fraction of tokens* routed to expert `i` (a
+$L_{\text{aux}} = \alpha \cdot E \cdot \sum_i (f_i \cdot P_i)$, where `f_i` is the *fraction of tokens* routed to expert `i` (a
 hard count) and `P_i` is the *mean router probability* for expert `i` (soft). The product is
 minimized at uniform load (`f_i = P_i = 1/E`). The clever part: `f_i` is non-differentiable, so the
 gradient flows only through `P_i` — the loss nudges the router's probabilities toward *under*-loaded
@@ -128,7 +128,7 @@ size: the per-expert token histogram.
 **B2. Explain expert capacity and token dropping. What does the capacity factor buy?**
 
 In token-choice routing you cap how many tokens each expert accepts per batch:
-`capacity = capacity_factor · (T / E)`. Tokens beyond an expert's capacity are *dropped* — they skip
+$\text{capacity} = \text{capacity\_factor} \cdot (T / E)$. Tokens beyond an expert's capacity are *dropped* — they skip
 the expert layer and pass through unchanged via the residual connection. The reason you need a cap at
 all is systems, not modeling: when experts are sharded across GPUs (expert parallelism), a hot expert
 that receives triple its share stalls the whole all-to-all collective while other GPUs idle, so you
@@ -293,7 +293,7 @@ the minima and fit `N_opt ∝ C^a`. Cheap because it reuses points along curves 
 `N` — it is a U-shaped bowl whose bottom is the optimal `N` for that budget (fit a parabola in
 log-space, don't just take the lowest sampled point). Collect the bowl-bottoms and fit `N_opt ∝ C^a`.
 This is the cleanest and the one the scaling-laws build centers on. **(3) Parametric fit.** Fit
-`L(N,D) = E + A/N^α + B/D^β` to *all* your `(N, D, loss)` points at once (nonlinear regression,
+$L(N,D) = E + A/N^\alpha + B/D^\beta$ to *all* your `(N, D, loss)` points at once (nonlinear regression,
 Huber loss on log-loss for robustness), then compute the optimum analytically via `a = β/(α+β)`. Most
 data-efficient, most sensitive to fitting choices. The discipline: all three must *agree* before you
 trust an extrapolation.
@@ -385,7 +385,7 @@ similarity — so a signature of `k` MinHashes estimates Jaccard as the fraction
 unbiased estimate, and each doc is now a fixed-length signature. **LSH (banding):** split the `k`-entry
 signature into `b` bands of `r` rows each (`k = b·r`); two docs are *candidates* if they match exactly
 in at least one band. The probability a pair with true Jaccard `s` becomes a candidate is
-`1 − (1 − s^r)^b`, an S-curve in `s`. You tune `b` and `r` to place the steep threshold where you want
+$1 - (1 - s^r)^b$, an S-curve in `s`. You tune `b` and `r` to place the steep threshold where you want
 the cutoff (e.g. catch pairs above ~0.8, skip below): raising `r` sharpens and raises the threshold
 (fewer false positives, more misses), raising `b` lowers it. Only candidate pairs get an exact
 comparison, collapsing the quadratic blowup. That single S-curve is the whole tuning story.
@@ -674,8 +674,7 @@ long streams without fine-tuning — though note it *forgets* the evicted middle
 
 **H5. At long context, what dominates inference cost — and which levers attack it?**
 
-The **KV cache**, not the weights. It grows linearly with sequence length and batch (`2 · n_layers ·
-n_kv_heads · d_head · L_seq · batch · bytes`), so at long context a single sequence's cache can exceed
+The **KV cache**, not the weights. It grows linearly with sequence length and batch ($2 \cdot n_{\text{layers}} \cdot n_{\text{kv\_heads}} \cdot d_{\text{head}} \cdot L_{\text{seq}} \cdot \text{batch} \cdot \text{bytes}$), so at long context a single sequence's cache can exceed
 the model weights and, across concurrent users, becomes the binding memory constraint that caps batch
 size — and since decode is memory-bandwidth-bound, reading that cache also eats bandwidth. The levers
 all attack terms in that formula. **GQA/MQA** shrink `n_kv_heads`, cutting the cache by the query-to-KV
@@ -695,7 +694,7 @@ fragmentation so more of it fits. At long context, KV-cache economics *is* the i
 You fine-tune on prompt-response pairs with the next-token objective, but you compute loss *only on
 the response tokens*. Mechanically you build a `response_mask` that is 0 over prompt tokens and 1 over
 response tokens, then average the per-token NLL only over the masked positions:
-`loss = − Σ_t mask_t · log p_θ(y_t | y_<t) / Σ_t mask_t`. The reason: you do not want to spend model
+$\text{loss} = - \sum_t \text{mask}_t \cdot \log p_\theta(y_t \mid y_{<t}) \,/\, \sum_t \text{mask}_t$. The reason: you do not want to spend model
 capacity learning to *generate the user's question* — that is input you will always be given, not
 behavior you want to produce — only to generate the answer *conditioned on* it. Training on the prompt
 tokens would waste gradient on modeling the instruction distribution and can actively hurt. This pairs
@@ -710,8 +709,8 @@ the reward will grade.
 From comparisons. You collect, for a prompt `x`, a preferred response `y_w` and a dispreferred `y_l`
 (judged by humans or an AI), and train a scalar reward model `R(x, y)` under the **Bradley-Terry**
 model, which says the probability a human prefers `y_1` over `y_2` is the sigmoid of the reward
-difference: `P(y_1 ≻ y_2 | x) = σ(R(x, y_1) − R(x, y_2))`. You fit it by maximum likelihood —
-equivalently minimizing `− log σ(R(x, y_w) − R(x, y_l))` over the pairs. Architecturally it is usually
+difference: $P(y_1 \succ y_2 \mid x) = \sigma(R(x, y_1) - R(x, y_2))$. You fit it by maximum likelihood —
+equivalently minimizing $-\log \sigma(R(x, y_w) - R(x, y_l))$ over the pairs. Architecturally it is usually
 the same transformer with a scalar head replacing the vocab projection. The crucial property is that
 Bradley-Terry only ever sees reward *differences* between two responses to the same prompt, so the
 absolute scale of `R` is unidentified — which is exactly the property DPO later exploits to cancel the
@@ -720,7 +719,7 @@ intractable partition function.
 
 **I3. In PPO-style RLHF, what is the KL-to-reference term for, and what breaks without it?**
 
-The objective is `max_π E_{y∼π}[R(x,y)] − β · KL(π(y|x) || π_ref(y|x))`: maximize reward while staying
+The objective is $\max_\pi \mathbb{E}_{y \sim \pi}[R(x,y)] - \beta \cdot \mathrm{KL}(\pi(y \mid x) \,\|\, \pi_{\text{ref}}(y \mid x))$: maximize reward while staying
 close to the frozen SFT reference. The KL term is the leash. Without it, optimization **reward-hacks**
 — it finds degenerate outputs the reward model scores highly but humans hate, drifting arbitrarily far
 from sensible language because a *learned* reward model is only accurate near the distribution it was
@@ -734,11 +733,11 @@ refusal behaviors.
 **I4. DPO versus PPO — what does DPO trade, and when would you still run PPO?**
 
 DPO exploits that the KL-regularized objective has a *closed-form* optimal policy
-`π*(y|x) ∝ π_ref(y|x)·exp(R(x,y)/β)`. Invert it to express the implicit reward as
-`β log(π/π_ref) + β log Z(x)`, substitute into the Bradley-Terry loss, and the intractable partition
+$\pi^*(y \mid x) \propto \pi_{\text{ref}}(y \mid x) \cdot \exp(R(x,y)/\beta)$. Invert it to express the implicit reward as
+$\beta \log(\pi/\pi_{\text{ref}}) + \beta \log Z(x)$, substitute into the Bradley-Terry loss, and the intractable partition
 `Z(x)` cancels (Bradley-Terry sees only differences) — leaving a plain supervised loss on preference
 pairs, no reward model and no RL loop:
-`L_DPO = − log σ(β·(log π(y_w)/π_ref(y_w) − log π(y_l)/π_ref(y_l)))`. The policy *is* the reward model.
+$L_{\text{DPO}} = - \log \sigma(\beta \cdot (\log \pi(y_w)/\pi_{\text{ref}}(y_w) - \log \pi(y_l)/\pi_{\text{ref}}(y_l)))$. The policy *is* the reward model.
 DPO trades away PPO's separate reward model, value network, and finicky on-policy loop for a stable,
 simple offline loss that reaches comparable quality on many tasks — the default now. You still reach
 for PPO (or online RL) when you need *on-policy* improvement — generating fresh samples, scoring them,
@@ -826,7 +825,7 @@ serving pays inference on every forward pass forever, so a smaller overtrained m
 **J14. What's the highest-return data stage?** Deduplication and model-based (classifier) quality
 filtering.
 
-**J15. What does the fuzzy-dedup S-curve `1−(1−s^r)^b` control?** The Jaccard-similarity threshold
+**J15. What does the fuzzy-dedup S-curve $1-(1-s^r)^b$ control?** The Jaccard-similarity threshold
 above which document pairs become candidates; tune `b`, `r` to place the steep cutoff.
 
 **J16. Why extract from WARC, not WET?** WET's crude pre-extracted text is low quality; re-extracting
@@ -856,7 +855,7 @@ does *not* test long-context reasoning or aggregation.
 **J24. Why mask the prompt in SFT?** You want capacity spent on generating the answer given the
 question, not on generating the question.
 
-**J25. In DPO, what is the implicit reward?** `β·log(π/π_ref)` — the policy *is* the reward model,
+**J25. In DPO, what is the implicit reward?** $\beta \cdot \log(\pi/\pi_{\text{ref}})$ — the policy *is* the reward model,
 which is how the reward model and RL loop are removed.
 
 **J26. What does GRPO drop versus PPO?** The learned value network; the group's own reward mean/std is

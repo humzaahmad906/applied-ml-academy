@@ -46,11 +46,13 @@ Two non-obvious truths:
 
 ### The Mental Model
 
-```
-Code (commit hash) ──┐
-Data (DVC hash)      ├──► Pipeline ──► Artifact (hash) ──► Numbers
-Hyperparams + seed ──┤
-Container image (sha)┘
+```mermaid
+flowchart LR
+    C["Code (commit hash)"] --> P[Pipeline]
+    D["Data (DVC hash)"] --> P
+    H["Hyperparams + seed"] --> P
+    I["Container image (sha)"] --> P
+    P --> A["Artifact (hash)"] --> N[Numbers]
 ```
 
 Every input above must be pinned. The output artifact's hash is the "did we reproduce" check.
@@ -102,13 +104,12 @@ Iceberg / Delta give you SQL-level time travel: `SELECT * FROM events FOR VERSIO
 
 ### The Mental Model
 
-```
-   Git (code)            DVC / Lakehouse (data)
-   ────────              ──────────────────────
-   commit abc123  ◄──►   data version 17
-                            │
-                            ▼
-                    [Pipeline] ──► metrics, model, predictions
+```mermaid
+flowchart TD
+    G["Git (code): commit abc123"] <--> V["DVC / Lakehouse (data): data version 17"]
+    G --> P[Pipeline]
+    V --> P
+    P --> O["metrics, model, predictions"]
 ```
 
 Both axes versioned independently and tied at training time.
@@ -206,18 +207,13 @@ The "feature store" abstraction (Feast, Tecton, internal builds) is a coordinati
 
 ### The Mental Model
 
-```
-Raw events
-    │
-    ▼
-Feature definition (one set of functions)
-    │
-   ┌┴──────────────┐
-   ▼               ▼
-Offline (Iceberg)  Online (Redis)
-   │               │
-   ▼               ▼
-Training set    Inference lookup
+```mermaid
+flowchart TD
+    R[Raw events] --> F["Feature definition (one set of functions)"]
+    F --> OFF["Offline (Iceberg)"]
+    F --> ON["Online (Redis)"]
+    OFF --> T[Training set]
+    ON --> I[Inference lookup]
 ```
 
 Same definition, two materializations, two consumers.
@@ -263,22 +259,17 @@ Patterns that work:
 
 ML pipelines specifically:
 
-```
-Pull data → Validate → Feature engineer → Train → Eval → Register →
-Promote (canary alias) → Test → Promote champion → Notify
+```mermaid
+flowchart LR
+    A[Pull data] --> B[Validate] --> C[Feature engineer] --> D[Train] --> E[Eval] --> F[Register] --> G["Promote (canary alias)"] --> H[Test] --> I[Promote champion] --> J[Notify]
 ```
 
 ### The Mental Model
 
-```
-                   ┌─────────┐
-                   │Scheduler│
-                   └────┬────┘
-                        ▼
-                  [DAG / Flow]
-                    │  │  │  │
-                    ▼  ▼  ▼  ▼
-                   Task graph w/ retries + lineage
+```mermaid
+flowchart TD
+    S[Scheduler] --> DF["DAG / Flow"]
+    DF --> TG["Task graph w/ retries + lineage"]
 ```
 
 The orchestrator is the brain; tasks are the muscles.
@@ -326,15 +317,12 @@ Tests for ML, four categories:
 
 ### The Mental Model
 
-```
-PR              Merge to main      Schedule
-│                 │                  │
-▼                 ▼                  ▼
-CI                CD                 CT
-(lint, test)      (build, deploy)    (train, test, register)
-                                       │
-                                       ▼
-                          Gated promotion + monitoring
+```mermaid
+flowchart TD
+    PR[PR] --> CI["CI (lint, test)"]
+    M[Merge to main] --> CD["CD (build, deploy)"]
+    S[Schedule] --> CT["CT (train, test, register)"]
+    CT --> G["Gated promotion + monitoring"]
 ```
 
 The third arrow is unique to ML.
@@ -452,11 +440,11 @@ The big knobs: batch, quantize, compile, right-size hardware, cache.
 
 ### The Mental Model
 
-```
-Client ──► LB ──► Service ──► [Feature lookup] ──► [Model] ──► Response
-                                        │            │
-                                        ▼            ▼
-                                  [Online store] [Compiled engine]
+```mermaid
+flowchart LR
+    C[Client] --> LB --> S[Service] --> F[Feature lookup] --> M[Model] --> R[Response]
+    F --> OS[Online store]
+    M --> CE[Compiled engine]
 ```
 
 ### Why F500 Asks This
@@ -510,20 +498,14 @@ The reference dataset problem: what do you compare current data to?
 
 ### The Mental Model
 
-```
-Production
-   │ logs predictions + features
-   ▼
-[Monitoring job] ──► [Drift metrics in TSDB]
-   │                       │
-   │                       ▼
-   │                  [Dashboard]
-   ▼                       │
-[Per-day reports]           ▼
-                       [Alerts → Slack / pager]
-                            │
-                            ▼
-                       [Trigger retraining]
+```mermaid
+flowchart TD
+    P["Production (logs predictions + features)"] --> MJ[Monitoring job]
+    MJ --> DM["Drift metrics in TSDB"]
+    DM --> DB[Dashboard]
+    P --> PR[Per-day reports]
+    DB --> AL["Alerts → Slack / pager"]
+    AL --> RT[Trigger retraining]
 ```
 
 Monitoring closes the loop on CT.
@@ -626,9 +608,7 @@ GPU memory during inference is dominated by:
 
 For LLM inference, the KV cache often beats parameters as the bottleneck:
 
-```
-KV cache size = 2 × N_layers × seq_len × hidden_dim × bytes_per_element
-```
+$$\text{KV cache size} = 2 \times N_{\text{layers}} \times \text{seq\_len} \times \text{hidden\_dim} \times \text{bytes\_per\_element}$$
 
 For Llama-2-7B at 4096 context in FP16: ~2 GB per request. At 100 concurrent requests: 200 GB.
 
@@ -750,8 +730,9 @@ You need streaming features when freshness matters: fraud (seconds), recommendat
 
 Architecture:
 
-```
-Events ──► Kafka ──► Flink (windowed feature compute) ──► Online store ──► Service
+```mermaid
+flowchart LR
+    E[Events] --> K[Kafka] --> F["Flink (windowed feature compute)"] --> O[Online store] --> S[Service]
 ```
 
 Flink concepts:
@@ -886,9 +867,14 @@ Players: pgvector, Pinecone, Weaviate, Qdrant, Milvus, LanceDB, Vespa, OpenSearc
 
 Hybrid search:
 
-```
-query → embed ──► vector top-100 ──┐
-        └──────► BM25 top-100 ─────┴──► merge or rerank ──► top-10
+```mermaid
+flowchart LR
+    Q[query] --> E[embed]
+    E --> V[vector top-100]
+    Q --> B[BM25 top-100]
+    V --> M[merge or rerank]
+    B --> M
+    M --> T[top-10]
 ```
 
 Reranking with a cross-encoder (BGE-Reranker, Cohere Rerank) on the top 50–200 candidates is a big quality lift for cheap compute.
@@ -952,17 +938,14 @@ The 2026 regulatory landscape:
 
 ### The Mental Model
 
-```
-                  [Risk classification]
-                          │
-            ┌─────────────┼──────────────┐
-            ▼             ▼              ▼
-       [Minimal]    [Limited]       [High-risk]
-                                          │
-                          ┌───────────────┴───────────────┐
-                          ▼               ▼               ▼
-                  [Risk mgmt]      [Data gov]      [Tech docs +
-                                                   monitoring]
+```mermaid
+flowchart TD
+    RC[Risk classification] --> MIN[Minimal]
+    RC --> LIM[Limited]
+    RC --> HR[High-risk]
+    HR --> RM[Risk mgmt]
+    HR --> DG[Data gov]
+    HR --> TD["Tech docs + monitoring"]
 ```
 
 The higher the risk tier, the heavier the process.
@@ -1073,15 +1056,14 @@ The classic anti-patterns: idle GPUs, endpoints with min-replicas > 0, cross-reg
 
 ### The Mental Model
 
-```
-                    Cost per inference
-                          │
-            ┌─────────────┼─────────────┐
-            ▼             ▼             ▼
-        Hardware       Software       Process
-        - right-size   - batch        - cache
-        - quantize     - compile      - route
-        - serverless   - share GPU    - scale-zero
+```mermaid
+flowchart TD
+    C[Cost per inference] --> H[Hardware]
+    C --> S[Software]
+    C --> P[Process]
+    H --> H1["right-size / quantize / serverless"]
+    S --> S1["batch / compile / share GPU"]
+    P --> P1["cache / route / scale-zero"]
 ```
 
 ### Why F500 Asks This
@@ -1132,11 +1114,12 @@ Trade-offs interviewers love:
 
 ### The Mental Model
 
+```mermaid
+flowchart LR
+    Q[Question] --> C[Clarify] --> A[Architecture] --> Co[Components] --> F[Failures] --> Cost[Cost] --> O[Ops]
 ```
-Question → Clarify → Architecture → Components → Failures → Cost → Ops
 
 Each transition is explicit. Never skip clarify.
-```
 
 ### Why F500 Asks This
 
@@ -1186,16 +1169,16 @@ The bias to correct: junior engineers see "self-hosted is free." Architects see 
 
 ### The Mental Model
 
-```
-                     [Reversibility]
-                    │             │
-            Reversible           Irreversible
-                    │             │
-   ┌────────┬──────┴───┐    ┌────┴───┬─────────┐
-   │ Low    │ High     │    │ Low    │ High    │
-   │ cost   │ cost     │    │ cost   │ cost    │
-   ▼        ▼          ▼    ▼        ▼         ▼
-  Try    Prototype   Decide  Months, ADR, multiple reviews
+```mermaid
+flowchart TD
+    R[Reversibility] --> Rev[Reversible]
+    R --> Irr[Irreversible]
+    Rev --> RL["Low cost → Try"]
+    Rev --> RH["High cost → Prototype / Decide"]
+    Irr --> IL[Low cost]
+    Irr --> IH[High cost]
+    IL --> M["Months, ADR, multiple reviews"]
+    IH --> M
 ```
 
 Calibrate process to the cell.
@@ -1230,3 +1213,11 @@ Architect interviews probe judgment under ambiguity. The right answer is rarely 
 The ROI on talking out loud is 10x reading. Most candidates fail interviews not because they don't know the material but because they've never said it aloud.
 
 Good luck. The work compounds.
+
+## You can now
+
+- Answer graded (🟢/🟡/🔴) F500 MLOps interview questions across all 20 domains — from reproducibility and feature stores to LLMOps, governance, and architect-level build-vs-buy calls — at the depth each level expects.
+- Explain the production reality each question probes, so you can turn a one-line prompt into a paragraph-length answer that signals real operational experience rather than textbook recall.
+- Reason quantitatively under pressure: memory math for distributed training, KV-cache sizing for LLM inference, latency budgets for serving, PSI thresholds for drift, and unit economics for FinOps.
+- Structure a 45-minute ML system-design round end to end — clarify, architect, drill into components, enumerate failure modes, sketch cost, and cover org ownership — without skipping the steps that lose candidates points.
+- Run a focused final-week interview sprint, mapping sections to a job description and rehearsing 🟡 and 🔴 answers out loud until they are fluent.

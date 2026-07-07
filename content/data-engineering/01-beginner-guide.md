@@ -482,6 +482,16 @@ These four skills are the floor for a junior DE role. You're now on the floor.
 
 ---
 
+## You can now
+
+- Spin up Postgres and multi-container stacks in Docker with the correct volume, port, and env-var flags — and explain why the volume is what makes data survive a restart.
+- Query Parquet/CSV directly with DuckDB, including joins that span files, Postgres, and object storage, with no loading step.
+- Choose deliberately between pandas and Polars, and use Polars' lazy `scan_parquet` + `collect` to push filters and projections down into the reader.
+- Provision GCS buckets and BigQuery datasets as code with Terraform, reasoning about `plan` vs `apply` and drift detection.
+- Build a scheduled Kestra flow — with inputs, triggers, retries, and backfills — that orchestrates a `dlt` API ingest into your lake and warehouse.
+
+---
+
 ## Confidence Checks Before Tier 2
 
 Don't move on until you can answer these without googling:

@@ -128,6 +128,14 @@ A principal who interviews 40 candidates a year shapes the org more durably than
 
 **The bar-raiser role.** Borrowed from Amazon: a trained interviewer from *outside* the hiring team with veto power, whose incentive is the company's bar rather than the team's urgency. If your org has the role, hold it for ML hires; if not, propose it — a one-page RFC, piloted on your own org's loops first (Section 6's sequencing applies to process adoption too). The bar-raiser's highest-value veto is the "strong on skills, corrosive on collaboration" candidate whom a shorthanded team will always talk themselves into.
 
+## You can now
+
+- Write the right document for the moment — RFC to invite input before a decision, decision doc to record one, memo to build the shared diagnosis that makes RFCs land — and distinguish the three so you never spend three weeks writing the wrong one.
+- Run a design review that asks the five decision-level questions (right problem? survives 10×? migration cost? first failure mode? who else is affected?) without becoming a bottleneck — enforcing a 5-day timebox, growing other reviewers through co-review cycles, and calibrating blocking versus advisory comments.
+- Pre-wire a contentious proposal through ordered 1:1 stakeholder conversations so the review meeting ratifies in 20 minutes rather than debates for 90 — including identifying the authorship wounds that masquerade as technical objections before they surface in a room.
+- Drive platform adoption across teams you do not manage by paying migration friction centrally, over-investing in a lighthouse team whose numbers do the persuading, and reserving executive mandate only to formalize behavior that 70% of teams already chose.
+- Propose a team topology change as an IC by diagnosing the architectural cost of the current boundary in demonstrated terms (named incidents, duplicated systems, stalled migrations), pricing the momentum loss of a reorg honestly, and handing the memo to the director who owns the decision.
+
 ## Worked example — six product teams onto one serving platform in two quarters, no mandate
 
 **Setup.** You are the principal at a ~350-engineer fintech. Six product teams (payments-fraud, credit-risk, support-copilot, personalization, KYC-docs, collections) run models on five serving stacks: two homegrown Flask fleets, one SageMaker estate, one team on a vendor, one on the platform team's year-old vLLM/KServe stack that only its builders use. Aggregate cost of the fragmentation, from your Module 02-style diagnosis: ~9 engineers' worth of duplicated maintenance ($1.6M/yr loaded), no shared eval gating (the March incident — a bad credit-risk model served for 11 days — traced directly to a stack with no gate), GPU utilization at 31% because capacity can't pool. Leadership agrees fragmentation is bad but has declined to mandate consolidation: "get them to want it."

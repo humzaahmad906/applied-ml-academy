@@ -58,6 +58,19 @@ Cascades appear in the cost math of the foundations chapter, the document-extrac
 3. If confidence < threshold → escalate to the next tier.
 4. Repeat up to a frontier model or human review.
 
+```mermaid
+flowchart TD
+    A[Incoming request] --> B[Cheap model inference]
+    B --> C{confidence ≥ threshold?}
+    C -->|yes| D[Serve result]
+    C -->|no| E[Escalate]
+    E --> F[Next-tier model]
+    F --> G{At frontier?}
+    G -->|no| C
+    G -->|yes| H[Frontier model or human review]
+    H --> D
+```
+
 **Confidence calibration is the routing currency.** The cascade works only if the cheap model's confidence scores are *calibrated* — a confidence of 0.8 should mean the model is right ~80% of the time, not 50% or 95%. Uncalibrated confidence turns the cascade into a random splitter. Calibration methods: temperature scaling (a single scalar applied to logits post-training, usually sufficient for classification heads), Platt scaling, or held-out calibration sets with isotonic regression. The calibration check is part of the eval harness, not an afterthought.
 
 **What to set the threshold at:** this is a product/business decision, not purely an ML decision. It encodes: how much quality degradation is acceptable on the cheap path, what the cost ratio between tiers is, and what the acceptable error rate on the escalated tail is. State this explicitly in an interview — it shows you understand that the cascade is a joint engineering-product-finance decision.
@@ -68,7 +81,7 @@ Cascades appear in the cost math of the foundations chapter, the document-extrac
 
 1M-token context windows are now a product feature, not a research artifact. They introduce a serving problem that doesn't exist at 4k or 32k context, and interviewers at companies building document-processing or agent-loop products are starting to probe it.
 
-**The memory problem.** KV cache at 1M tokens for a 70B-class model is roughly 320 KB/token × 1M = **~320 GB per user session** in FP16 — larger than the model weights themselves and far exceeding the HBM of any single GPU. Even a 7B model at 1M context accumulates ~2–4 GB of KV per user. Multi-user serving with long-context sessions saturates memory before it saturates compute.
+**The memory problem.** KV cache at 1M tokens for a 70B-class model is roughly $320\,\text{KB/token} \times 10^6 \approx 320\,\text{GB}$ per user session in FP16 — larger than the model weights themselves and far exceeding the HBM of any single GPU. Even a 7B model at 1M context accumulates ~2–4 GB of KV per user. Multi-user serving with long-context sessions saturates memory before it saturates compute.
 
 **The prefill latency problem.** Prefilling 1M tokens is a compute-bound operation that can take **minutes** on current hardware, even with FlashAttention. A user uploading a 500-page PDF and asking a question cannot wait 2 minutes for the first response token. This drives the need for **chunked prefill** (interleave prefill chunks with ongoing decode, so other users' ITL doesn't spike) and **async prefill** (fill the KV cache in the background before the user asks, if the document is known in advance).
 
@@ -86,7 +99,11 @@ Cascades appear in the cost math of the foundations chapter, the document-extrac
 
 ## 6. Capacity planning & cost math (interview gold)
 
-Worked example — "serve a 70B chat model, 10k concurrent users": assume each active user generates a request every ~30 s, 1k-token prompts, 300-token responses → ~330 req/s, ~110k decode tok/s + 330k prefill tok/s. On H100-class hardware with a well-tuned engine, a 4-way-TP 70B replica sustains roughly 1.5–3k decode tok/s within interactive SLOs (order-of-magnitude planning number — measure your own) → ~40–70 replicas of 4×H100 before caching; system-prompt prefix caching might cut prefill cost 50–80%. Then $/1M tokens = (GPU-$/hr × GPUs) / (tok/s × 3600 / 10⁶) — practice producing this chain fluently, stating every assumption.
+Worked example — "serve a 70B chat model, 10k concurrent users": assume each active user generates a request every ~30 s, 1k-token prompts, 300-token responses → ~330 req/s, ~110k decode tok/s + 330k prefill tok/s. On H100-class hardware with a well-tuned engine, a 4-way-TP 70B replica sustains roughly 1.5–3k decode tok/s within interactive SLOs (order-of-magnitude planning number — measure your own) → ~40–70 replicas of 4×H100 before caching; system-prompt prefix caching might cut prefill cost 50–80%. Then the cost per 1M tokens is:
+
+$$\text{cost/1M tok} = \frac{\text{GPU-\$}/\text{hr} \times N_{\text{GPU}}}{\text{tok/s} \times 3600 / 10^6}$$
+
+Practice producing this chain fluently, stating every assumption.
 
 Cost levers ranked: quantization (FP8 weights+KV ≈ near-free 1.5–2×), prefix caching (workload-dependent, can be huge), batching/goodput tuning, cheaper hardware per phase (disaggregation enables compute-heavy GPUs for prefill, bandwidth-heavy for decode), spec decode for latency-bound low-batch services, and cascades (small model first, escalate hard cases).
 
@@ -490,3 +507,11 @@ The characteristic shape: TTFT and ITL are flat up to the knee, then rise sharpl
 
 **Q5. Sketch the capacity plan for serving an 8B model to 1M DAU chat product.**
 **A.** Assumptions out loud: 1M DAU → ~5% peak-hour concurrency = 50k active; each sends a message every 40 s → 1.25k req/s; 800-token average context after history, 250-token responses → ~310k decode tok/s and ~1M prefill tok/s peak. Single H100-class GPU serving 8B FP8 with a tuned engine: order 5–10k decode tok/s within chat SLOs (state it as a planning number to be measured) → ~40–70 GPUs for decode-equivalent load before optimizations. Then optimize: shared-system-prompt prefix caching kills most prefill; FP8 KV + quantized weights raise per-GPU batch; autoscale on goodput with ~30% headroom for spikes and replica failure; multi-region by data residency. Add the cost line: at $2–3/H100-hr, ~$3–5k/day ≈ fractions of a cent per DAU — then the punchline interviewers love: the same product on a frontier API at ~$1–3/1M tokens would cost 5–20× more at this volume, which is the build-vs-buy crossover argument from the foundations chapter.
+
+## You can now
+
+- Explain the four engine innovations — continuous batching, PagedAttention, prefix caching, and chunked prefill — and trace how each one addresses a specific bottleneck in LLM serving.
+- Design a prefill/decode disaggregated serving architecture, state when it is worth the operational complexity, and identify KV-cache transfer as the binding engineering constraint.
+- Configure a vLLM deployment for chat, long-context, and agentic workloads using the correct scheduler flags and quantization settings, and interpret the Prometheus metrics that expose misconfiguration.
+- Apply the cascade pattern across query routing, RAG retrieval tiers, and reasoning-vs-fast model selection — and articulate why confidence calibration is the routing currency and why the threshold is a joint ML-product-finance decision.
+- Produce a capacity plan and cost-per-1M-tokens estimate for a production serving system, naming every assumption, and enumerate the levers — quantization, prefix caching, batching, disaggregation, cascades — that move the number.

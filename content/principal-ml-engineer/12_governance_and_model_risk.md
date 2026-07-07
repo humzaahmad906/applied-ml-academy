@@ -54,19 +54,23 @@ known_limitations: >
 
 The fastest way to kill governance is uniform rigor: if the feed-ranking tweak and the credit-underwriting model face the same review board, teams either drown or defect. Tier by **blast radius**, and let the tier mechanically determine the process. A workable three-tier scheme:
 
-```text
-Tier assignment — answer in order; first "yes" sets the tier:
-
-T1 (high):    Does the model make or materially influence decisions about
-              individuals' access to credit, employment, housing, insurance,
-              education, healthcare, or legal outcomes? OR does it fall in an
-              EU AI Act high-risk category? OR could a failure plausibly cost
-              >$10M or a regulatory action?
-T2 (medium):  Does it face customers directly (content they see, prices they
-              pay, support they receive) OR move revenue/cost >$1M/yr OR
-              process regulated data categories?
-T3 (low):     Everything else — internal tools, offline analytics,
-              non-customer-facing optimization.
+```mermaid
+flowchart TD
+    A{"Materially influences individual access to credit,<br/>employment, housing, insurance, healthcare, or legal outcomes?"}
+    B{"EU AI Act Annex III high-risk category?"}
+    C{"Failure plausibly costs >$10M<br/>or triggers a regulatory action?"}
+    D{"Customer-facing content or prices, OR<br/>revenue/cost >$1M/yr, OR regulated data categories?"}
+    T1["T1 — High Risk"]
+    T2["T2 — Medium Risk"]
+    T3["T3 — Low Risk"]
+    A -->|Yes| T1
+    A -->|No| B
+    B -->|Yes| T1
+    B -->|No| C
+    C -->|Yes| T1
+    C -->|No| D
+    D -->|Yes| T2
+    D -->|No| T3
 ```
 
 What each tier buys, calibrated so T3 is nearly free:
@@ -197,6 +201,14 @@ Signed: author + one peer (not the author). Ship on completion — no meeting.
 ```
 
 The checklist is deliberately boring. Its value is the second item: it is the tripwire that catches a T3 model drifting into T2/T1 territory, which is how "the ranking tweak" quietly becomes "the model that sets prices" without anyone re-tiering it.
+
+## You can now
+
+- Build a 9-field model inventory enforced by the deployment pipeline, enumerating your fleet from system artifacts rather than from memory and covering vendor and embedded models alongside internally trained ones.
+- Apply the three-tier blast-radius rubric to any model portfolio, assign review depth proportional to risk, and write the tiering memo with a named approver so tier assignments do not drift silently as models change what they feed.
+- Write a signed fairness-definition memo that names the chosen metric, explicitly accepts the residual disparity, states the conditions for reopening, and functions as the artifact a regulator or general counsel will actually ask for.
+- Design a model-card pipeline that generates documentation from systems of record and fails the deploy when generation fails, so every card stays current without imposing manual effort on model teams.
+- Resolve the three privacy-versus-ML tensions — deletion lag, purpose limitation, and retention-versus-audit — with field-level schema decisions made at design time, before a regulatory deadline forces the choices under pressure.
 
 ## Worked example
 

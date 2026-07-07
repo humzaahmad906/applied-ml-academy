@@ -49,31 +49,21 @@ Most "fraud detection" projects stop at "send to a queue when something looks we
 
 ### Architecture Sketch
 
-```
-[Event Generator] ──► [Kafka: raw_events]
-                              │
-                              ├──► [Flink: feature engineer]
-                              │           │
-                              │           ▼
-                              │     [Online store: Redis]
-                              │           │
-                              │           ▼
-                              │     [KServe: detector]   ──► [Kafka: alerts]
-                              │                                    │
-                              │                                    ▼
-                              │                          [Streamlit labeling UI]
-                              │                                    │
-                              │                                    ▼
-                              │                          [Kafka: labels]
-                              │                                    │
-                              ▼                                    ▼
-                       [Iceberg: training data]            [Airflow: retraining]
-                              │                                    │
-                              ▼                                    ▼
-                       [dbt marts]                          [MLflow Registry]
-                              │                                    │
-                              ▼                                    ▼
-                       [Drift dashboard]                  [KServe canary deploy]
+```mermaid
+flowchart TD
+    G["Event Generator"] --> K["Kafka: raw_events"]
+    K --> FL["Flink: feature engineer"]
+    K --> IC["Iceberg: training data"]
+    FL --> RS["Online store: Redis"]
+    RS --> DET["KServe: detector"]
+    DET --> AL["Kafka: alerts"]
+    AL --> UI["Streamlit labeling UI"]
+    UI --> LB["Kafka: labels"]
+    LB --> AF["Airflow: retraining"]
+    IC --> DBT["dbt marts"]
+    DBT --> DD["Drift dashboard"]
+    AF --> REG["MLflow Registry"]
+    REG --> CAN["KServe canary deploy"]
 ```
 
 ### The Interesting Technical Decisions
@@ -148,30 +138,18 @@ All three share the same platform; the platform shows how to scale to dozens.
 
 ### Architecture Sketch
 
-```
-[Client]
-   │
-   ▼
-[FastAPI / LiteLLM gateway]
-   │
-   ├──► [Input filters (PII, prompt injection)]
-   │
-   ├──► [Router: pick model based on tenant + complexity]
-   │
-   ├──► [Retrieval: tenant-scoped vector + BM25 → rerank]
-   │
-   ├──► [Cache check (exact + semantic)]
-   │
-   ├──► [Prompt assembly from registry]
-   │
-   ├──► [LLM call (OpenAI / Anthropic / Bedrock / self-hosted vLLM)]
-   │
-   ├──► [Output filters (schema validation, toxicity)]
-   │
-   ├──► [Log to Langfuse + emit metrics + cost attribution]
-   │
-   ▼
-[Response]
+```mermaid
+flowchart TD
+    C["Client"] --> GW["FastAPI / LiteLLM gateway"]
+    GW --> IF["Input filters<br/>(PII, prompt injection)"]
+    IF --> R["Router: pick model by<br/>tenant + complexity"]
+    R --> RET["Retrieval: tenant-scoped<br/>vector + BM25 → rerank"]
+    RET --> CA["Cache check<br/>(exact + semantic)"]
+    CA --> PA["Prompt assembly from registry"]
+    PA --> LLM["LLM call<br/>(OpenAI / Anthropic / Bedrock / self-hosted vLLM)"]
+    LLM --> OF["Output filters<br/>(schema validation, toxicity)"]
+    OF --> LOG["Log to Langfuse + emit<br/>metrics + cost attribution"]
+    LOG --> RESP["Response"]
 ```
 
 ### The Interesting Technical Decisions
@@ -664,3 +642,13 @@ These are *learning projects*. They're not "I built this for my employer." Be ho
 The right framing: "I built this on my own to deeply learn X. Here's what I'd do differently with a team and a year of runway."
 
 That's a senior signal.
+
+---
+
+## You can now
+
+- Scope a portfolio project to genuine F50 depth — with acceptance criteria, load-test targets, cost ceilings, and an explicit "what I'd build next."
+- Choose the two or three projects that match your target role instead of building seven shallowly, and defend the choice.
+- Identify the one non-obvious technical decision in each project (Flink state schema, LLM routing policy, point-in-time joins, cost refactor) that carries a 30-minute interview answer.
+- Structure a project repo and a 1,500–3,000-word README that reads as senior signal — architecture diagram, decisions with trade-offs, operational notes, evaluation numbers.
+- Frame a self-built learning project honestly and compellingly in an interview, including the trade-offs you'd revisit with a team and real runway.

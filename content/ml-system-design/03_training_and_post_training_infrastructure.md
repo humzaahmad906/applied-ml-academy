@@ -6,7 +6,7 @@ You will probably never pretrain a frontier model, but interviews (and real jobs
 
 ## 1. The arithmetic of training
 
-Memorize: **training FLOPs ≈ 6 × N × D** (N = parameters, D = training tokens; 2ND for the forward pass, ~4ND for backward). A 7B model on 1T tokens ≈ 4.2×10²² FLOPs. An H100 delivers ~1×10¹⁵ BF16 FLOP/s peak; at a realistic **MFU** (model FLOPs utilization) of 35–45%, that's ~3 days × 400 GPUs. Being able to produce this estimate live is a strong interview signal.
+Memorize: **training FLOPs** $\approx 6ND$ ($N$ = parameters, $D$ = training tokens; $2ND$ for the forward pass, $\approx 4ND$ for backward). A 7B model on 1T tokens $\approx 4.2 \times 10^{22}$ FLOPs. An H100 delivers ~1×10¹⁵ BF16 FLOP/s peak; at a realistic **MFU** (model FLOPs utilization) of 35–45%, that's ~3 days × 400 GPUs. Being able to produce this estimate live is a strong interview signal.
 
 **Memory per parameter (mixed-precision Adam):** weights 2 bytes (BF16) + grads 2 + optimizer states 8 (FP32 master weights + two Adam moments... conventions vary, ~12–16 bytes total per param is the planning number) → a 7B model needs ~100 GB of training state before activations. This is why a 7B model does not fully fine-tune on one 80 GB GPU without sharding or tricks, and why activation **gradient checkpointing** (recompute activations in backward, ~30% compute for big memory savings) is on by default.
 
@@ -39,7 +39,7 @@ Composition heuristic for interviews: TP within a node, PP/FSDP across nodes, CP
 **Stage 3 — RL.** Two flavors:
 
 - **RLHF (PPO + learned reward model):** the InstructGPT/Claude lineage for open-ended quality; expensive (policy + reference + reward + value models in memory).
-- **RLVR — RL from verifiable rewards — with GRPO:** the post-DeepSeek-R1 paradigm and, by 2026, the dominant approach for post-training reasoning models: deterministic verifiers (exact-answer checks in math, unit tests for code) provide the reward, and **GRPO** eliminates the value model by normalizing rewards within a group of sampled completions per prompt. Know GRPO's mechanics: sample G completions per prompt, advantage = (reward − group mean)/group std, PPO-style clipped update. Know its failure modes: zero gradient when all samples in a group fail (exploration collapse on hard prompts), length bias, and **reward hacking** of any imperfect verifier; label noise in verifiable rewards degrades RLVR severely — training against noisy verifiers can be barely better than format-only rewards. Variants you can name-drop with understanding: DAPO, Dr. GRPO (bias corrections), GSPO (sequence-level).
+- **RLVR — RL from verifiable rewards — with GRPO:** the post-DeepSeek-R1 paradigm and, by 2026, the dominant approach for post-training reasoning models: deterministic verifiers (exact-answer checks in math, unit tests for code) provide the reward, and **GRPO** eliminates the value model by normalizing rewards within a group of sampled completions per prompt. Know GRPO's mechanics: sample $G$ completions per prompt, advantage $A_i = \dfrac{r_i - \bar{r}_g}{\sigma_{r_g}}$, PPO-style clipped update. Know its failure modes: zero gradient when all samples in a group fail (exploration collapse on hard prompts), length bias, and **reward hacking** of any imperfect verifier; label noise in verifiable rewards degrades RLVR severely — training against noisy verifiers can be barely better than format-only rewards. Variants you can name-drop with understanding: DAPO, Dr. GRPO (bias corrections), GSPO (sequence-level).
 - **Systems angle (the interview gold):** RL training is now an *inference-heavy* workload — rollout generation dominates wall-clock, so modern stacks (**verl**, **OpenRLHF**, **TRL**'s GRPOTrainer) embed a vLLM/SGLang engine for rollouts, often on separate "rollout" GPUs from the trainer — training is becoming disaggregated just like serving.
 
 **Stage 4 — Distillation.** Teacher generates outputs (or token distributions) on your task distribution; student SFTs on them; optionally on-policy distillation (GKD) where the student's own samples are corrected by the teacher. R1-style reasoning-trace distillation showed small models inherit a surprising fraction of teacher reasoning. This is the standard way to hit a latency/cost target: prototype with the big model, distill into the small one.
@@ -84,9 +84,11 @@ FA-2 (2023) added sequence-dimension parallelism within the CUDA kernel, roughly
 
 ## Foundations Box: Measuring MFU Yourself
 
-MFU = (FLOPs delivered per second) / (hardware peak FLOPs per second). The denominator is on the spec sheet; the numerator requires instrumentation.
+$$\text{MFU} = \frac{\text{FLOPs delivered per second}}{\text{hardware peak FLOPs per second}}$$
 
-**FLOPs per step:** the 6ND rule gives total training FLOPs; per step, FLOPs ≈ 6 × N × T where T is the global-batch token count (2NT forward + 4NT backward). At 7B parameters and 4096 tokens/step: 6 × 7×10⁹ × 4096 ≈ 1.7×10¹⁴ FLOPs.
+The denominator is on the spec sheet; the numerator requires instrumentation.
+
+**FLOPs per step:** the $6ND$ rule gives total training FLOPs; per step, $\text{FLOPs} \approx 6 \times N \times T$ where $T$ = global-batch token count ($2NT$ forward $+ 4NT$ backward). At 7B parameters and 4096 tokens/step: $6 \times 7 \times 10^9 \times 4096 \approx 1.7 \times 10^{14}$ FLOPs.
 
 **The `synchronize()` trap:** CUDA launches are asynchronous. `time.perf_counter()` around a training step without `torch.cuda.synchronize()` measures Python dispatch latency, not GPU execution time — the measured step will appear 50–100× faster than reality.
 
@@ -371,3 +373,11 @@ Loss dropping steadily from ~2.0 toward ~1.0–1.2 is healthy. Flat loss from st
 
 **Q5. Why did RLVR/GRPO become the dominant reasoning post-training method, and what breaks it?**
 **A.** Three reasons: (1) it removes the two most fragile pieces of PPO-RLHF — the learned reward model (replaced by a deterministic verifier, eliminating that reward-hacking surface) and the value network (GRPO's group-relative advantage is a Monte-Carlo baseline) — making large-scale RL dramatically simpler and cheaper; (2) verifiable domains (math, code, agent tasks with success checks) are exactly where pure SFT plateaus, and reasoning-focused RLVR runs showed it elicits emergent long-chain reasoning; (3) infrastructure matured — post-training frameworks with embedded rollout engines made it accessible. What breaks it: no verifier for the task (open-ended writing), noisy/gameable verifiers (the model learns the verifier's bugs — formatting tricks, test-case overfitting), zero-gradient groups when every sample fails on hard prompts (mitigations: curriculum, difficulty filtering), and overlong-response/length bias requiring penalty terms. Plus a systems cost juniors miss: rollout generation dominates compute, so the bottleneck is inference throughput, not gradient steps.
+
+## You can now
+
+- Estimate GPU-hours and cluster size for any training run from first principles: apply $\text{FLOPs} \approx 6ND$, a realistic MFU of 35–45 %, and your hardware's peak throughput to produce defensible capacity numbers on the spot.
+- Choose and compose a parallelism strategy — FSDP/ZeRO stages, tensor parallel within a node, pipeline parallel across nodes, expert parallel for MoE — given model size, cluster interconnect topology, and per-layer memory budget.
+- Design and execute a full modern post-training pipeline: SFT with sequence packing, DPO with a $\beta$-sweep for KL control, and GRPO-RLVR with a verifiable reward, including diagnosing failure modes (flat loss, zero-advantage groups, reward hacking) at each stage.
+- Apply LoRA/QLoRA for memory-efficient fine-tuning and articulate when full fine-tuning or QAT is necessary based on adaptation depth, layer sensitivity, and deployment precision requirements.
+- Measure MFU correctly — synchronizing the GPU before timing, logging per-step to wandb, and tracing sudden drops to data pipeline bottlenecks or misconfigured FSDP all-gather sizes rather than guessing.

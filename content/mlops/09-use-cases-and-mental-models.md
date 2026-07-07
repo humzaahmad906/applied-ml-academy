@@ -178,30 +178,18 @@ Both arrive at a similar architecture. The difference is in *how they got there*
 
 ### The Proposed Architecture (Consensus)
 
-```
-[Employee browser]
-        │
-        ▼
-[Existing intranet — SSO via IAM Identity Center]
-        │
-        ▼
-[FastAPI / ECS — the assistant service]
-        │
-        ├─► [Bedrock Guardrails: input filters]
-        ├─► [Bedrock Knowledge Bases: hybrid retrieval]
-        │       │
-        │       └─► [S3: source policy docs] + [OpenSearch index]
-        ├─► [Bedrock Claude 3.5 Sonnet: generation]
-        ├─► [Bedrock Guardrails: output filters]
-        │
-        ▼
-[CloudWatch + S3 audit log — 7-year retention]
-        │
-        ▼
-[Eval pipeline: nightly LLM-as-judge against gold set]
-        │
-        ▼
-[Quality dashboard for the MRM team]
+```mermaid
+flowchart TD
+    A[Employee browser] --> B[Existing intranet — SSO via IAM Identity Center]
+    B --> C[FastAPI / ECS — the assistant service]
+    C --> G1[Bedrock Guardrails: input filters]
+    C --> KB[Bedrock Knowledge Bases: hybrid retrieval]
+    KB --> S[S3: source policy docs + OpenSearch index]
+    C --> LLM[Bedrock Claude 3.5 Sonnet: generation]
+    C --> G2[Bedrock Guardrails: output filters]
+    C --> LOG[CloudWatch + S3 audit log — 7-year retention]
+    LOG --> EVAL[Eval pipeline: nightly LLM-as-judge against gold set]
+    EVAL --> DASH[Quality dashboard for the MRM team]
 ```
 
 ### What They'd Worry About in Month 3
@@ -246,30 +234,31 @@ A staff ML engineer at the company thinks like a detective, not an inventor.
 
 **Build a hypothesis tree:**
 
-```
-CTR drop
-├── 1. Training-serving skew (data shape differs in prod)
-│   ├── 1a. Feature distribution shift
-│   ├── 1b. Feature freshness regression
-│   ├── 1c. Schema change in upstream features
-│   └── 1d. New tenants / users not represented in training
-├── 2. Label distribution shift (the labels themselves are different)
-│   ├── 2a. Attribution window changed
-│   ├── 2b. New event filtering in the data pipeline
-│   └── 2c. Position bias changed due to UI change
-├── 3. Causal user behavior change
-│   ├── 3a. Macro shift (economy, season, competitor)
-│   ├── 3b. Promotional change
-│   ├── 3c. Site redesign altered the natural CTR baseline
-│   └── 3d. New traffic source with different intent
-├── 4. Eligibility / serving change
-│   ├── 4a. Catalog changed (different items available to rank)
-│   ├── 4b. Business rules now filtering out high-CTR items
-│   └── 4c. Position/UI changes outside ML
-└── 5. Measurement bug
-    ├── 5a. Tracking SDK update lost events
-    ├── 5b. Logging pipeline dropping a fraction
-    └── 5c. Definition of CTR changed
+```mermaid
+flowchart TD
+    ROOT[CTR drop]
+    ROOT --> C1[1. Training-serving skew — data shape differs in prod]
+    C1 --> C1a[1a. Feature distribution shift]
+    C1 --> C1b[1b. Feature freshness regression]
+    C1 --> C1c[1c. Schema change in upstream features]
+    C1 --> C1d[1d. New tenants / users not represented in training]
+    ROOT --> C2[2. Label distribution shift — the labels themselves differ]
+    C2 --> C2a[2a. Attribution window changed]
+    C2 --> C2b[2b. New event filtering in the data pipeline]
+    C2 --> C2c[2c. Position bias changed due to UI change]
+    ROOT --> C3[3. Causal user behavior change]
+    C3 --> C3a[3a. Macro shift — economy, season, competitor]
+    C3 --> C3b[3b. Promotional change]
+    C3 --> C3c[3c. Site redesign altered the natural CTR baseline]
+    C3 --> C3d[3d. New traffic source with different intent]
+    ROOT --> C4[4. Eligibility / serving change]
+    C4 --> C4a[4a. Catalog changed — different items available to rank]
+    C4 --> C4b[4b. Business rules now filtering out high-CTR items]
+    C4 --> C4c[4c. Position/UI changes outside ML]
+    ROOT --> C5[5. Measurement bug]
+    C5 --> C5a[5a. Tracking SDK update lost events]
+    C5 --> C5b[5b. Logging pipeline dropping a fraction]
+    C5 --> C5c[5c. Definition of CTR changed]
 ```
 
 For each branch, identify a cheap diagnostic:
@@ -349,22 +338,15 @@ When the root cause is found (say, the feature pipeline was lagging because a Fl
 
 Once root cause is found, the IC architect proposes:
 
-```
-[Training pipeline]                     [Serving pipeline]
-       │                                       │
-       ▼                                       ▼
-[Training feature stats]              [Production feature stats]
-       │                                       │
-       └─────────────┬─────────────────────────┘
-                     ▼
-             [Drift detector job (daily)]
-                     │
-            ┌────────┴────────┐
-            ▼                 ▼
-       [Slack alert]    [Metrics dashboard]
-                     │
-                     ▼
-         [Auto-route to on-call ML engineer]
+```mermaid
+flowchart TD
+    TP[Training pipeline] --> TFS[Training feature stats]
+    SP[Serving pipeline] --> PFS[Production feature stats]
+    TFS --> DD[Drift detector job — daily]
+    PFS --> DD
+    DD --> SA[Slack alert]
+    DD --> MD[Metrics dashboard]
+    SA --> OC[Auto-route to on-call ML engineer]
 ```
 
 Plus:
@@ -617,8 +599,8 @@ The senior move is to push the product team to clarify *which* of these they act
 **Why pre-generated (offline batch) over real-time:**
 
 - Generative video at user-request latency is currently impossible at quality
-- 50M users × 10K titles × per-user is 500B trailers; impossible
-- 200 user clusters × 10K titles × 1 trailer per cluster = 2M trailers; feasible
+- $50\text{M users} \times 10\text{K titles} \times \text{per-user} = 500\text{B}$ trailers; impossible
+- $200 \text{ clusters} \times 10\text{K titles} \times 1 \text{ trailer/cluster} = 2\text{M}$ trailers; feasible
 - Cluster-based personalization captures 80% of the value at 0.001% of the cost
 - A/B tests can measure cluster-level lift cleanly
 
@@ -717,17 +699,12 @@ You're brought in as a consulting senior MLOps engineer (or SA at a manufacturin
 
 A staff ML engineer hired as a consultant first does not look at the models. They look at the *causal chain*:
 
-```
-[Telemetry] → [Model] → [Prediction] → [Alert] → [Dispatch decision]
-                                                      │
-                                                      ▼
-                                              [Maintenance action]
-                                                      │
-                                                      ▼
-                                              [Avoided failure]
-                                                      │
-                                                      ▼
-                                              [Avoided downtime cost]
+```mermaid
+flowchart TD
+    T[Telemetry] --> M[Model] --> P[Prediction] --> A[Alert] --> D[Dispatch decision]
+    D --> MA[Maintenance action]
+    MA --> AF[Avoided failure]
+    AF --> ADC[Avoided downtime cost]
 ```
 
 Each arrow is a potential leak. The senior diagnostic walks the chain backward from "saved money" until they find the break.
@@ -1217,18 +1194,9 @@ Across all eight scenarios, certain reasoning patterns repeat. Internalize them.
 
 When ML investments don't produce business value, walk the chain backward:
 
-```
-Business outcome
-   ↑
-Action taken
-   ↑
-Decision
-   ↑
-Prediction reaches decider
-   ↑
-Prediction generated
-   ↑
-Model
+```mermaid
+flowchart BT
+    M[Model] --> PG[Prediction generated] --> PR[Prediction reaches decider] --> D[Decision] --> A[Action taken] --> BO[Business outcome]
 ```
 
 The break is rarely at the model. It's usually at "decision," "action," or "outcome captured by the right party."
@@ -1340,3 +1308,15 @@ This is the thinking the F50 senior ML interviews actually test. Tools are commo
 When you've done that for 30+ scenarios, the senior interview becomes routine. Until then, every interview is a fresh shock.
 
 Pick one of these scenarios this week. Write your own version of the architecture, then compare to the proposed one. Find one thing you missed. Add it to your toolkit. Then do another next week.
+
+## You can now
+
+- Read a vague executive request ("build an AI assistant," "personalized trailers," "predictive maintenance") and surface the unspoken scoping, regulatory, and political questions a senior asks *before* proposing an architecture.
+- Walk a value chain backward from business outcome to model to locate where an ML investment actually leaks value — and recognize when the fix is commercial or process, not technical.
+- Choose between several reasonable architectures and defend the choice in an architect's voice: the context it fits, the cost it accepts, and the scenario in which a different choice would win.
+- Apply the recurring reflexes — phased rollout, slice-aware monitoring, reversibility weighting, and Day-100 thinking — to any deployment decision on demand.
+- Frame the same recommendation two ways, as an internal IC architect and as a customer-facing SA, and know when the most senior move is to say "don't build this at all."
+
+## Try it
+
+Pick one scenario from this chapter and run the discovery conversation out loud. Recruit a friend or colleague to play the executive (CTO, CMO, CFO, CDO) and give them only the two-paragraph "situation" for that scenario — nothing else. Set a 20-minute timer and conduct discovery: your only job is to ask questions, not to propose anything. Have your partner improvise answers. When the timer ends, write your own "What you're not told" list and a single scoped-pilot recommendation from what you learned, then compare against the chapter's version. Score yourself on two things: which discovery questions the chapter asked that you didn't, and whether your scoped pilot was narrower than the executive's original ask. Repeat with a second scenario a week later; the gap between your list and the chapter's should shrink each time.

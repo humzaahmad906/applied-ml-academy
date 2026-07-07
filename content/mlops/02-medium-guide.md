@@ -45,12 +45,13 @@ The fix: **the same code path produces the feature in both worlds**, or the feat
 
 ### The Feature Pipeline Pattern
 
-```
-[Raw events] ──► [Feature transformations (pure functions)]
-                        │
-                        ├──► [Offline store: Parquet/Iceberg on S3] ──► [Training]
-                        │
-                        └──► [Online store: Redis / DynamoDB / Aerospike] ──► [Serving]
+```mermaid
+flowchart LR
+    A["Raw events"] --> B["Feature transformations<br/>(pure functions)"]
+    B --> C["Offline store:<br/>Parquet/Iceberg on S3"]
+    B --> D["Online store:<br/>Redis / DynamoDB / Aerospike"]
+    C --> E["Training"]
+    D --> F["Serving"]
 ```
 
 The feature definitions are **one set of functions**. Two materializations: offline for training (cheap, batch), online for serving (fast, low-latency).
@@ -249,38 +250,18 @@ The 2026 split: **Prefect** for fast prototyping and smaller orgs; **Dagster** f
 
 ### What an ML Pipeline Actually Looks Like
 
-```
-[Pull raw data]
-      │
-      ▼
-[Validate data (Great Expectations / Pandera)]
-      │
-      ▼
-[Feature pipeline → offline store]
-      │
-      ▼
-[Train candidate model]
-      │
-      ▼
-[Evaluate vs current production model]
-      │
-      ▼
-[Register if better]
-      │
-      ▼
-[Promote to Staging]
-      │
-      ▼
-[Run model tests on Staging]
-      │
-      ▼
-[Promote to Production (manual or automatic)]
-      │
-      ▼
-[Materialize features to online store]
-      │
-      ▼
-[Notify slack]
+```mermaid
+flowchart TD
+    A["Pull raw data"] --> B["Validate data<br/>(Great Expectations / Pandera)"]
+    B --> C["Feature pipeline → offline store"]
+    C --> D["Train candidate model"]
+    D --> E["Evaluate vs current production model"]
+    E --> F["Register if better"]
+    F --> G["Promote to Staging"]
+    G --> H["Run model tests on Staging"]
+    H --> I["Promote to Production<br/>(manual or automatic)"]
+    I --> J["Materialize features to online store"]
+    J --> K["Notify Slack"]
 ```
 
 Every step is a task. Failures retry. Successes trigger downstream. The orchestrator is the brain.
@@ -805,21 +786,16 @@ For portfolio projects: use Evidently or WhyLogs (free, OSS). Mention the commer
 
 ### Monitoring System Architecture
 
-```
-[Serving service] ──► [Prediction log (Kafka / S3 / DB)]
-                            │
-                            ▼
-                  [Daily monitoring job (Prefect)]
-                            │
-              ┌─────────────┴─────────────┐
-              ▼                           ▼
-      [Drift metrics in TS DB]    [Evidently HTML to S3]
-              │                           │
-              ▼                           ▼
-        [Grafana dashboard]        [Slack alert with link]
-                            │
-                            ▼
-                  [Trigger retraining if PSI > threshold for K days]
+```mermaid
+flowchart TD
+    A["Serving service"] --> B["Prediction log<br/>(Kafka / S3 / DB)"]
+    B --> C["Daily monitoring job (Prefect)"]
+    C --> D["Drift metrics in TS DB"]
+    C --> E["Evidently HTML to S3"]
+    D --> F["Grafana dashboard"]
+    E --> G["Slack alert with link"]
+    F --> H["Trigger retraining if PSI &gt; threshold for K days"]
+    G --> H
 ```
 
 Note the loop: monitoring is what *triggers* CT. Drift detected → schedule retraining. This is the closed loop that defines mature MLOps.
@@ -965,3 +941,14 @@ Don't move on until:
 8. You've thought about cost — you know roughly what your project would cost at 10x volume.
 
 When all eight feel solid, move on to the Advanced Guide. That's where you start being able to handle real production scale.
+
+---
+
+## You can now
+
+- Design a feature pipeline whose transformations are pure and deterministic, and explain concretely how it prevents training-serving skew.
+- Write an as-of (temporal) join for point-in-time-correct feature retrieval, and verify with code that no feature leaks from the future.
+- Orchestrate a scheduled training pipeline in Prefect or Airflow with retries, alerts, lineage, and idempotent backfills — and avoid the classic XCom / parse-time anti-patterns.
+- Manage a model's lifecycle through the registry with alias-based promotion (`@champion`/`@challenger`) and one-command rollback.
+- Build CI/CD/CT gates in GitHub Actions with OIDC cloud auth and manual prod approval, plus the four ML-specific test categories (unit, data, model-behavior, integration).
+- Detect data, concept, and prediction drift with the right metric for each (PSI, KS, chi-squared, sliding-window AUC) and close the loop so drift triggers retraining.

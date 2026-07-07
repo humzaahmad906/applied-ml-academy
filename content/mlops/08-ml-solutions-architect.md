@@ -1140,3 +1140,19 @@ Work through this seriously and you have credible paths to:
 The compound interest on this work over 3–5 years is enormous. Few engineers build this surface area. The ones who do become indispensable — whether they call themselves architects, SAs, principals, or directors. The work is what compounds; the title is just signaling.
 
 Now go pick one path and commit. Or — if you're early enough in career — pick a portfolio project and let the work tell you which path you want.
+
+---
+
+## You can now
+
+You can now:
+
+- Distinguish the three SA populations — vendor, internal/enterprise, and consultancy — by their comp model, stakeholders, rhythm, and exit options, and reason about which fits you.
+- Run a structured 90–120 minute discovery conversation, using open questions, silence, and reflective summarization to reach the customer's real problem before proposing anything.
+- Write a reference architecture that names its context applicability, component trade-offs, variants, cost model, and failure modes — and know to harvest patterns from 3+ real engagements before writing one.
+- Scope a POC with a signed one-pager (question, success criteria, in/out scope, timeline, decision date) that avoids the never-ending-POC and POC-becomes-production traps.
+- Locate the SA-specific stages of an enterprise deal, cultivate a champion, shepherd a security/procurement review, and pick a vertical with the regulatory and vocabulary depth that closes 7-figure deals.
+
+## Try it
+
+Pick one vertical you have a genuine edge in (or the one whose deal flow you find most attractive) and build a single reference architecture for a recurring problem in it — for example, "RAG over enterprise documents for a regulated bank." Write the full one-pager: a one-sentence problem statement, the context in which it applies (and where it doesn't), a C4 Container-level diagram, each component choice with one sentence of *why*, two variants (K8s-experienced team vs. managed-only), a rough cost model parameterized by document volume and query rate, the top three failure modes with how you'd detect each, and the vertical-specific compliance notes (e.g., SR 11-7 model documentation, data residency). Then run a mock discovery conversation against it out loud — play the customer, ask yourself the six qualification questions (pain, who decides, who controls budget, timeline, criteria for "yes," executive sponsor), and note every place your reference architecture assumes a context the customer didn't actually confirm. Those gaps are exactly what separates a template from advice.

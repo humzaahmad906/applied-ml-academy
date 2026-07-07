@@ -64,11 +64,15 @@ The monitoring stack for a production model has four layers, ordered by how fast
 
 When the primary model can't serve (or can't be trusted), what happens? If your answer lives in the head of whoever is on call, you don't have an answer. A degradation ladder is a pre-designed, pre-tested fallback chain with explicit triggers:
 
-```text
-Rung 0  primary model (current version)
-Rung 1  previous model version, pinned in registry     — trigger: quality SLO breach, bad-promotion suspicion
-Rung 2  cached scores / heuristic rules                — trigger: feature store or both models unavailable
-Rung 3  static safe default (policy decision)          — trigger: everything down
+```mermaid
+flowchart TD
+    R0["Rung 0 — Primary model (current version)"]
+    R1["Rung 1 — Previous version, pinned in registry"]
+    R2["Rung 2 — Cached scores / heuristic rules"]
+    R3["Rung 3 — Static safe default (policy decision)"]
+    R0 -->|"Trigger: quality SLO breach or bad-promotion suspicion"| R1
+    R1 -->|"Trigger: feature store or both models unavailable"| R2
+    R2 -->|"Trigger: everything down"| R3
 ```
 
 Three design points that separate a real ladder from a diagram:
@@ -106,6 +110,14 @@ Three design points that separate a real ladder from a diagram:
 The second ML-specific addition: the postmortem is an *input to the pattern library*. Every postmortem ends with a classification against the failure taxonomy (this module's five classes, Module 11's eleven patterns) and, when it doesn't fit, a proposal for a new pattern. Over two years this turns your incident history from folklore into a design-review checklist — which is exactly how the checklist at the end of Module 11 was built.
 
 **Error budgets for model quality.** The SRE error-budget contract — "while the SLO is met, ship fast; when the budget is burned, freeze and stabilize" — ports to model quality with one translation: the budget is *quality-SLO breach minutes* (or canary-metric excursion area), and the thing you freeze is not deploys in general but *risk-adding changes to that model's surface*: new features, new model architectures, threshold changes, upstream migrations. Concretely: a tier-1 model gets a budget of, say, 4 hours/quarter of quality-SLO breach. Inside budget, the team ships weekly retrains and monthly feature additions with self-serve review. Budget exhausted → the next sprint is monitoring, contracts, and backfill capability, not features — and that trade is pre-agreed with product leadership, which is the entire point: the budget converts "reliability vs velocity" from a per-argument negotiation into a standing contract. Without it, reliability work loses every individual prioritization fight and then costs you a quarter all at once.
+
+## You can now
+
+- Define all four SLO families — availability, latency, feature freshness, and model freshness — for any production ML model, and design quality SLOs using canary metrics when ground-truth labels arrive too late to page on directly.
+- Classify any ML incident into one of the five classes within the first fifteen minutes and route it to the right responder: infra on-call for Class 1, a rollback-or-rung decision for Class 2, data engineering plus backfill assessment for Class 3/4, and a scheduled investigation for Class 5.
+- Design a degradation ladder with explicit per-rung triggers, pre-computed quality and cost estimates for each rung, and a quarterly game-day exercise schedule — so the ladder runs correctly the first time it matters.
+- Apply the retrain-vs-rollback decision rule under pressure: roll back to a known-good version when degradation correlates with a deployment event, drop to a rung when the world changed, and never emergency-retrain on possibly-contaminated data during an active incident.
+- Run a blameless ML postmortem that pushes every action item up one level of generality, and negotiate quality error budgets with product leadership so reliability investment is pre-funded rather than re-litigated every quarter.
 
 ## Worked example — the currency-code incident
 

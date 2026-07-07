@@ -42,9 +42,9 @@ and 1 over the response tokens. The SFT loss is a masked per-token negative log-
 compute log-probs over the whole sequence, then average the NLL only over the masked (response)
 positions:
 
-```text
-loss = - sum_t  mask_t * log p_theta(y_t | y_<t) / sum_t mask_t
-```
+$$
+\text{loss} = - \frac{\sum_t \text{mask}_t \cdot \log p_\theta(y_t \mid y_{<t})}{\sum_t \text{mask}_t}
+$$
 
 Masking the prompt matters: you do not want to spend capacity learning to *generate* the user's
 question, only to generate the answer given it. In the microbatch train step this is a
@@ -81,9 +81,9 @@ less likely.
 **Bradley-Terry** model, which says the probability a human prefers `y_1` over `y_2` is the sigmoid
 of the reward difference:
 
-```text
-P(y_1 ≻ y_2 | x) = σ( R(x, y_1) − R(x, y_2) )
-```
+$$
+P(y_1 \succ y_2 \mid x) = \sigma\!\left( R(x, y_1) - R(x, y_2) \right)
+$$
 
 The reward model is trained by maximum likelihood on this — equivalently, minimizing
 `− log σ(R(x, y_w) − R(x, y_l))` over the preference pairs. It is usually the same transformer with
@@ -93,9 +93,9 @@ a scalar head replacing the vocab projection.
 reward while staying close to the frozen SFT reference `π_ref`. This is the KL-regularized
 objective that unifies the whole unit:
 
-```text
-max_π  E_{x, y∼π}[ R(x, y) ] − β · KL( π(y|x) || π_ref(y|x) )
-```
+$$
+\max_\pi \; \mathbb{E}_{x,\, y \sim \pi}\!\left[ R(x, y) \right] - \beta \cdot \mathrm{KL}\!\left( \pi(y \mid x) \,\|\, \pi_{\text{ref}}(y \mid x) \right)
+$$
 
 Classically this outer optimization is done with **PPO**: sample responses from the current policy,
 score them with `R`, estimate a per-token advantage with a learned value network as the baseline,
@@ -110,19 +110,19 @@ reward model *and* a separate value network *and* running a finicky on-policy RL
 accessible. The derivation is the payoff here: the KL-regularized objective above has a
 *known closed-form optimal policy*,
 
-```text
-π*(y|x) ∝ π_ref(y|x) · exp( R(x, y) / β )
-```
+$$
+\pi^*(y \mid x) \propto \pi_{\text{ref}}(y \mid x) \cdot \exp\!\left( R(x, y) / \beta \right)
+$$
 
 Invert this to write the reward that any policy implicitly optimizes,
-`R(x, y) = β log( π(y|x) / π_ref(y|x) ) + β log Z(x)`, and substitute it into the Bradley-Terry
+$R(x, y) = \beta \log\!\left( \pi(y \mid x) / \pi_{\text{ref}}(y \mid x) \right) + \beta \log Z(x)$, and substitute it into the Bradley-Terry
 loss. The intractable partition function `Z(x)` cancels because Bradley-Terry only ever sees reward
 *differences* between two responses to the same prompt. You are left with a plain supervised loss on
 preference pairs, no reward model and no RL loop:
 
-```text
-L_DPO = − E_{(x, y_w, y_l)} [ log σ( β·( log π(y_w|x)/π_ref(y_w|x) − log π(y_l|x)/π_ref(y_l|x) ) ) ]
-```
+$$
+L_{\text{DPO}} = - \mathbb{E}_{(x, y_w, y_l)} \left[ \log \sigma\!\left( \beta \cdot \left( \log \frac{\pi(y_w \mid x)}{\pi_{\text{ref}}(y_w \mid x)} - \log \frac{\pi(y_l \mid x)}{\pi_{\text{ref}}(y_l \mid x)} \right) \right) \right]
+$$
 
 Read it as: increase the log-ratio of the winner relative to the reference, decrease it for the
 loser, and `β` controls how hard you are allowed to pull away from the reference (it is exactly the
@@ -152,9 +152,9 @@ that plagues learned rewards.
 
 Everything here is one estimator. The REINFORCE gradient of expected reward is
 
-```text
-∇_θ E[R] = E[ ∇_θ log π_θ(y|x) · R(x, y) ]
-```
+$$
+\nabla_\theta \mathbb{E}[R] = \mathbb{E}\!\left[ \nabla_\theta \log \pi_\theta(y \mid x) \cdot R(x, y) \right]
+$$
 
 — reinforce the tokens of high-reward responses, in proportion to the reward. Raw rewards give a
 high-variance, always-positive signal, so you subtract a **baseline** `b` and reinforce the
@@ -191,18 +191,20 @@ separate value network to estimate the baseline; GRPO removes it. For each promp
 group's own statistics as the baseline. The advantage for response `i` in group with rewards
 `{r_1..r_G}` is the group-normalized reward:
 
-```text
-A_i = ( r_i − mean(r_1..r_G) ) / ( std(r_1..r_G) + ε )
-```
+$$
+A_i = \frac{ r_i - \operatorname{mean}(r_1 \dots r_G) }{ \operatorname{std}(r_1 \dots r_G) + \varepsilon }
+$$
 
 Every token in response `i` gets this same scalar advantage. The objective is the PPO-style
 per-token clipped surrogate, with the importance ratio between the current policy and the policy
 that generated the rollouts:
 
-```text
-ratio_t   = π_θ(y_t | ·) / π_θ_old(y_t | ·)
-L_GRPO    = − E [ min( ratio_t · A_i,  clip(ratio_t, 1−ε, 1+ε) · A_i ) ]
-```
+$$
+\begin{aligned}
+\text{ratio}_t &= \pi_\theta(y_t \mid \cdot) \,/\, \pi_{\theta_{\text{old}}}(y_t \mid \cdot) \\
+L_{\text{GRPO}} &= - \mathbb{E}\!\left[ \min\!\left( \text{ratio}_t \cdot A_i, \; \operatorname{clip}(\text{ratio}_t, 1-\varepsilon, 1+\varepsilon) \cdot A_i \right) \right]
+\end{aligned}
+$$
 
 with `ε = 0.2` (`cliprange`). The clip is what lets you take several gradient steps on the same
 batch of rollouts without the policy running away from the distribution it sampled from. The
@@ -306,3 +308,17 @@ the reasoning-model boom. The reward is format-plus-correctness (R1-Zero style),
 prevents reward hacking, and verifiable rewards are the key unlock because they give an unlimited,
 unhackable signal wherever you can check the answer — exactly the regime much of your
 structured-extraction work lives in.
+
+## You can now
+
+You can now:
+
+- implement masked SFT — a `response_mask` that zeros the prompt tokens so the NLL is averaged only over response positions — and explain why the chat template teaches the exact structure the reward later grades.
+- derive the DPO loss from the KL-regularized objective: the closed-form optimum $\pi^* \propto \pi_{\text{ref}} \cdot \exp(R/\beta)$, the reward inversion, and why the partition function $Z(x)$ cancels under Bradley-Terry.
+- articulate why the $\beta \cdot \mathrm{KL}$ leash is the central knob in the whole pipeline — too low invites reward hacking and mode collapse, too high pins the policy to SFT.
+- turn a verifiable reward into training signal three ways — expert iteration (rejection-sampling SFT), and GRPO with the group-normalized advantage $A_i = (r_i - \operatorname{mean})/(\operatorname{std} + \varepsilon)$ and the clipped per-token surrogate — and say why GRPO drops PPO's value network.
+- design a format-plus-correctness reward and anticipate its failure modes (length inflation, lenient-parser exploits, advantage collapse when a group ties), and choose the right rung of the ladder for a narrow product model.
+
+## Try it
+
+Implement the GRPO advantage-and-loss step from scratch against a tiny fixture, no RL library. Write `grpo_advantages(rewards)` that group-normalizes a vector of `G` rewards, then `grpo_loss(logp_policy, logp_old, advantages, clip)` that forms the ratio $\pi_\theta / \pi_{\theta_{\text{old}}}$, applies the clipped surrogate $\min(\text{ratio} \cdot A, \operatorname{clip}(\text{ratio}, 1 \pm \varepsilon) \cdot A)$, and averages per token. Verify three things by hand on toy tensors: (1) a group where every reward ties gives ~zero advantage and thus no gradient (advantage collapse); (2) `logp_old` is detached so no gradient leaks into the rollout policy; (3) with the ratio pinned at 1 the clipped and unclipped losses agree. Then flip one reward and confirm the sign of the update moves the right response up. Getting the `no_grad` and the `min` (not `max`) right is exactly what the graded `test_grpo` suite checks.

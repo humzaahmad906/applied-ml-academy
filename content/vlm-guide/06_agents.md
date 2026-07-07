@@ -8,13 +8,14 @@ An **agent** is an LLM placed in a **loop** where it can take actions (call tool
 
 Strip away the frameworks and every agent is this loop:
 
-```text
-goal + context ─▶ [LLM decides: think / act] ─▶ if action: call tool
-                          ▲                                │
-                          │                                ▼
-                   observation  ◀──────────────  tool returns result
-                          │
-                   (repeat until done or budget exhausted) ─▶ final answer
+```mermaid
+flowchart TD
+    A[goal + context] --> B{"LLM decides:<br/>think / act"}
+    B -->|action| C[call tool]
+    C --> D[tool returns result]
+    D --> E[observation]
+    E --> B
+    B -->|done or budget exhausted| F[final answer]
 ```
 
 The LLM is the **policy/brain**; the loop and tools are the **scaffolding**. Each turn, the model sees the accumulated history (goal, prior thoughts, actions, observations) and outputs either the next action or a final answer. This is the "the model is a function; the loop is the program calling it" framing made literal.
@@ -145,3 +146,17 @@ Reading takeaway: when an agent-training paper's contribution is a new reward sc
 - **Cost:** tokens/tool-calls/latency per task — is the win worth the overhead vs a simpler agent?
 - **Eval honesty:** real task-completion on a credible benchmark, or a cherry-picked demo? Trajectory quality or just final-answer luck?
 - **The one-sentence contribution and its cost.**
+
+---
+
+## You can now
+
+- Reduce any agent framework to the core loop — the LLM as policy, the loop and tools as scaffolding — and recognise ReAct's Thought → Action → Observation as its substrate.
+- Wire up tool use / function calling (schema → structured call → observation), explain how constrained decoding guarantees valid tool JSON, and place MCP (agent↔tools) vs A2A (agent↔agent) in the protocol stack.
+- Choose a planning strategy against the robustness-vs-cost tradeoff — plan-then-execute vs interleaved replanning (ReAct, Reflexion, LATS) — and design a memory system distinguishing short-term context from long-term vector/graph/episodic stores.
+- Decide when multi-agent orchestration earns its coordination overhead, and apply context engineering (compression, offloading, retrieval, isolation) as the primary performance lever.
+- Attribute an agent paper's gains to base model vs training signal vs scaffolding, and reason about long-horizon reliability — why 95%-per-step compounds to ~60% over 10 steps.
+
+## Try it
+
+Build a two-tool ReAct agent (say a web search and a calculator, or a file reader and a code runner) and instrument it: log every Thought, Action, Observation, the step count, and the token cost per task. Run it on ten multi-step questions and hand-label each trajectory for where it succeeded, looped, hallucinated a tool call, or failed to recover from a tool error. Then compute per-step success rate and confirm for yourself how it compounds over the horizon. You will see directly why §8's reliability problem — not raw model capability — is the binding constraint on real agents, and where in the loop your budget and loop-detection guards need to go.

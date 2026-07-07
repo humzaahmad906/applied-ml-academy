@@ -8,10 +8,15 @@ Models are commoditized. Any competitor can call the same APIs you can, fine-tun
 
 The loop everyone can recite:
 
-```text
-instrument product → capture outcomes & corrections → curate → retrain
-        ↑                                                        │
-        └──────── more usage ← better product ← better model ←──┘
+```mermaid
+graph LR
+    A[instrument product] --> B["capture outcomes<br/>& corrections"]
+    B --> C[curate]
+    C --> D[retrain]
+    D --> E[better model]
+    E --> F[better product]
+    F --> G[more usage]
+    G --> A
 ```
 
 What separates companies where this compounds from companies where it's a slide is that each arrow is a funded engineering artifact with an owner. Walk them:
@@ -193,6 +198,14 @@ tail-templates slice
 ```
 
 Reading it: still climbing steeply at 100% → you are data-bound and can price a point of accuracy directly in $/label. Flat from 50% → 100% → more of the *same* data is worthless; the next dollar goes to compute, architecture, or *different* data (new slices, harder cases, new modalities). Run the curve per-slice, because "flat overall" routinely hides "steep on the slice that drives your worst errors" — which is also exactly where active learning should aim. The whole experiment costs a few training runs (usually $500–$10k) and settles arguments that otherwise consume quarters of roadmap. Rerun it twice a year per major model; the curve moves as models and data change.
+
+## You can now
+
+- Design a correction-capture event schema that turns user edits in a product UI into near-free labeled training pairs, and negotiate that instrumentation into the product before launch rather than retrofitting it later at 10× the cost.
+- Budget a labeling operation end-to-end — sticker price plus QA overhead, rework, and instruction-iteration time — and select the right in-house/vendor/model-assisted split for your volume, quality bar, and latency requirements.
+- Apply the three active-learning selectors (uncertainty, diversity, disagreement sampling) while maintaining a permanently random eval stream, so metrics aren't computed on the hardest slice and actively sampled datasets don't silently bias reported numbers.
+- Architect a three-tier PII pipeline (raw → pseudonymized → anonymized), connect retention windows to consent granularity, and design a deletion-propagation cadence that is a defensible compliance answer rather than a promise.
+- Run the marginal-value-of-data experiment per slice to answer "data vs. compute?" with arithmetic, and know when a flat curve signals switching from more of the same data to compute or to qualitatively different data.
 
 ## Worked example
 

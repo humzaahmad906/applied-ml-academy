@@ -278,3 +278,11 @@ pre-tokenization and emitted as atomic ids at encode time. Naive training is too
 work is counting over deduplicated pre-tokens and updating only the pair counts each merge
 touches. Vocabulary size trades sequence length against embedding parameters, and for small
 models the embedding table can dominate the whole parameter budget.
+
+## You can now
+
+- explain why byte-level BPE never emits an out-of-vocabulary token, and why decoding must use `errors="replace"` during streaming generation.
+- implement BPE training with incremental pair-count updates over deduplicated pre-tokens instead of recounting the whole corpus on every merge.
+- apply the GPT-2 pre-tokenization regex and split special tokens out *before* merging, so no merge ever crosses a word or document boundary.
+- measure a tokenizer with compression ratio and fertility, and reason about how the training corpus's statistics get baked into the merges.
+- size a vocabulary against the embedding-table parameter cost for a given model scale, and know why small on-device models use smaller vocabularies.

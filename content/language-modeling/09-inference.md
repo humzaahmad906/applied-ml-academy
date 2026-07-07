@@ -31,7 +31,7 @@ per operation. For the big MLP matmuls, prefill has intensity proportional to th
 processed together (`B × T`), which is large, so those matmuls saturate the tensor cores. In
 decode you process one token per sequence, so the intensity collapses toward the batch size `B`
 alone: you read a full weight matrix and do a single vector-matrix product against it. Attention
-sits in between, with intensity scaling like `S·T / (S + T)` where `S` is the cached length and `T`
+sits in between, with intensity scaling like $\frac{S\cdot T}{S + T}$ where `S` is the cached length and `T`
 the new tokens. Every hardware has a break-even intensity (the ridge point of its roofline, roughly
 peak-FLOPs ÷ memory-bandwidth); below it you are memory-bound, above it compute-bound. Prefill is
 comfortably above; single-stream decode is far below.
@@ -52,9 +52,9 @@ decode from recomputing everything to computing one token's worth plus reading t
 
 The cost is memory. The KV cache size is:
 
-```
-2 (keys and values) * n_layers * n_kv_heads * d_head * L_seq * batch * bytes_per_element
-```
+$$
+\text{KV cache} = \underbrace{2}_{\text{keys \& values}}\cdot n_{layers}\cdot n_{kv\_heads}\cdot d_{head}\cdot L_{seq}\cdot \text{batch}\cdot \text{bytes\_per\_element}
+$$
 
 It grows linearly with sequence length and batch size, and for long contexts and many concurrent
 users it can exceed the size of the model weights themselves. A worked example makes the scale
@@ -211,3 +211,15 @@ int4/int8 (AWQ, GPTQ) is the workhorse, activation quantization is harder due to
 (LLM.int8, SmoothQuant), and QAT plus layer-sensitivity mixed precision recovers accuracy at low
 bit-widths. Report TTFT, inter-token latency, and throughput separately, because optimizing one
 usually costs another.
+
+## You can now
+
+- distinguish prefill (compute-bound, sets TTFT) from decode (memory-bandwidth-bound, sets inter-token latency) by their arithmetic intensity.
+- compute KV-cache size from the config and explain why GQA/MQA, MLA, local attention, and KV-cache quantization each attack a specific term in that formula.
+- explain why continuous batching with a paged KV cache is the single biggest throughput lever, and why it works.
+- describe speculative decoding, why verification is cheap on the otherwise-idle compute, and why the scheme is lossless.
+- pick a quantization strategy (weight-only int4/int8 with AWQ/GPTQ, activation quantization, KV-cache quantization, QAT) for a memory-bound decode target, and predict the decode speedup from bytes-per-weight.
+
+## Try it
+
+Take a small model you can run locally and measure decode throughput (tokens/second) at batch sizes 1, 4, and 16. Confirm total throughput climbs with batch size — you are raising decode arithmetic intensity toward the compute-bound regime — while per-user inter-token latency degrades, making the throughput-versus-latency tradeoff concrete. Then quantize the weights to int4 and re-measure single-stream decode speed, and check the result against the `bandwidth / (bytes_per_weight × active_params)` prediction: if you were memory-bound, halving the bytes per weight should roughly double decode speed.

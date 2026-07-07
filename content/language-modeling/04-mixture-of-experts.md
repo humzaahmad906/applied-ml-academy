@@ -41,6 +41,19 @@ g_i      = softmax(logits[topk])[i]     # gate weight for kept expert i, sums to
 y        = sum_i  g_i * Expert_i(x)      # only the k chosen experts run
 ```
 
+```mermaid
+flowchart LR
+    X["token x (d)"] --> R["router W_r<br/>(d × E)"]
+    R --> L["logits (E)"]
+    L --> T["top-k select"]
+    T --> S["softmax over<br/>kept k → g_i"]
+    S -->|"g_1"| E1["Expert i_1"]
+    S -->|"g_2"| E2["Expert i_2"]
+    E1 --> Y["y = Σ g_i · Expert_i(x)"]
+    E2 --> Y
+    L -.->|"E − k experts<br/>never run"| Skip(["skipped"])
+```
+
 Softmax-then-topk vs topk-then-softmax is a real choice. Normalizing over only the `k` kept
 logits (topk-then-softmax, what Mixtral does) keeps the gate weights summing to 1 regardless of
 how confident the router was; softmax-over-all-then-keep-topk lets the combined weight shrink
@@ -65,11 +78,11 @@ tokens, that GPU becomes the bottleneck and the rest idle.
 the training loss that penalizes uneven load. For a batch of `T` tokens and `E` experts, define
 per expert `i`:
 
-```
-f_i = fraction of tokens routed to expert i          (a hard count / T)
-P_i = mean over tokens of the router probability for expert i   (a soft average)
-L_aux = alpha * E * sum_i ( f_i * P_i )
-```
+$$
+f_i = \frac{\#\{\text{tokens} \to \text{expert } i\}}{T}\ \text{(hard count)},
+\qquad P_i = \frac{1}{T}\sum_{\text{tokens}} p_i\ \text{(soft average)},
+\qquad \mathcal{L}_{\text{aux}} = \alpha\, E \sum_{i=1}^{E} f_i\, P_i
+$$
 
 The product `f_i * P_i` is minimized when load is uniform (`f_i = P_i = 1/E`), giving
 `L_aux = alpha`. The clever part: `f_i` is a non-differentiable count, so the gradient flows only
@@ -79,14 +92,15 @@ uniform routing and kill specialization; too weak and you get collapse.
 
 **Router z-loss.** A second auxiliary term seen in ST-MoE penalizes large router logits to keep
 the softmax numerically stable and prevent the logits from exploding:
-`L_z = (1/T) * sum_tokens (logsumexp_e(logits))^2`.
+$\mathcal{L}_z = \frac{1}{T}\sum_{\text{tokens}}\big(\text{logsumexp}_e(\text{logits})\big)^2$.
 
 **Expert capacity and token dropping.** In the token-choice formulation you cap how many tokens
 each expert accepts per batch — its *capacity*:
 
-```
-capacity = capacity_factor * (T / E)     # capacity_factor typically 1.0 - 2.0
-```
+$$
+\text{capacity} = \text{capacity\_factor}\times \frac{T}{E}
+\qquad (\text{capacity\_factor typically } 1.0\text{–}2.0)
+$$
 
 Tokens beyond an expert's capacity are **dropped**: they skip the expert layer and pass through
 via the residual connection unchanged. The capacity factor buys slack for imbalance at the cost
@@ -124,10 +138,10 @@ The whole point is that FLOPs track *active* parameters, not total. For an MoE l
 experts, top-`k` routing, and per-expert FFN of the usual `~8d^2` params (SwiGLU, as in the
 architecture chapter):
 
-```
-total FFN params  = E * 8 * d^2
-active FFN params = k * 8 * d^2         # per token, only k experts run
-```
+$$
+\text{total FFN params} = E\cdot 8d^2,
+\qquad \text{active FFN params} = k\cdot 8d^2 \ \text{(per token, only $k$ experts run)}
+$$
 
 So switching from dense to an `E`-expert top-`k` MoE multiplies FFN *capacity* by `E` while
 multiplying FFN *FLOPs* by only `k`. The router itself costs a negligible `2 * d * E` per token.
@@ -175,3 +189,15 @@ auxiliary loss, a router z-loss for stability, expert-capacity limits with token
 DeepSeek's newer loss-free per-expert bias. Fine-grained plus shared experts is the modern recipe.
 MoE trades compute for memory and all-to-all communication, making it a datacenter technique and a
 poor fit for memory-constrained on-device deployment.
+
+## You can now
+
+- separate total from active parameters for an MoE, and use *active* `N` in the `6ND` compute rule.
+- describe top-k routing and explain why the discrete selection makes routing prone to self-reinforcing collapse.
+- write the auxiliary load-balancing loss and explain why its gradient flows only through the differentiable `P_i` term.
+- compare the load-balancing options — auxiliary loss, router z-loss, expert capacity with token dropping, expert-choice routing, and DeepSeek's loss-free per-expert bias.
+- decide when an MoE beats a dense model of the same active size, given memory budget and interconnect bandwidth.
+
+## Try it
+
+Instrument a small MoE layer (say `E = 8`, top-2) on a toy training run and log the per-expert token-count histogram every few hundred steps. Turn the auxiliary load-balancing loss off (`alpha = 0`) and watch routing collapse — a few experts capturing most tokens while others go dead. Then sweep `alpha` upward and find the value that flattens the load enough to keep every expert trained without driving the routing distribution all the way to uniform (which would kill specialization). Plot expert entropy and the aux-loss magnitude against `alpha`.

@@ -267,42 +267,31 @@ Every F100 has some variant of this. The differences are in which tool fills whi
 
 ### Reference: Real-Time Analytics Stack
 
-```
-[App] ─► [Kafka] ─► [Flink (enrichment)] ─► [ClickHouse / Druid / Pinot]
-                              │                       │
-                              ▼                       ▼
-                       [Iceberg lake]          [User-facing dashboards]
-                              │                  (sub-second queries)
-                              ▼
-                       [Warehouse / dbt]
-                              │
-                              ▼
-                       [Analyst BI tools]
-                       (seconds-to-minutes queries)
+```mermaid
+flowchart TD
+    App --> Kafka
+    Kafka --> Flink["Flink (enrichment)"]
+    Flink --> OLAP["ClickHouse / Druid / Pinot"]
+    Flink --> ICE["Iceberg lake"]
+    OLAP --> DASH["User-facing dashboards (sub-second)"]
+    ICE --> WH["Warehouse / dbt"]
+    WH --> BI["Analyst BI tools (seconds-to-minutes)"]
 ```
 
 The lambda-vs-kappa debate plays out in the choice of how to back this. In 2026 the trend is "Iceberg as the source of truth, with materializations into ClickHouse for the hot path."
 
 ### Reference: ML Platform Architecture
 
-```
-[Sources] ─► [DE pipelines] ─► [Lakehouse: training data]
-                                       │
-                                       ▼
-                                [Feature Store]
-                                  │           │
-                       (offline)  │           │  (online)
-                                  ▼           ▼
-                          [Training pipeline]  [Inference service]
-                                  │                    │
-                                  ▼                    │
-                          [Model registry]             │
-                                  │                    │
-                                  └───── deploy ──────►│
-                                                       │
-                                                       ▼
-                                              [Predictions back to apps]
-                                              [Or → Kafka → downstream]
+```mermaid
+flowchart TD
+    SRC["Sources"] --> DEP["DE pipelines"]
+    DEP --> LH["Lakehouse: training data"]
+    LH --> FS["Feature Store"]
+    FS -->|offline| TRAIN["Training pipeline"]
+    FS -->|online| INF["Inference service"]
+    TRAIN --> REG["Model registry"]
+    REG -->|deploy| INF
+    INF --> PRED["Predictions back to apps (or to Kafka to downstream)"]
 ```
 
 The DE/ML platform overlap is where roles like "ML Platform Engineer" or "Feature Platform Engineer" live. If your background is part-ML, this is where you have an asymmetric advantage.
@@ -340,17 +329,12 @@ The architect's role in a mesh: build the platform, define the standards, enforc
 
 When the brief is "do more with less":
 
-```
-[Sources] ─► [dlt + Cron]  (skip the orchestrator if simple)
-                  │
-                  ▼
-          [Parquet on S3]   (skip the lakehouse if not needed)
-                  │
-                  ▼
-          [DuckDB queries]  (skip the warehouse if data <500GB)
-                  │
-                  ▼
-          [Evidence.dev]    (skip the BI tool if dashboards are simple)
+```mermaid
+flowchart TD
+    SRC["Sources"] --> ING["dlt + Cron (skip the orchestrator if simple)"]
+    ING --> PQ["Parquet on S3 (skip the lakehouse if not needed)"]
+    PQ --> DUCK["DuckDB queries (skip the warehouse if data under 500GB)"]
+    DUCK --> EV["Evidence.dev (skip the BI tool if dashboards are simple)"]
 ```
 
 The architect knows when to scale down, not just when to scale up. A startup or a small F100 team often benefits more from this stack than from a "modern data stack" recreation. Good architects recommend this when appropriate even though it makes them look less ambitious.
@@ -1190,3 +1174,17 @@ If you work through this seriously over 2–4 years, you'll have a credible path
 The compound interest on this work is enormous. Most engineers never build this surface area. The ones who do become indispensable.
 
 Now stop reading curricula. Go build the beginner project.
+
+---
+
+## You can now
+
+- Describe what a data architect actually produces — decisions, ADRs, diagrams, strategy memos — and calibrate decision energy to a choice's reversibility and cost.
+- Write an ADR and a design doc a future team can trust, and carry a mental library of reference architectures (modern stack, real-time, ML platform, mesh, cost-conscious).
+- Run a build-vs-buy analysis on true total cost of ownership, and plan a phased migration (strangler fig, parallel-run) that avoids the big-bang failure mode.
+- Model platform cost and capacity, translate business strategy into a data strategy, and communicate up, down, and across to the right stakeholders.
+- Recognize the architect failure modes (ivory tower, astronaut, magpie, bottleneck) in yourself, and prepare for the distinct shape of an architect interview loop.
+
+## Try it
+
+Pick a real architectural decision you or a project you've built is facing — a warehouse choice, an orchestrator, build-vs-buy on a catalog. Write a one-to-three-page ADR in the standard structure: context, decision, alternatives considered (with honest pros and cons for each), consequences (including the negatives you're accepting), and an implementation plan. Then place the decision on the reversibility/cost matrix and check whether the energy you spent matches where it lands. If you can hand the ADR to someone unfamiliar and have them understand *why* the decision was made, you've produced the core artifact of the role.

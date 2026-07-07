@@ -8,9 +8,7 @@ Writing DDP code, tuning NCCL flags, sharding an optimizer — those are senior 
 
 Every fleet decision reduces to one identity:
 
-```text
-effective $/GPU-hour = (paid $/GPU-hour) / utilization
-```
+$$\text{effective \$/GPU-hr} = \frac{\text{paid \$/GPU-hr}}{\text{utilization}}$$
 
 A reserved H100 at $2.50/hr running at 40% utilization costs you $6.25 per *useful* hour — more than on-demand. Every other decision (owned vs rented, scheduler choice, quota policy) is downstream of this fraction. Fix utilization before optimizing price; a 20% discount negotiated on a 40%-utilized fleet is theater.
 
@@ -92,9 +90,7 @@ At single-node scale, hardware failure is an anecdote. At fleet scale it is a de
 
 **Checkpointing cadence is a math problem, not a vibe.** The Young–Daly approximation gives the optimal checkpoint interval:
 
-```text
-optimal_interval ≈ sqrt(2 × checkpoint_cost × MTBF)
-```
+$$\text{optimal\_interval} \approx \sqrt{2 \times \text{checkpoint\_cost} \times \text{MTBF}}$$
 
 where `checkpoint_cost` is wall-clock time to write one checkpoint and `MTBF` is the job's aggregate mean time between failures. Worked: a 512-GPU run, aggregate MTBF ≈ 86 h, checkpoint write = 4 min (0.067 h) → interval ≈ sqrt(2 × 0.067 × 86) ≈ **3.4 hours**. Checkpointing hourly wastes write overhead; checkpointing daily means an average failure costs you 12 hours × 512 GPUs ≈ 6,100 GPU-hours ≈ **$17k per incident** at $2.75/hr. The formula also shows the leverage of cheaper checkpoints: cut write time 4× (async/sharded checkpointing to local NVMe with background upload — standard in Megatron/DeepSpeed/torch-distributed stacks) and the optimal interval halves, halving expected lost work too.
 
@@ -165,20 +161,15 @@ The deliberate compromise in item 4 is the Principal-level nuance: demanding bit
 
 The cheapest GPU-hour is the one you don't burn. The decision tree, in the order the options should be exhausted:
 
-```text
-Need capability X?
-├─ Prompting a served model reaches the quality bar?
-│    → Ship it. Cost: ~0 capex, days of eng time. Revisit at volume.
-├─ Retrieval/RAG closes the gap (knowledge problem, not skill problem)?
-│    → Build retrieval. Fresh data beats baked-in data; no training run
-│      keeps up with a knowledge base that changes weekly.
-├─ Fine-tune (SFT/LoRA on 4–8B class) on your narrow distribution?
-│    → Usually the right call for high-volume, narrow tasks once you have
-│      ≥ a few thousand quality examples. Cost: 10s–100s of GPU-hours.
-└─ Pretrain / continued-pretrain from scratch or near it?
-     → Requires ALL of: durable data advantage, sustained volume that
-       amortizes the run, a recipe-mature team, and a 2+ year horizon.
-       Cost: 10^4–10^6 GPU-hours. This is a company bet, not a task.
+```mermaid
+flowchart TD
+    A["Need capability X?"] --> B{"Prompting a served model<br/>reaches the quality bar?"}
+    B -->|Yes| B1["Ship it.<br/>Cost: ~0 capex, days of eng time.<br/>Revisit at volume."]
+    B -->|No| C{"Retrieval/RAG closes the gap?<br/>Knowledge problem, not skill problem?"}
+    C -->|Yes| C1["Build retrieval.<br/>Fresh data beats baked-in data;<br/>no training run keeps up with<br/>a weekly-changing knowledge base."]
+    C -->|No| D{"Fine-tune on your narrow distribution?<br/>SFT/LoRA on 4–8B class,<br/>≥ few thousand quality examples?"}
+    D -->|Yes| D1["Usually right for high-volume narrow tasks.<br/>Cost: 10s–100s of GPU-hours."]
+    D -->|No| E["Pretrain / continued-pretrain.<br/>Requires: durable data advantage + sustained volume<br/>+ recipe-mature team + 2+ year horizon.<br/>Cost: 10⁴–10⁶ GPU-hours.<br/>This is a company bet, not a task."]
 ```
 
 The tree is well known; the *governance* around it is the Principal contribution. Two mechanisms:
@@ -203,6 +194,14 @@ Fleet size          = P50 monthly demand ÷ (720 × target fleet util 0.75)
 Mini-example: a program to fine-tune and ship four 8B-class domain models per quarter (each: ~2 × 10^20 FLOPs final run → on H100 bf16 at ~40% MFU ≈ 1,000 GPU-hours; ×2.5 multiplier = 2,500 GPU-hours; ×4 models = 10k GPU-hours/quarter) plus one continued-pretraining bet (~8 × 10^22 FLOPs → ~350k GPU-hours over two quarters with a 2× multiplier = 700k... which at 512 GPUs × 720 h/mo ≈ 369k GPU-hours/month capacity means roughly a two-month occupation of a 512-GPU reservation). The calendar check is the step everyone skips: GPU-hours fit the budget while the *calendar* doesn't, because the big run monopolizes the fleet and starves every Tier-1/2 workload. That's how orgs end up with an angry quarter — the spreadsheet balanced and the queue didn't.
 
 Present capacity plans with three scenarios (roadmap slips 25% / holds / grows 25%) and the procurement action for each — reserve the base, option the upside via spot and cloud burst.
+
+## You can now
+
+- Frame fleet decisions around effective cost per useful GPU-hour — $\text{effective \$/GPU-hr} = \text{paid \$/GPU-hr} / \text{utilization}$ — decompose idle time into attributable buckets (fragmentation, zombie runs, oversized allocations, quota hoarding), and recover utilization through policy before recommending any procurement change
+- Set checkpoint cadence from first principles using the Young–Daly formula, deriving aggregate MTBF from per-GPU failure rates and translating checkpoint write cost directly into expected GPU-hours lost per failure
+- Apply the compute-approval decision tree in governance order — prompt, retrieve, fine-tune, pretrain — with kill criteria declared at launch rather than after sunk cost accumulates
+- Build a capacity plan that traces every GPU-hour demand to shown arithmetic (FLOPs → hours at a stated MFU, times an explicit experiment multiplier), runs a calendar check to catch fleet monopolization, and sizes the reserved tranche to the lower scenario with spot-burst for the upside
+- Specify a scheduling policy that survives adversarial conditions: gang scheduling for distributed jobs, preemption tiers tied to workload class rather than seniority, quota decay to prevent hoarding, and an interactive-pool size with idle auto-stop
 
 ## Worked example
 

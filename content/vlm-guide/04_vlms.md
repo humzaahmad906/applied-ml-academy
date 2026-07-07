@@ -6,12 +6,17 @@ Assumes the foundations and the LLM chapter. A VLM is an LLM that can also *see*
 
 ## 1. The canonical VLM, in one picture
 
-```text
-image ──▶ [vision encoder] ──▶ visual features ──▶ [projector] ──▶ visual tokens
-                                                                       │
-text ───▶ [tokenizer + embed] ──▶ text tokens ─────────────────────────┤
-                                                                       ▼
-                                            [language model (decoder)] ──▶ text output
+```mermaid
+flowchart LR
+    IMG[image] --> VE[vision encoder]
+    VE --> VF[visual features]
+    VF --> PROJ[projector]
+    PROJ --> VT[visual tokens]
+    TXT[text] --> TOK[tokenizer + embed]
+    TOK --> TT[text tokens]
+    VT --> LM[language model - decoder]
+    TT --> LM
+    LM --> OUT[text output]
 ```
 
 Four components:
@@ -120,3 +125,17 @@ Caption data for alignment; rich instruction data (VQA, document QA, charts, tab
 - **Training:** which stages, what's frozen when, data mix, synthetic-vs-real, any preference/RL stage?
 - **What modality/task is it actually optimized for** (captioning vs document/OCR vs video vs grounding vs unified generation)? — this reframes which design choices are load-bearing.
 - **The one-sentence contribution and its cost** (usually tokens-vs-quality or quality-vs-generality).
+
+---
+
+## You can now
+
+- Trace the four-stage VLM pipeline — vision encoder → projector → decoder LLM → training recipe — and explain what each stage contributes.
+- Choose a vision encoder from its pretraining objective: CLIP/SigLIP for language-aligned semantics, DINOv2 for spatial/geometric structure, and say why document/OCR work weights resolution and spatial fidelity so heavily.
+- Place any VLM on the fusion spectrum — late (CLIP) → cross-attention (Flamingo) → prefix-concat (LLaVA) → early/native (Chameleon) → encoder-free (Gemma 4) — which is most of understanding its architecture.
+- Reason about the projector's core tradeoff — visual-token count (cost) vs information preserved — and pick MLP vs Q-Former vs pixel-shuffle for a token budget.
+- Explain the LLaVA-style train-the-projector-then-instruction-tune recipe, and why synthetic document data fails to transfer without physically-faithful spatial distortions.
+
+## Try it
+
+Take two VLMs with published details from different points on the fusion spectrum — for example Llama 3.2 Vision (cross-attention fusion) and Qwen2-VL or a LLaVA-family model (prefix-concat, native/dynamic resolution) — and fill in the §7 reading checklist for each side by side: vision encoder and resolution strategy, projector type and visual-token count, fusion family, continuous-vs-discrete tokens, training stages and what is frozen when. Then write one sentence per model naming what task it is optimized for and the tradeoff that choice paid. The contrast makes the design axes concrete in a way reading one model alone does not.

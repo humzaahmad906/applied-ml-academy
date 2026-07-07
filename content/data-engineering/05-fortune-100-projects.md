@@ -47,31 +47,21 @@ Most "fraud detection" projects stop at "send to a queue when something looks we
 
 ### Architecture Sketch
 
-```
-[Event Generator] ──► [Kafka: raw_events]
-                             │
-                             ├──► [Streaming Feature Engineer]
-                             │           │
-                             │           ▼
-                             │     [Kafka: features]
-                             │           │
-                             │           ▼
-                             │     [Detector Service] ──► [Kafka: alerts]
-                             │                                  │
-                             │                                  ▼
-                             │                          [Analyst Labeling UI]
-                             │                                  │
-                             │                                  ▼
-                             │                          [Kafka: labels]
-                             │                                  │
-                             ▼                                  ▼
-                       [Iceberg lake]                   [Airflow retraining]
-                             │                                  │
-                             ▼                                  ▼
-                         [dbt marts]                    [Model registry]
-                             │                                  │
-                             ▼                                  ▼
-                       [Dashboards]                    (deploys updated detector)
+```mermaid
+flowchart TD
+    GEN["Event Generator"] --> RAW["Kafka: raw_events"]
+    RAW --> SFE["Streaming Feature Engineer"]
+    RAW --> LAKE["Iceberg lake"]
+    SFE --> FEAT["Kafka: features"]
+    FEAT --> DET["Detector Service"]
+    DET --> ALERTS["Kafka: alerts"]
+    ALERTS --> UI["Analyst Labeling UI"]
+    UI --> LABELS["Kafka: labels"]
+    LABELS --> RETRAIN["Airflow retraining"]
+    RETRAIN --> REG["Model registry"]
+    REG --> DEPLOY["Deploys updated detector"]
+    LAKE --> MARTS["dbt marts"]
+    MARTS --> DASH["Dashboards"]
 ```
 
 ### The Interesting Technical Decisions
@@ -131,29 +121,15 @@ The twist that makes this project F100-grade: you support **time travel**. Any a
 
 ### Architecture Sketch
 
-```
-[Postgres: orders, customers, products]
-            │
-            ▼
-       [Debezium]
-            │
-            ▼
-   [Kafka: cdc.public.orders, cdc.public.customers, ...]
-            │
-            ▼
-   [Kafka Connect → Iceberg sink]
-            │
-            ▼
-   [Iceberg tables: lake.orders, lake.customers, ...]
-        │       │
-        │       ▼
-        │   [dbt: marts.dim_customers SCD2, marts.fct_orders]
-        │       │
-        │       ▼
-        │   [BI Dashboard]
-        ▼
-   [Time-travel UI]
-   "Show me orders.orders as of 2024-06-15 15:47:00"
+```mermaid
+flowchart TD
+    PG["Postgres: orders, customers, products"] --> DBZ["Debezium"]
+    DBZ --> CDC["Kafka: cdc.public.orders, cdc.public.customers, ..."]
+    CDC --> SINK["Kafka Connect to Iceberg sink"]
+    SINK --> ICE["Iceberg tables: lake.orders, lake.customers, ..."]
+    ICE --> DBT["dbt: marts.dim_customers SCD2, marts.fct_orders"]
+    DBT --> BI["BI Dashboard"]
+    ICE --> TT["Time-travel UI — orders.orders as of 2024-06-15 15:47:00"]
 ```
 
 ### The Interesting Technical Decisions
@@ -623,3 +599,13 @@ These are *learning projects*. They're not "I built this for my employer." Be ho
 The right framing: "I built this on my own to deeply learn X. Here's what I'd do differently with a team and a year of runway."
 
 That's a senior signal.
+
+---
+
+## You can now
+
+- Choose which portfolio projects to build for a target F100 role, and justify two or three deep over seven shallow.
+- Scope an F100-grade project end to end — real-time anomaly detection, CDC lakehouse, cost audit, feature store, observability platform, or data mesh — with acceptance criteria a senior reviewer would respect.
+- Design the architecture for each, naming the *interesting* technical decision (identity resolution, point-in-time correctness, exactly-once trade-offs) rather than just the tool list.
+- Write a project README that reads like a tech blog post — architecture diagram, decisions-and-trade-offs, cost analysis, and what you'd build next.
+- Present any of these as a senior interview narrative: one-sentence framing, the one non-obvious decision explained, and what you'd do differently.

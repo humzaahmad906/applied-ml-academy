@@ -131,9 +131,9 @@ comparison over billions of documents. The construction:
   below are almost always skipped). Only candidate pairs are then compared exactly, collapsing the
   quadratic blowup into something tractable.
 
-```text
-P(candidate | jaccard = s) = 1 - (1 - s^r)^b
-```
+$$
+P(\text{candidate} \mid \text{jaccard} = s) = 1 - (1 - s^r)^b
+$$
 
 Increasing `r` sharpens and raises the threshold (fewer false positives, more misses); increasing
 `b` lowers it (catch more, more false positives). This single S-curve is the entire tuning story of
@@ -218,3 +218,17 @@ curated sources is a tuned hyperparameter often changed on a curriculum with a f
 anneal. Synthetic data lets you manufacture the distribution you want but risks amplifying errors
 and closing feedback loops, so validate it against real data. Copyright and licensing are real
 constraints, not footnotes. The same principles govern your synthetic vision-data pipelines.
+
+## You can now
+
+You can now:
+
+- lay out the full Common Crawl pipeline as an ordered sequence — WARC extraction, language ID, quality filtering, deduplication, PII masking, decontamination — and justify why extraction runs on raw WARC rather than the crude WET files.
+- distinguish heuristic (Gopher/C4) filtering from model-based (fastText-classifier) filtering, and explain why the classifier substantially outperforms rules while quietly risking a narrowed distribution.
+- derive the MinHash estimate of Jaccard similarity and tune LSH banding via the S-curve $1 - (1 - s^r)^b$, choosing `b` and `r` to place the candidate-threshold exactly where you want it.
+- map a raw source onto the three-stage quality bar (pre-, mid-, post-training) and design a data-mixture *curriculum* with a high-quality annealing phase, treating the mixture as a tuned hyperparameter.
+- decide when synthetic data helps versus when it closes a self-reinforcing feedback loop, and track provenance and license as first-class metadata through the whole pipeline.
+
+## Try it
+
+Take a few hundred documents from a Common Crawl WET sample (or any messy scraped-text dump) and implement the deduplication stage end to end: represent each document as its set of word 5-grams, build a `k`-MinHash signature per document, and band it into `b` bands of `r` rows. Sweep a couple of `(b, r)` settings that keep `k = b·r` fixed and plot the candidate-probability S-curve for each; then run the exact Jaccard comparison only on the candidate pairs and confirm the empirical catch rate tracks $1 - (1 - s^r)^b$. Report how the surviving document count and the false-positive rate move as you sharpen `r`. This is the tuning knob the whole dedup stage rides on.

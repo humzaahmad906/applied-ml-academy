@@ -46,16 +46,17 @@ The correct retrieval architecture here is the two-tower model: a user tower ove
 
 ### Current-state architecture
 
-```
-Request
-  → [Candidate generation: two-tower ANN | social graph | recency | exploration]
-  → merged ~2–5k candidates
-  → [Ranker: DCN-v2 / sequence encoder, multi-task heads, value formula]
-  → top ~200
-  → [Re-rank / policy: diversity, integrity, exploration injection, creator floors]
-  → top ~50 served
-     ↓
-  [Logging: impressions + positions + outcomes → feedback loop → training data]
+```mermaid
+flowchart TD
+    REQ[Request] --> CG["Candidate generation: two-tower ANN, social graph, recency, exploration"]
+    CG --> MERGE["merged ~2-5k candidates"]
+    MERGE --> RANK["Ranker: DCN-v2 / sequence encoder, multi-task heads, value formula"]
+    RANK --> T200["top ~200"]
+    T200 --> RERANK["Re-rank / policy: diversity, integrity, exploration injection, creator floors"]
+    RERANK --> T50["top ~50 served"]
+    T50 --> LOG["Logging: impressions + positions + outcomes"]
+    LOG -->|feedback loop| TRAIN["training data"]
+    TRAIN -.->|next training cycle| RANK
 ```
 
 The data flywheel — impressions and interactions logged, joined with delayed outcomes, fed back to the next training cycle — is the system's primary moat, and it is the first thing that fails without careful design (the labeling and feedback-loop sections of the data-engineering chapter cover the machinery).
@@ -104,17 +105,17 @@ The first version wraps the model in a standard HTTP server, batches incoming re
 
 ### Current-state architecture
 
-```
-IDE keystroke / completion request
-  → GenAI gateway (rate limit, auth, session routing)
-  → KV-cache-aware load balancer
-        ├─→ small model fleet (inline completions, simple fills)
-        └─→ full model fleet (multi-line, explanations, long context)
-              ├─ disaggregated prefill pool (compute-bound, scales separately)
-              └─ decode pool (bandwidth-bound, serves tokens to IDE)
-  ← streaming response (tokens as available)
-     ↓
-  [logging → quality signals → training data for next fine-tune round]
+```mermaid
+flowchart TD
+    IDE["IDE keystroke / completion request"] --> GW["GenAI gateway: rate limit, auth, session routing"]
+    GW --> LB["KV-cache-aware load balancer"]
+    LB --> SM["small model fleet: inline completions, simple fills"]
+    LB --> FM["full model fleet: multi-line, explanations, long context"]
+    FM --> PF["disaggregated prefill pool: compute-bound, scales separately"]
+    PF --> DP["decode pool: bandwidth-bound, serves tokens to IDE"]
+    SM --> RESP["streaming response: tokens as available"]
+    DP --> RESP
+    RESP --> LOG["logging to quality signals to training data for next fine-tune round"]
 ```
 
 Structured decoding enforces function-signature and import formatting; prefix caching is the dominant cost lever; KV hit rate and ITL p99 are the primary operational metrics. An engine upgrade or quantization change triggers a regression eval on a fixed held-out task set before it touches the production fleet — "it should work" is not a deployment criterion.
@@ -165,16 +166,19 @@ The first version is a weekend prototype: chunk every document at 512 tokens, em
 
 ### Current-state architecture
 
-```
-Query
-  → [Query understanding: rewriting, metadata-filter extraction, multi-hop detection]
-  → parallel: BM25 retrieval + dense retrieval (bi-encoder, contextual chunks)
-  → RRF merge → top-50 candidates
-  → cross-encoder rerank → top-8 chunks
-  → [faithfulness check (parallel)] + [answer generation]
-  ← response with cited sources + freshness metadata
-     ↓
-  [feedback: thumbs-up/down + correction → golden-set augmentation → eval loop]
+```mermaid
+flowchart TD
+    Q[Query] --> QU["Query understanding: rewriting, metadata-filter extraction, multi-hop detection"]
+    QU --> BM25["BM25 lexical retrieval"]
+    QU --> DENSE["dense retrieval: bi-encoder, contextual chunks"]
+    BM25 --> RRF["RRF merge: top-50 candidates"]
+    DENSE --> RRF
+    RRF --> RR["cross-encoder rerank: top-8 chunks"]
+    RR --> FC["faithfulness check (parallel)"]
+    RR --> GEN["answer generation"]
+    FC --> RESP["response with cited sources + freshness metadata"]
+    GEN --> RESP
+    RESP --> FB["feedback: thumbs up/down + correction to golden-set augmentation to eval loop"]
 ```
 
 For multi-hop queries the retrieve-rerank step runs inside an agent loop; the number of loops is bounded by a step budget and a cost cap per query. Context engineering (stable system prompt first for KV-cache reuse, just-in-time chunk injection, compaction when the context window nears its limit) keeps per-query cost bounded.
@@ -223,24 +227,19 @@ The first version is a single large-context prompt: stuff the ticket, the full p
 
 ### Current-state architecture
 
-```
-Incoming ticket
-  → intent classifier
-       ├─→ standard intents: deterministic workflow engine
-       └─→ ambiguous/complex: agent loop
-             ↓
-  [input guardrails: injection classifier, PII scrub]
-  → agent loop (context-engineered, step budget)
-       ↓ tool call (dry-run first)
-  [tool rails: idempotency check, policy compliance, spend cap]
-       ↓ execute / escalate
-  [output guardrails: schema validation, policy-compliance classifier]
-  → action + structured note update
-  → check termination: done? escalate? hit budget?
-       ↓ (on escalation)
-  human review queue (context attached, proposed action shown)
-     ↓
-  [HITL correction → training data for classifiers]
+```mermaid
+flowchart TD
+    T[Incoming ticket] --> IC[intent classifier]
+    IC -->|standard intents| WF["deterministic workflow engine"]
+    IC -->|ambiguous / complex| IG["input guardrails: injection classifier, PII scrub"]
+    IG --> AL["agent loop: context-engineered, step budget"]
+    AL -->|tool call, dry-run first| TR["tool rails: idempotency check, policy compliance, spend cap"]
+    TR --> OG["output guardrails: schema validation, policy-compliance classifier"]
+    OG --> ACT["action + structured note update"]
+    ACT --> TERM{"terminate? done / escalate / budget hit"}
+    TERM -->|on escalation| HRQ["human review queue: context attached, proposed action shown"]
+    HRQ --> HITL["HITL correction to training data for classifiers"]
+    TERM -->|done| DONE([resolved])
 ```
 
 Full trajectory audit logging at every step is non-negotiable: the trajectory log is the audit trail for billing disputes, the ground truth for eval replay, and the debugging surface for oncall.
@@ -293,18 +292,16 @@ RLVR training is infrastructure-heavy: rollout generation at scale requires a co
 
 ### Current-state pipeline
 
-```
-Base open-weight model
-  → Stage 1: SFT (curated, deduplicated, quality-filtered pairs)
-       ↓ held-out task metric gate
-  → Stage 2: DPO (preference pairs from human review + KTO from telemetry)
-       ↓ preference-eval gate (win rate vs SFT baseline on golden set)
-  → Stage 3: RLVR/GRPO (verifiable tasks, deterministic verifiers, disaggregated rollout engine)
-       ↓ verifiable-task accuracy gate
-  → Stage 4: quantization (FP8/INT4 with parity check, max-abs-diff < threshold)
-  → model registry → serving fleet
-       ↓
-  [online eval: A/B, telemetry → preference pairs → next DPO round]
+```mermaid
+flowchart TD
+    BASE[Base open-weight model] --> SFT["Stage 1: SFT (curated, deduplicated, quality-filtered pairs)"]
+    SFT -->|held-out task metric gate| DPO["Stage 2: DPO (preference pairs from human review + KTO from telemetry)"]
+    DPO -->|preference-eval gate: win rate vs SFT baseline| RLVR["Stage 3: RLVR / GRPO (verifiable tasks, deterministic verifiers, disaggregated rollout engine)"]
+    RLVR -->|verifiable-task accuracy gate| QUANT["Stage 4: quantization (FP8/INT4 parity check, max-abs-diff below threshold)"]
+    QUANT --> REG[model registry]
+    REG --> FLEET[serving fleet]
+    FLEET --> OE["online eval: A/B, telemetry to preference pairs"]
+    OE -.->|next DPO round| DPO
 ```
 
 The data flywheel for post-training: production thumbs-down responses feed the next DPO training cycle; HITL corrections on edge-case RLVR failures feed verifier improvements; quality-filtered generation from the latest model can augment the SFT dataset for the next version. This is a living pipeline, not a one-time training job.
@@ -357,3 +354,11 @@ Then read the case study again and compare. The gaps are your study targets. Rep
 
 **Q5. A product manager asks you to add tool use to your existing RAG assistant — the agent should be able to query a live database. What design concerns do you raise before writing a line of code?**
 **A.** In roughly the order of severity: (1) **Security.** The assistant already processes untrusted user input. Adding a database tool means a user could attempt prompt injection — embed instructions in their query to make the agent execute unintended queries. Mitigations: input injection classifier before the agent sees the query; least-privilege database credentials scoped to the minimum tables and columns needed (never the write user); egress logging of every query. (2) **Idempotency and blast radius.** Read-only queries are recoverable. If the tool ever writes, every write must be idempotent and every high-impact action must go through a human approval gate. Determine upfront which operations the tool can execute autonomously vs. which require approval. (3) **Schema as context.** Database schema injected naively into the system prompt is thousands of tokens; for large schemas, this blows out the context window and KV-cache reuse. Use deferred tool loading or a schema-search tool so the agent pulls only the relevant table definitions on demand. (4) **Cost and loop control.** Agentic database queries can fan out; a single user question can generate dozens of SQL calls if the loop is uncontrolled. Step budgets, cost caps, and consecutive-failure circuit breakers are prerequisites, not additions. (5) **Eval.** Add the new tool path to the existing eval harness before launch — not after the first incident. Raising all five of these before writing code is exactly the behavior the question is designed to elicit.
+
+## You can now
+
+- narrate each of the five case studies as naive → concrete pain → targeted fix → current shape, naming the motivating failure behind every evolution step.
+- explain why the recommendation funnel forbids user×item cross-features in the retrieval towers and reserves them for the ranker.
+- sequence the LLM-serving upgrades (continuous batching → PagedAttention → prefix caching → chunked prefill → prefill/decode disaggregation → KV-aware routing → cascade) and state the exact pain each one solves.
+- diagnose the three dominant production-RAG failures (orphaned chunks, dense-only identifier misses, ungrounded generation) and the SFT→DPO→RLVR failure modes (exploration collapse, reward hacking, verifier noise) with their fixes.
+- reconstruct any of these current-state architectures from memory under a 45-minute timer — the interview is a reconstruction, not a recitation.

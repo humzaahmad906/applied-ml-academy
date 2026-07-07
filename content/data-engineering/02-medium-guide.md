@@ -396,14 +396,13 @@ Around it: **dimension tables** describing the *entities* involved in events.
 
 For NYC taxi:
 
-```
-       dim_dates                    dim_zones
-            │                            │
-            ▼                            ▼
-       fct_trips ◄── (foreign keys to dimensions)
-            ▲                            ▲
-            │                            │
-       dim_vendors                  dim_payment_types
+```mermaid
+flowchart TD
+    dim_dates --> fct_trips
+    dim_zones --> fct_trips
+    dim_vendors --> fct_trips
+    dim_payment_types --> fct_trips
+    fct_trips["fct_trips (holds foreign keys to each dimension)"]
 ```
 
 `fct_trips` has columns like `trip_id, date_key, pickup_zone_id, dropoff_zone_id, vendor_id, fare, distance, duration`. The dimensions explain what those keys mean.
@@ -558,6 +557,16 @@ Build a multi-source analytics project:
 - You think about cost, documentation, and testing — the things that separate seniors from juniors
 
 This project is genuinely portfolio-worthy. Treat the `README` like a tech blog post — it's the thing recruiters will actually read.
+
+---
+
+## You can now
+
+- Design BigQuery tables with partitioning and clustering, and predict which `WHERE` clauses actually prune bytes scanned versus silently scanning the whole table.
+- Write window-function SQL — `ROW_NUMBER`, `LAG`, running totals, time-aware rolling ranges — fluently enough to pass a senior SQL screen.
+- Structure a dbt project with staging/intermediate/marts layering, choose the right materialization per model, and enforce quality with built-in and package tests.
+- Model a warehouse dimensionally: build a star schema, pick the correct fact-table grain, and implement SCD Type 2 with dbt snapshots.
+- Explain where the field is heading — SQLMesh vs dbt, ODCS data contracts, and why a semantic layer is becoming the AI agent's interface to the warehouse.
 
 ---
 

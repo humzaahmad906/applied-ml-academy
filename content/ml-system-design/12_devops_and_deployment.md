@@ -655,3 +655,11 @@ The critical design decision is `minReplicaCount`. For a latency-sensitive servi
 If the regression is in the model weights (not the application code), rollback is a config change: update `MODEL_URI` in the Deployment to point to the previous version in the model registry and re-apply. Same speed, same mechanism.
 
 Prevention: the eval harness gate in the CI pipeline is the primary defense. Every candidate model version must pass offline eval gates (accuracy, latency on the golden set) before the Deployment manifest is updated. The CI pipeline I described in this chapter runs the eval step before building or pushing anything — a regression fails the pipeline at the cheapest possible point. For model-specific promotion, the eval and observability chapter's champion/challenger gate is the complementary mechanism: the new model must beat the champion on the eval suite before its `MODEL_URI` is updated in the Deployment. Deploying a model that failed either gate requires an explicit override, which creates an audit trail.
+
+## You can now
+
+- write a multi-stage CUDA Dockerfile that ships a runtime image 60–70% smaller than a single-stage build, with no compilers, dev tooling, or embedded model weights.
+- separate `/health` (liveness) from `/ready` (readiness) so Kubernetes doesn't kill a pod that is still loading a large checkpoint.
+- diagnose the CUDA-toolkit-vs-host-driver ceiling mismatch before it surfaces as a cryptic `no kernel image available` error at the first CUDA call.
+- choose between HPA and KEDA for a given workload, and justify `minReplicaCount: 1` for a latency-sensitive LLM service against the cold-start reality.
+- build an eval-gated GitHub Actions pipeline with a human production-approval gate, and execute a sub-two-minute `kubectl rollout undo` for both code and model-weight regressions.

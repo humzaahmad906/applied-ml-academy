@@ -98,7 +98,7 @@ algorithm *and* its production form.
 
 **B1. Scaled dot-product attention with a causal mask, in plain PyTorch.**
 
-The primitive. Score, scale by `1/sqrt(d_k)`, causal-mask, numerically-stable softmax, weight the
+The primitive. Score, scale by $1/\sqrt{d_k}$, causal-mask, numerically-stable softmax, weight the
 values. Write the softmax by hand to show you know the max-subtraction.
 
 ```python
@@ -305,7 +305,7 @@ class SwiGLU(torch.nn.Module):
 If asked to write SiLU by hand: `silu(x) = x * torch.sigmoid(x)`. Traps: only two matrices (that is
 the old ReLU MLP — SwiGLU has three because the gate is a separate projection); putting the
 activation on the wrong branch or on both; adding biases; and not knowing the sizing rule —
-`d_ff ≈ (8/3)·d_model` rounded to a multiple of 64, chosen so the three-matrix parameter count
+$d_{\text{ff}} \approx (8/3) \cdot d_{\text{model}}$ rounded to a multiple of 64, chosen so the three-matrix parameter count
 matches the old two-matrix `4d` design. Naming that `8/3` rule unprompted is the depth signal.
 
 ---

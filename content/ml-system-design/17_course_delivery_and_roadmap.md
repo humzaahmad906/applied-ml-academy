@@ -65,10 +65,12 @@ These constants recur across the training, inference, and serving chapters. Inte
 
 **FLOPs per token — dense transformer**
 
-```
-Forward pass:   FLOPs ≈ 2N
-Training step:  FLOPs ≈ 6N
-```
+$$
+\begin{aligned}
+\text{Forward pass:} &\quad \text{FLOPs} \approx 2N \\
+\text{Training step:} &\quad \text{FLOPs} \approx 6N
+\end{aligned}
+$$
 
 *N* = number of non-embedding parameters. The forward-pass formula (2N) follows from the dominant term being matrix multiplications: for each token, every parameter is multiplied once (weight × activation → ~2 ops per multiply-add). The training-step formula (6N) adds the backward pass (~4N: 2N for the gradient with respect to weights + 2N for the gradient with respect to activations). This is the formula underlying the Chinchilla compute budget: *C ≈ 6ND* where *D* is the number of training tokens. In an interview, volunteering "the forward pass costs 2N FLOPs per token and a full training step costs 6N" is a senior signal — most candidates treat FLOPs as a black box.
 
@@ -78,9 +80,9 @@ Training step:  FLOPs ≈ 6N
 
 **KV-cache size**
 
-```
-KV-cache bytes = 2 × L × n_kv × d_head × S × B_elem
-```
+$$
+\text{KV-cache bytes} = 2 \times L \times n_{kv} \times d_{head} \times S \times B_{elem}
+$$
 
 - *L* = number of layers
 - *n_kv* = number of KV heads (equals n_heads for MHA; reduced for GQA/MQA)
@@ -91,10 +93,12 @@ KV-cache bytes = 2 × L × n_kv × d_head × S × B_elem
 
 Example: LLaMA-3.1-8B: 32 layers, GQA with 8 KV heads, d_head = 128, fp16.
 
-```
-Per-token KV = 2 × 32 × 8 × 128 × 2 = 131 072 bytes ≈ 128 KB per token
-128K context window → 128 KB × 128 000 ≈ 16 GB  — close to the full model weight size
-```
+$$
+\begin{aligned}
+\text{Per-token KV} &= 2 \times 32 \times 8 \times 128 \times 2 = 131{,}072 \text{ bytes} \approx 128\text{ KB} \\
+128\text{K context} &\rightarrow 128\text{ KB} \times 128{,}000 \approx 16\text{ GB} \quad (\approx \text{full model weight size})
+\end{aligned}
+$$
 
 This explains why long-context serving is memory-constrained and why fp8 KV caching halves this number. In an interview, being able to derive that a 128K-context request consumes ~16 GB of KV cache for an 8B model — and then naming fp8 KV as the mitigation — is the exact depth-on-demand that separates mid-level from senior-level answers.
 
@@ -104,15 +108,15 @@ This explains why long-context serving is memory-constrained and why fp8 KV cach
 
 At batch size 1, a single decode step (one token generated) must load every model weight from HBM at least once. This is the memory-bandwidth bottleneck:
 
-```
-time_per_token ≈ model_bytes / HBM_bandwidth
-```
+$$
+\text{time per token} \approx \frac{\text{model bytes}}{\text{HBM bandwidth}}
+$$
 
 Example: a 7B fp16 model = 14 GB; H100 SXM HBM3 bandwidth = ~3.35 TB/s.
 
-```
-14 × 10⁹ bytes / 3.35 × 10¹² B/s ≈ 4.2 ms per token
-```
+$$
+\frac{14 \times 10^{9} \text{ bytes}}{3.35 \times 10^{12} \text{ B/s}} \approx 4.2 \text{ ms per token}
+$$
 
 Upper-bound throughput at batch=1: ~240 tok/s. Real systems achieve 150–200 tok/s at small batch due to attention and non-matmul overhead. Increasing batch size amortizes the weight reads across multiple concurrent tokens — the system transitions from memory-bound to compute-bound somewhere around batch 32–128 depending on model size. Batch size at the memory/compute crossover = *2 × N / (d_model)* in simplified analysis — the practical takeaway is that continuous batching exists precisely to keep the GPU on the right side of this transition.
 
@@ -124,9 +128,9 @@ The corollary: on a smaller HBM-bandwidth chip, latency degrades proportionally.
 
 Model FLOP Utilization (MFU) measures the fraction of the hardware's theoretical peak FLOP/s that the training job actually achieves:
 
-```
-MFU = (measured throughput in tok/s × FLOPs/tok) / (n_GPUs × peak_FLOP/s)
-```
+$$
+\text{MFU} = \frac{\text{measured throughput (tok/s)} \times \text{FLOPs/tok}}{n_{GPUs} \times \text{peak FLOP/s}}
+$$
 
 Well-optimized runs on modern hardware (H100, well-tuned FSDP or Megatron, high-BF16 utilization, minimal communication overhead) land in the **35–50% MFU** range. Budget **40%** as a planning number; use it to estimate training time from compute budget. Anything below 30% warrants investigation (communication bottleneck, memory contention, kernel inefficiency). Anything above 55% on a dense transformer at scale is either a small model, a benchmark artifact, or a very careful implementation — mention it if you achieved it, name the techniques that got you there (torch.compile, flash-attention, custom kernels, carefully tuned TP degree).
 

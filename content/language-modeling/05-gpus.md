@@ -66,9 +66,9 @@ mixed-precision training is universal.
 
 Here is the model that ties it together. For any operation, define its arithmetic intensity:
 
-```
-arithmetic intensity = FLOPs performed / bytes moved to and from HBM
-```
+$$
+\text{arithmetic intensity} = \frac{\text{FLOPs performed}}{\text{bytes moved to and from HBM}}
+$$
 
 Every GPU has two ceilings: a peak compute rate (FLOP/s) and a peak memory bandwidth (bytes/s).
 For an A100, peak bf16 tensor compute is ~312 TFLOP/s and peak HBM bandwidth is ~1.5–2.0 TB/s
@@ -77,9 +77,9 @@ For an A100, peak bf16 tensor compute is ~312 TFLOP/s and peak HBM bandwidth is 
 
 Their ratio is a break-even intensity — the FLOPs-per-byte at which the two ceilings meet:
 
-```
-break-even intensity = peak FLOP/s / peak bytes/s
-```
+$$
+\text{break-even intensity} = \frac{\text{peak FLOP/s}}{\text{peak bytes/s}}
+$$
 
 For an A100 that is roughly 312e12 / 2.0e12 ≈ 156 FLOPs per byte. For an H100, roughly
 990e12 / 3.35e12 ≈ 295 FLOPs per byte. These break-even points are high, and they have been
@@ -189,3 +189,15 @@ and naive attention are memory-bound and dominated by HBM round-trips. The way t
 move data from HBM as rarely as possible, which means low precision for the matmuls and kernel
 fusion for everything else. Batch size buys occupancy and matmul size, which is how the GPU hides
 memory latency — and every measurement must synchronize, warm up, and profile before you trust it.
+
+## You can now
+
+- describe the GPU execution model — SMs, warps, SIMT, warp divergence, and wave quantization — and the register/shared/L2/HBM memory hierarchy.
+- compute any operation's arithmetic intensity and place it on the roofline to predict memory-bound versus compute-bound behavior before running it.
+- explain why matmuls belong on tensor cores in low precision (~312 vs ~19.5 TFLOP/s on A100) while elementwise ops, reductions, and naive attention are memory-bound.
+- reason about occupancy and why larger batches and longer sequences hide memory latency and raise utilization.
+- benchmark GPU code correctly: synchronize before timing, warm up, average over trials, watch peak memory, and profile before optimizing.
+
+## Try it
+
+Benchmark two operations on your GPU (or MPS device): one large square matmul and one memory-bound elementwise op such as RMSNorm, both on tensors of the same total size. For each, measure wall-clock time (with warmup and `torch.cuda.synchronize()`), then compute achieved FLOP/s and achieved bytes/s and its arithmetic intensity. Place both points on your device's roofline and confirm the matmul lands under the flat compute roof while the elementwise op sits far under the sloped bandwidth roof — the whole memory-bound-vs-compute-bound story in two measurements.

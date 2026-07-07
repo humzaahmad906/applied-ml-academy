@@ -137,6 +137,14 @@ Run by: ____________  System: ____________  Date: ________
 Disposition per item: PASS / FINDING (owner + date) / ACCEPTED RISK (signed)
 ```
 
+## You can now
+
+- Recognize all eleven production failure patterns by their structural signature, name the canonical case that made each pattern famous, and explain why the same structure recurs across industries and system types.
+- Apply the principal's catching-question for any pattern during a design review without prompting, and push every finding from "what happened to this system" to "what systemic change would prevent two other plausible incidents."
+- Run the consolidated 11-item checklist against any new system design in under an hour, producing PASS, FINDING, or ACCEPTED RISK dispositions with named owners and dates for every item.
+- Write an internal case study that identifies the dominant failure pattern, estimates cost with stated assumptions, and proposes a prevention that passes the two-other-incidents test.
+- Distinguish the four patterns most commonly conflated in incident reviews — regime change versus adversarial feedback, and symptom patching versus overcorrection — and apply the correct defense to each.
+
 ## Worked example — running the checklist on "AskNorth," a bank's LLM support agent
 
 **The design under review.** A retail bank (9M customers) proposes an LLM customer-support agent: frontier API + RAG over policy docs and account FAQs, able to quote fee/refund policies, initiate card blocks via tool call, and escalate to humans on low confidence. It will learn from thumbs-up/down feedback, fine-tuning a smaller in-house model quarterly on highly-rated transcripts to cut API cost. Target: deflect 40% of 2.4M annual contacts (~$8 saved per deflected contact ≈ $7.7M/year). The design doc is competent: latency budgets, cascade economics, eval on a 500-conversation golden set (89% resolution quality by LLM-judge).

@@ -158,10 +158,9 @@ Data residency (Module 01 of the ML System Design course covers the six crossing
 
 Once the portfolio exists, the single highest-leverage recurring decision is *which requests go to which model*. The cascade formula and the confidence-threshold economics:
 
-```text
-blended_cost/req = Σ_i share_i × cost_i
-quality(τ)       = share_small(τ) × q_small + (1 − share_small(τ)) × q_big
-```
+$$\text{blended cost/req} = \sum_i \text{share}_i \times \text{cost}_i$$
+
+$$\text{quality}(\tau) = \text{share}_\text{small}(\tau) \times q_\text{small} + \bigl(1 - \text{share}_\text{small}(\tau)\bigr) \times q_\text{big}$$
 
 where τ is the confidence threshold controlling escalation. The senior framing is "cascades save money." The principal framing: **τ is a product-owned dial with a dollar value per notch, and someone must own it.** Tighten τ (escalate more): quality up, cost up. Loosen: reverse. Concretely, on a 10M req/day support workload where the small model handles 80% at $0.4/1M output tokens and the frontier tier costs $15/1M, moving escalation share from 20% → 15% saves ≈ $110k/year — and whether that 5% of traffic actually needed frontier quality is an eval question, answerable with a weekly sampled A/B of escalation decisions.
 
@@ -171,9 +170,7 @@ Operational requirements that distinguish a real cascade from a demo: a calibrat
 
 The self-hosted token cost formula, from Module 01 of the ML System Design course, restated because everything here builds on it:
 
-```text
-$/1M output tokens = GPU_$/hr × num_GPUs / (throughput_tok_s × 3600) × 1e6 / utilization
-```
+$$\frac{\$}{1\text{M tokens}} = \frac{\text{GPU}_{\$/\text{hr}} \times N_\text{GPU}}{\text{throughput}_{\text{tok/s}} \times 3600} \times \frac{10^6}{\text{utilization}}$$
 
 Worked, with 2026 planning numbers (state your own when they differ):
 
@@ -193,12 +190,19 @@ Two lessons the numbers force. First, **utilization sensitivity dominates everyt
 
 Capacity sizing in the other direction — from demand to GPUs:
 
-```text
-GPUs = peak_QPS × avg_output_tokens / (tok_s_per_GPU × target_util)
-     e.g. 40 QPS × 400 tok / (6000 × 0.6) ≈ 4.4 → 5 GPUs + headroom policy
-```
+$$N_\text{GPU} = \frac{\text{peak\_QPS} \times \overline{\text{output\_tokens}}}{\text{tok/s\_per\_GPU} \times \text{target\_util}}$$
+
+e.g. $40\text{ QPS} \times 400\text{ tok} \;/\; (6000 \times 0.6) \approx 4.4 \;\rightarrow\; 5\text{ GPUs} + \text{headroom policy}$
 
 Do this arithmetic in meetings, out loud, with stated assumptions. It is the fastest credibility-builder a principal has, and it ends more bad projects than any design review.
+
+## You can now
+
+- Build a serving-portfolio inventory table — one row per model with $/month, $/1k req, hardware, and SLO compliance — and use it to convert "serving is expensive" from a complaint into a fundable business case for consolidation.
+- Size self-hosted LLM cost per million output tokens from first principles, work backward from demand to GPU count, and do this arithmetic live in a planning meeting as a credibility-establishing move.
+- Design a two-tier serving platform (CPU + GPU) with a model-migration order driven by $/1k req and incident count, not engineering convenience, and estimate the ops savings from collapsing N bespoke stacks to 2.
+- Apply the quality-gate protocol for quantization: freeze a per-slice eval set, gate on aggregate and per-slice regression bounds, and record the comparison artifact in the model registry so "what quantization is prod running and what did it cost?" is a one-query answer.
+- Set the cascade confidence threshold τ as a product-owned dial with an explicit dollar value per notch, specify its routing-decision log, and define the monthly review that keeps the cost/quality frontier legible to stakeholders.
 
 ## Worked example
 

@@ -243,3 +243,11 @@ Take the RAG system from the retrieval chapter (or the agent from the agentic-sy
 
 **Q5. Shadow deployment vs canary — when each, and what does each catch?**
 **A.** **Shadow:** the challenger receives mirrored live traffic and produces predictions that are logged, never served. Zero user risk; catches systems issues (latency under real load, crashes, feature-fetch failures, skew between offline eval scores and live scores) and lets you compare champion-vs-challenger outputs on identical real inputs. What it *cannot* measure: anything requiring user reaction — engagement, feedback loops, downstream behavior change — because no one sees its outputs. **Canary:** serve the challenger to a small real slice (1–5%) with automated guardrail monitoring and instant rollback; this is the first measurement of true user impact and operational behavior under genuine consequence, at bounded blast radius. They're sequential, not alternatives: offline gate → shadow (de-risk systems + skew) → canary (de-risk users) → A/B at power (measure the effect) → ramp. Special cases worth adding: for state-mutating systems (fraud blocking, refunds, agents with side effects), shadow requires care — you must *simulate* the action, not execute it; and for LLM products, "shadow" often means generating responses on logged prompts and judge-scoring them, which is exactly the offline-eval-on-production-distribution pattern from the flywheel.
+
+## You can now
+
+- design a layered evaluation strategy — versioned golden/regression sets, slice-aware offline metrics, and a calibrated LLM-as-judge — and defend it against the biases that make naive judging worthless.
+- name and mitigate the five LLM-as-judge biases (position, verbosity, self-preference, rubric drift, sycophancy) and calibrate a judge against a human-labeled subset with a reported Cohen's κ.
+- run the incident-response triage taxonomy (data in → feature/train-serve skew → artifact → serving config → eval) to localize an "accuracy dropped, infra looks fine" regression.
+- treat prompts as versioned code: wire an eval-gated CI pipeline and a prompt registry so every prompt/model change is gated, A/B-able, and one-flip-rollback-able.
+- instrument an ML service with the five ML-specific dashboard panels and calibrated, tiered alerts, and export a custom metric (e.g. feature null rate) to Prometheus.

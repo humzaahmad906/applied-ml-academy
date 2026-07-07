@@ -193,7 +193,7 @@ The 2026 default LLM cost play: take GPT-4o or Claude as teacher, distill into a
 
 ### KV Cache Management
 
-In LLM inference, the KV cache stores attention key/value tensors for previous tokens. Its size is `2 × N × L × H × bytes_per_element` (N layers, L sequence length, H hidden size, bytes per element by precision).
+In LLM inference, the KV cache stores attention key/value tensors for previous tokens. Its size is $2 \times N \times L \times H \times \text{bytes\_per\_element}$ (N layers, L sequence length, H hidden size, bytes per element by precision).
 
 For Llama-2-7B with 4096 context, FP16: ~2GB per request. At 100 concurrent requests: 200GB. The KV cache, not parameters, is the memory bottleneck for LLM inference.
 
@@ -315,9 +315,9 @@ PPO is finicky. Reward hacking is real. Most modern alignment has moved past it.
 
 Skip the reward model. Given pairs (prompt, chosen, rejected), train the model to prefer chosen directly:
 
-```
-L_DPO = -log σ(β log[π(chosen|prompt) / π_ref(chosen|prompt)] - β log[π(rejected|prompt) / π_ref(rejected|prompt)])
-```
+$$
+\mathcal{L}_{\text{DPO}} = -\log \sigma\!\left( \beta \log \frac{\pi(\text{chosen} \mid \text{prompt})}{\pi_{\text{ref}}(\text{chosen} \mid \text{prompt})} - \beta \log \frac{\pi(\text{rejected} \mid \text{prompt})}{\pi_{\text{ref}}(\text{rejected} \mid \text{prompt})} \right)
+$$
 
 No reward model, no PPO. Much more stable. Often equivalent results. The 2026 default.
 
@@ -448,9 +448,9 @@ The ops rule: any agent that touches a production system (sends email, writes to
 
 ### Hybrid Search Math
 
-```
-score = α × normalize(vector_score) + (1-α) × normalize(bm25_score)
-```
+$$
+\text{score} = \alpha \cdot \text{normalize}(\text{vector\_score}) + (1 - \alpha) \cdot \text{normalize}(\text{bm25\_score})
+$$
 
 How to pick α? Use a labeled eval set. Tune α to maximize NDCG@10 or recall@10. Often α=0.5–0.7 works.
 
@@ -1037,3 +1037,14 @@ You've now seen the full landscape. The honest path forward:
 The compound interest on solid fundamentals over 12–18 months is genuinely transformative. Most candidates skip them and stay mid-level forever. Don't be most candidates.
 
 When you're ready to think about the role *above* senior IC, continue to the ML architect track.
+
+---
+
+## You can now
+
+- Compute training memory by hand for a given model and optimizer, and choose the right ZeRO stage / FSDP sharding and 3D-parallelism layout for the interconnect you have.
+- Select the correct inference optimization for a bottleneck — quantization (AWQ/GPTQ/FP8), PagedAttention KV-cache paging, continuous batching, speculative decoding, or an architectural trick like GQA/MoE.
+- Map a distributed-systems consistency choice (CAP/PACELC, replication, partitioning, consensus) onto the right ML component — feature cache, model promotion, or event stream.
+- Reason about the six data-residency leak surfaces for multi-region LLM serving and design a control-plane/data-plane split that survives an EU AI Act or GDPR review.
+- Diagnose an agentic system through a tool-call trace tree — loop detection, tool-error propagation, context-window pressure — and enforce dry-run mode on side-effecting tools.
+- Recognize, from the recurring patterns, which advanced topic to consult when a real production system pushes you into unfamiliar territory.

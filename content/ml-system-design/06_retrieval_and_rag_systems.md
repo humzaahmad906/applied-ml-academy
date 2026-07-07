@@ -74,7 +74,11 @@ def recall_at_k(
     return score
 ```
 
-**Faithfulness (claim-by-claim).** Decompose the model's answer into atomic claims with a short LLM call — "list every factual claim in this sentence as a JSON array". Then for each claim ask the judge: "Is this claim supported by the context below? Answer yes or no." Faithfulness = (supported claims) / (total claims). This is deliberately pessimistic: one unsupported claim in a three-claim answer scores 0.67, which is the right sensitivity for hallucination detection.
+**Faithfulness (claim-by-claim).** Decompose the model's answer into atomic claims with a short LLM call — "list every factual claim in this sentence as a JSON array". Then for each claim ask the judge: "Is this claim supported by the context below? Answer yes or no."
+
+$$\text{Faithfulness} = \frac{\text{supported claims}}{\text{total claims}}$$
+
+This is deliberately pessimistic: one unsupported claim in a three-claim answer scores 0.67, which is the right sensitivity for hallucination detection.
 
 ```python
 def faithfulness_score(
@@ -358,3 +362,11 @@ For the end-to-end RAG case study — serving architecture, latency budget break
 
 **Q5. Design semantic search over 200M product listings, p99 < 150 ms, with filters.**
 **A.** Two-stage funnel. **Offline:** fine-tune a bi-encoder on click/purchase pairs from search logs (in-batch negatives + hard negatives mined from BM25); embed listings (Matryoshka-truncate to 256–512d); index with IVF-PQ or sharded HNSW — at 200M vectors, memory math decides: 200M × 512d × fp16 ≈ 200 GB raw → PQ compression or disk-resident (DiskANN) per shard; shard by category or hash, replicate for QPS. **Online:** query → light normalization + metadata-filter extraction → parallel dense + BM25 → RRF merge of ~500 → cross-encoder rerank of top 100 (small, distilled, batched on GPU, ~20–40 ms) → business-rule re-rank (availability, margin, diversity). Filters: pre-filter inside the ANN engine where selective (price range, category), post-filter when broad. **Freshness:** new/updated listings flow through a streaming embed pipeline into a small fresh-index tier merged at query time, with nightly compaction into the main index. **Eval:** recall@k against logged purchases offline, interleaving experiments online (see the evaluation chapter), and a latency budget per stage stated explicitly: 5 retrieval + 35 rerank + 10 merge ≈ well inside p99.
+
+## You can now
+
+- Architect a multi-stage retrieval pipeline — chunking, embedding, ANN index, hybrid dense+BM25 fusion via RRF, cross-encoder reranking — and justify each layer's tradeoffs under real memory, latency, and recall constraints.
+- Select the right ANN index (HNSW, IVF-PQ, DiskANN) for a given corpus size and memory budget, and tune `efSearch` as a live recall/latency dial without rebuilding the index.
+- Build a golden-set eval harness before the first ablation: construct synthetic QA pairs, measure retrieval recall@k, and score generation faithfulness claim-by-claim using an LLM judge calibrated against human labels.
+- Localize a RAG failure to its root cause — embedding gap, chunk boundary split, lost-in-the-middle, stale index, or missing abstention — and apply the correct targeted fix rather than prompt-tweaking.
+- Recognize ICL example selection as a retrieval problem and reuse the same ANN infrastructure to serve dynamically chosen few-shot examples from a versioned example bank.

@@ -42,11 +42,12 @@ projection of `d×d`.)
 
 Summing the parameterized terms over `n` layers plus the head gives the forward-pass matmul cost:
 
-```
-forward_flops ≈ n · (8 T d² + 6 T d d_ff)      # attention proj + FFN, all params
-              + n · (4 B L² d)                  # attention scores and value-weighting (no params)
-              + 2 T d V                          # LM head
-```
+$$
+\text{forward\_flops} \approx
+\underbrace{n\,(8Td^2 + 6Tdd_{ff})}_{\text{attn proj + FFN (params)}}
++ \underbrace{n\,(4BL^2 d)}_{\text{attn scores + values (no params)}}
++ \underbrace{2TdV}_{\text{LM head}}
+$$
 
 With the canonical SwiGLU sizing `d_ff = (8/3)d`, the FFN term `6 T d d_ff` becomes `16 T d²`, so
 each layer's parameterized cost is `8 T d² + 16 T d² = 24 T d²`. Note this is the FLOP twin of the
@@ -150,9 +151,9 @@ Activations are the part the `18N`-style rules leave vague, so here is the shape
 transformer layer you store the inputs to each matmul and the attention intermediates. The
 dominant, unavoidable terms scale as:
 
-```
-activation_bytes ≈ bytes_per_elt · n_layers · B · L · (c₁ · d + c₂ · L · n_heads)
-```
+$$
+\text{activation\_bytes} \approx \text{bytes\_per\_elt}\cdot n_{layers}\cdot B\cdot L\cdot\big(c_1\, d + c_2\, L\, n_{heads}\big)
+$$
 
 The `c₁·d` part is the linear stack of stored activations (residual stream, FFN hidden of width
 `d_ff`, the QKV/output projection inputs) — all `O(d)` per token. The `c₂·L·n_heads` part is the
@@ -253,3 +254,11 @@ range at half the bytes and usually skips loss scaling; fp16 does not. Activatio
 main lever (batch, sequence, checkpointing, precision). Finally, FLOPs set a floor on time, but
 whether you hit it is a roofline question — arithmetic intensity decides memory-bound vs
 compute-bound, and MFU is the one number that scores it.
+
+## You can now
+
+- derive the forward FLOPs of any Transformer config component by component using the `2mnp` matmul rule.
+- apply the `2N` / `6N` / `6ND` rules, and state exactly what they ignore (the non-parameterized `4BL²d` attention-score term) and the context length at which it starts to dominate.
+- account for all four training-memory consumers and compute the `~18N`-byte fixed cost of bf16 mixed-precision AdamW.
+- choose among fp32, bf16, fp16, and fp8 from their bit layouts and dynamic range, and say when loss scaling is required and when bf16 lets you skip it.
+- place an operation on the roofline and predict memory-bound versus compute-bound behavior from its arithmetic intensity, then score a real run with MFU.

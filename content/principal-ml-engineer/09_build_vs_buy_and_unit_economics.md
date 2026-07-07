@@ -48,21 +48,19 @@ The highest-frequency 2026 instance of build-vs-buy is *API vs. self-hosted mode
 
 Both sides reduce to $/1M tokens; the ML System Design course derives the mechanics — here is the decision-grade version:
 
-```text
-API side:
-  $/req = in_tok × in_rate + out_tok × out_rate
-  (output rates run 3–5× input on all major providers; decompose or be 2–3× wrong)
-  effective_$/req = $/req × (1 − cache_hit × prefix_share)   ← prompt caching
+**API side** — raw cost per request, then cache-adjusted (output rates run 3–5× input on all major providers; decompose or be 2–3× wrong):
 
-Self-host side:
-  $/1M tok = GPU_$/hr × 1e6 / (tok_per_s × 3600 × utilization)
-  all-in    = raw_compute × (1.3–1.6)      ← serving eng, eval infra, upgrades, idle
-              + fine-tune/distill program cost amortized over volume
+$$\text{cost per request} = t_{in} \cdot r_{in} + t_{out} \cdot r_{out}$$
 
-Planning numbers (state your own):
-  H100 ≈ $2–4/hr reserved/spot; tuned vLLM, 7–8B FP8 ≈ 3 000–8 000 decode tok/s/GPU
-  → raw compute ≈ $0.10–0.40 / 1M output tokens at ≥60% utilization
-```
+$$\text{effective cost per request} = \text{cost per request} \times (1 - h_{\text{cache}} \cdot s_{\text{prefix}})$$
+
+**Self-host side** — headline compute cost per 1M output tokens, then all-in:
+
+$$\text{compute cost per 1M tok} = \frac{c_{\text{GPU}} \times 10^6}{T_s \times 3600 \times u}$$
+
+$$\text{all-in cost per 1M tok} = \text{compute cost} \times (1.3\text{–}1.6) + \frac{\text{fine-tune/distill program cost}}{\text{total volume (millions of tokens)}}$$
+
+Planning numbers (state your own): H100 ≈ $2–4/hr reserved/spot; tuned vLLM, 7–8B FP8 ≈ 3 000–8 000 decode tok/s/GPU → raw compute ≈ $0.10–0.40/1M output tokens at ≥60% utilization.
 
 A worked crossover, end to end. A document-extraction path: 25k requests/day, 2 500 input + 300 output tokens/request, frontier API at $2.50/$10 per 1M in/out, 70% cache hit on a 1 500-token stable prefix:
 
@@ -197,6 +195,14 @@ NEXT       triggers wired to: <dashboard/alert>; record reviewed on any fire
 
 - **Set explicit revisit triggers, not calendar reviews.** "Revisit if: volume exceeds X, vendor price changes >Y%, the vendor is acquired or misses the committed roadmap item, open-source alternative reaches capability Z, or a residency requirement lands." Triggers wired to a metric someone already watches actually fire; annual calendar reviews get skipped.
 - **Reversal is not failure.** The 2026 decision was right on 2026 facts; the 2028 reversal is right on 2028 facts. A principal who makes reversal cheap (exit terms, wrapper SDKs, decision records) and un-shameful (the trigger fired; we planned for this) has built an org that updates — rarer and more valuable than an org that decides correctly the first time.
+
+## You can now
+
+- Build a 3-year TCO model for any build-vs-buy decision with headcount fully loaded, opportunity cost included, and exit-risk amortized, then stress-test it against five sensitivity perturbations before calling the recommendation robust.
+- Calculate the API-versus-self-host crossover by running fleet utilization arithmetic — average load, peak factor, HA minimum, real utilization — so the $/1M-token figure you quote in a decision meeting reflects fleet reality, not the headline spec-sheet number.
+- Choose among prompt, RAG, and fine-tune on cost-curve logic (all-marginal vs. fixed-infra-plus-moderate-marginal vs. capex-plus-low-marginal) matched to knowledge update frequency and volume, rather than capability intuition alone.
+- Write a one-page CFO-grade decision memo that leads with the recommendation, states dollars-per-unit-of-business for both paths, names the strongest argument against the recommendation honestly, and wires at least three revisit triggers to observable quantities.
+- Use the build-path TCO analysis as negotiating capital to move vendor list price 20–40% and lock renewal caps and volume-tier pricing at signing, before entanglement eliminates that leverage.
 
 ## Worked example
 

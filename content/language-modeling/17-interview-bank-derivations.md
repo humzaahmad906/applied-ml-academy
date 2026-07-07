@@ -23,31 +23,33 @@ one-hot target `y` (true class `c`) be `L = −log p_c = −Σ_i y_i log p_i`.
 
 First the softmax Jacobian. For `i = j`:
 
-```text
-∂p_i/∂z_i = [e^{z_i}·S − e^{z_i}·e^{z_i}] / S²  = p_i − p_i²  = p_i(1 − p_i)     (S = Σ_k e^{z_k})
-```
+$$
+\frac{\partial p_i}{\partial z_i} = \frac{e^{z_i} S - e^{z_i} e^{z_i}}{S^2} = p_i - p_i^2 = p_i(1 - p_i) \qquad \left(S = \textstyle\sum_k e^{z_k}\right)
+$$
 
 For `i ≠ j`:
 
-```text
-∂p_i/∂z_j = [0 − e^{z_i}·e^{z_j}] / S²  = −p_i p_j
-```
+$$
+\frac{\partial p_i}{\partial z_j} = \frac{0 - e^{z_i} e^{z_j}}{S^2} = -p_i p_j
+$$
 
 Both cases fold into one line with the Kronecker delta:
 
-```text
-∂p_i/∂z_j = p_i (δ_ij − p_j)
-```
+$$
+\frac{\partial p_i}{\partial z_j} = p_i(\delta_{ij} - p_j)
+$$
 
 Now chain into the loss. `L = −Σ_i y_i log p_i`, so `∂L/∂z_j = −Σ_i (y_i / p_i) · ∂p_i/∂z_j`.
 Substitute the Jacobian:
 
-```text
-∂L/∂z_j = −Σ_i (y_i / p_i) · p_i (δ_ij − p_j)
-        = −Σ_i y_i (δ_ij − p_j)
-        = −y_j + p_j · Σ_i y_i
-        = p_j − y_j                          (since Σ_i y_i = 1)
-```
+$$
+\begin{aligned}
+\frac{\partial L}{\partial z_j} &= -\sum_i \frac{y_i}{p_i} \cdot p_i(\delta_{ij} - p_j) \\
+&= -\sum_i y_i(\delta_{ij} - p_j) \\
+&= -y_j + p_j \sum_i y_i \\
+&= p_j - y_j \qquad \left(\text{since } \textstyle\sum_i y_i = 1\right)
+\end{aligned}
+$$
 
 So `∂L/∂z = p − y`: the softmax probabilities minus the one-hot. Every `1/p_i` cancelled against a
 `p_i` in the Jacobian, which is exactly why the gradient is numerically clean and why frameworks fuse
@@ -66,11 +68,13 @@ Mean: `E[s] = Σ_i E[q_i] E[k_i] = 0` by independence and zero mean.
 
 Variance: the terms `q_i k_i` are independent across `i`, so variances add:
 
-```text
-Var(s) = Σ_i Var(q_i k_i)
-Var(q_i k_i) = E[q_i² k_i²] − E[q_i k_i]²  = E[q_i²]E[k_i²] − 0  = 1·1 = 1
-⇒ Var(s) = d
-```
+$$
+\begin{aligned}
+\operatorname{Var}(s) &= \sum_i \operatorname{Var}(q_i k_i) \\
+\operatorname{Var}(q_i k_i) &= \mathbb{E}[q_i^2 k_i^2] - \mathbb{E}[q_i k_i]^2 = \mathbb{E}[q_i^2]\,\mathbb{E}[k_i^2] - 0 = 1 \cdot 1 = 1 \\
+&\Rightarrow \operatorname{Var}(s) = d
+\end{aligned}
+$$
 
 So the raw dot product has standard deviation `√d` and grows with dimension. Feed scores of typical
 magnitude `√d` into softmax and, as `d` grows, the largest score dominates: the softmax saturates
@@ -92,22 +96,22 @@ The gain gradient is immediate: `∂L/∂g_i = ḡ_i · x_i / r`.
 For `∂L/∂x_j` there are two paths, because `x_j` appears both directly in `y_j` and inside `r` (which
 enters *every* `y_i`). Write `y_i = g_i x_i r^{-1}`.
 
-```text
-∂y_i/∂x_j = g_i [ δ_ij r^{-1} + x_i · ∂(r^{-1})/∂x_j ]
-```
+$$
+\frac{\partial y_i}{\partial x_j} = g_i \left[ \delta_{ij}\, r^{-1} + x_i \cdot \frac{\partial (r^{-1})}{\partial x_j} \right]
+$$
 
 Now `r = (1/d · Σ_k x_k²)^{1/2}`, so `∂r/∂x_j = (1/d) x_j / r`, and `∂(r^{-1})/∂x_j = −r^{-2} ∂r/∂x_j
 = −x_j / (d r³)`. Substitute:
 
-```text
-∂y_i/∂x_j = g_i [ δ_ij / r − x_i x_j / (d r³) ]
-```
+$$
+\frac{\partial y_i}{\partial x_j} = g_i \left[ \frac{\delta_{ij}}{r} - \frac{x_i x_j}{d\, r^3} \right]
+$$
 
 Sum over the upstream gradient, `∂L/∂x_j = Σ_i ḡ_i ∂y_i/∂x_j`:
 
-```text
-∂L/∂x_j = (1/r) [ ḡ_j g_j − (x_j / (d r²)) · Σ_i ḡ_i g_i x_i ]
-```
+$$
+\frac{\partial L}{\partial x_j} = \frac{1}{r} \left[ \bar{g}_j g_j - \frac{x_j}{d\, r^2} \sum_i \bar{g}_i g_i x_i \right]
+$$
 
 The first term is the direct path; the second is a projection: it subtracts, from every component
 `j`, a share of `Σ_i (ḡ_i g_i) x_i` proportional to `x_j`. That coupling term is the whole point —
@@ -128,16 +132,16 @@ term from the mean.
 A residual block computes `y = x + F(x)` where `F` is the sublayer (attention or FFN, with its norm).
 The Jacobian of the block output with respect to its input is:
 
-```text
-∂y/∂x = I + ∂F/∂x
-```
+$$
+\frac{\partial y}{\partial x} = I + \frac{\partial F}{\partial x}
+$$
 
 Now stack `n` such blocks: `x_{ℓ+1} = x_ℓ + F_ℓ(x_ℓ)`. By the chain rule, the gradient of the loss at
 the input of layer `ℓ` is the product of per-layer Jacobians from the top down:
 
-```text
-∂L/∂x_ℓ = ∂L/∂x_n · Π_{k=ℓ}^{n−1} ( I + ∂F_k/∂x_k )
-```
+$$
+\frac{\partial L}{\partial x_\ell} = \frac{\partial L}{\partial x_n} \cdot \prod_{k=\ell}^{n-1} \left( I + \frac{\partial F_k}{\partial x_k} \right)
+$$
 
 Expand one factor: `(I + ∂F)` means the gradient has a path that passes through `I` — i.e. straight
 through, untouched — in addition to the path through `∂F`. Multiply the `I` terms across all layers
@@ -234,15 +238,15 @@ Per token, per layer, you cache one key vector and one value vector, each of dim
 (number of KV heads) × (head dim). Let `h_kv` be KV heads (with GQA, `h_kv < h`), `d_head` the head
 dim, `p` bytes per element. Then:
 
-```text
-bytes per token per layer = 2 (K and V) · h_kv · d_head · p
-```
+$$
+\text{bytes per token per layer} = 2\ (K \text{ and } V) \cdot h_{kv} \cdot d_{\text{head}} \cdot p
+$$
 
 Multiply by `n` layers and `S` tokens:
 
-```text
-KV_bytes(S) = 2 · n · h_kv · d_head · p · S
-```
+$$
+\mathrm{KV\_bytes}(S) = 2 \cdot n \cdot h_{kv} \cdot d_{\text{head}} \cdot p \cdot S
+$$
 
 Everything except `S` is fixed by the architecture and dtype, so `KV_bytes ∝ S` — **linear in
 context length**. Three structural readings fall out. (1) The `2` is K-plus-V; drop V and you halve
@@ -266,31 +270,33 @@ correct, the explicit "∝ S", and mapping each factor to the technique that att
 
 Adam maintains exponential moving averages of the gradient `g_t` and its square:
 
-```text
-m_t = β₁ m_{t−1} + (1 − β₁) g_t          (first moment, estimate of E[g])
-v_t = β₂ v_{t−1} + (1 − β₂) g_t²         (second moment, estimate of E[g²])
-```
+$$
+\begin{aligned}
+m_t &= \beta_1 m_{t-1} + (1 - \beta_1) g_t &&\text{(first moment, estimate of } \mathbb{E}[g]) \\
+v_t &= \beta_2 v_{t-1} + (1 - \beta_2) g_t^2 &&\text{(second moment, estimate of } \mathbb{E}[g^2])
+\end{aligned}
+$$
 
 The bias problem: initialize `m_0 = v_0 = 0`. Unroll `m_t = (1−β₁) Σ_{i=1}^{t} β₁^{t−i} g_i`. Take
 expectation assuming `g_i ≈ g` roughly stationary:
 
-```text
-E[m_t] = (1−β₁) g Σ_{i=1}^{t} β₁^{t−i} = (1−β₁) g · (1 − β₁^t)/(1 − β₁) = g (1 − β₁^t)
-```
+$$
+\mathbb{E}[m_t] = (1-\beta_1)\, g \sum_{i=1}^{t} \beta_1^{t-i} = (1-\beta_1)\, g \cdot \frac{1 - \beta_1^t}{1 - \beta_1} = g\,(1 - \beta_1^t)
+$$
 
 So `E[m_t] = (1 − β₁^t) · E[g]` — biased toward zero, badly so at small `t` (with `β₁ = 0.9`, the
 first step's `m_1` is only `0.1·g`). Divide it out:
 
-```text
-m̂_t = m_t / (1 − β₁^t)          v̂_t = v_t / (1 − β₂^t)
-```
+$$
+\hat{m}_t = \frac{m_t}{1 - \beta_1^t} \qquad \hat{v}_t = \frac{v_t}{1 - \beta_2^t}
+$$
 
 Now both are unbiased. The update normalizes the step by the root second moment (per-parameter
 adaptive learning rate):
 
-```text
-θ_t = θ_{t−1} − α · m̂_t / (√v̂_t + ε)
-```
+$$
+\theta_t = \theta_{t-1} - \alpha \cdot \frac{\hat{m}_t}{\sqrt{\hat{v}_t} + \varepsilon}
+$$
 
 Intuition: dividing by `√v̂` gives each parameter a step scaled to its own gradient magnitude, so
 noisy/large-gradient directions take smaller steps — Adam is roughly sign-of-gradient with a
@@ -302,9 +308,9 @@ Now **AdamW / decoupled weight decay**. Original Adam adds L2 regularization int
 is wrong. AdamW decouples it: apply the adaptive step to the *pure* gradient, and subtract the decay
 directly from the weight:
 
-```text
-θ_t = θ_{t−1} − α ( m̂_t / (√v̂_t + ε) + λ θ_{t−1} )
-```
+$$
+\theta_t = \theta_{t-1} - \alpha \left( \frac{\hat{m}_t}{\sqrt{\hat{v}_t} + \varepsilon} + \lambda\, \theta_{t-1} \right)
+$$
 
 Now every parameter decays at the same rate `α λ` regardless of its gradient history, which is the
 correct behavior and is why every modern LLM uses AdamW, not Adam.
@@ -319,22 +325,22 @@ Take one 2D pair of a query at position `m` and key at position `n`. RoPE rotate
 proportional to its absolute position: `q̃_m = R(mθ) q`, `k̃_n = R(nθ) k`, where `R(φ)` is
 the 2D rotation matrix. The attention score for this pair is the dot product `q̃_m · k̃_n = q̃_m^T k̃_n`:
 
-```text
-q̃_m^T k̃_n = (R(mθ) q)^T (R(nθ) k) = q^T R(mθ)^T R(nθ) k
-```
+$$
+\tilde{q}_m^T \tilde{k}_n = (R(m\theta)\, q)^T (R(n\theta)\, k) = q^T R(m\theta)^T R(n\theta)\, k
+$$
 
 Two facts about rotations: `R(φ)^T = R(−φ)` (the inverse rotation), and `R(a)R(b) = R(a+b)`
 (rotations compose additively). So:
 
-```text
-R(mθ)^T R(nθ) = R(−mθ) R(nθ) = R((n − m)θ)
-```
+$$
+R(m\theta)^T R(n\theta) = R(-m\theta)\, R(n\theta) = R((n - m)\theta)
+$$
 
 Therefore:
 
-```text
-q̃_m^T k̃_n = q^T R((n − m)θ) k
-```
+$$
+\tilde{q}_m^T \tilde{k}_n = q^T R((n - m)\theta)\, k
+$$
 
 The score depends on the positions *only* through `n − m`, the relative offset — the absolute `m` and
 `n` have vanished. Write it out with `R((n−m)θ) = [[cos((n−m)θ), −sin((n−m)θ)], [sin((n−m)θ),
@@ -355,58 +361,66 @@ R(a+b)`, landing on `R((n−m)θ)` — and knowing RoPE hits `q,k` only, never `
 Start from the objective every alignment stage shares: maximize expected reward under a
 KL leash to the frozen reference `π_ref`, with coefficient `β`:
 
-```text
-max_π  E_{y∼π(·|x)} [ r(x,y) ]  −  β · KL( π(·|x) ‖ π_ref(·|x) )
-```
+$$
+\max_\pi \; \mathbb{E}_{y \sim \pi(\cdot \mid x)}[r(x,y)] \; - \; \beta \cdot \mathrm{KL}\!\left( \pi(\cdot \mid x) \,\|\, \pi_{\text{ref}}(\cdot \mid x) \right)
+$$
 
 Step 1 — solve for the optimal `π*`. Write the objective as a single expectation and complete it into
 a KL. For a fixed `x`:
 
-```text
-E_π[r] − β E_π[log(π/π_ref)]
-= −β E_π[ log(π/π_ref) − r/β ]
-= −β E_π[ log( π / (π_ref e^{r/β}) ) ]
-```
+$$
+\begin{aligned}
+&\mathbb{E}_\pi[r] - \beta\, \mathbb{E}_\pi[\log(\pi/\pi_{\text{ref}})] \\
+&= -\beta\, \mathbb{E}_\pi\!\left[ \log(\pi/\pi_{\text{ref}}) - r/\beta \right] \\
+&= -\beta\, \mathbb{E}_\pi\!\left[ \log\!\left( \frac{\pi}{\pi_{\text{ref}}\, e^{r/\beta}} \right) \right]
+\end{aligned}
+$$
 
 Define `π*(y|x) = (1/Z(x)) π_ref(y|x) e^{r(x,y)/β}`, with `Z(x) = Σ_y π_ref(y|x) e^{r(x,y)/β}` the
 normalizer. Then `π_ref e^{r/β} = Z(x) π*`, and:
 
-```text
-objective = −β E_π[ log( π / (Z π*) ) ] = −β E_π[ log(π/π*) ] + β log Z(x)
-          = −β · KL(π ‖ π*) + β log Z(x)
-```
+$$
+\begin{aligned}
+\text{objective} &= -\beta\, \mathbb{E}_\pi\!\left[ \log\!\left( \frac{\pi}{Z\, \pi^*} \right) \right] = -\beta\, \mathbb{E}_\pi[\log(\pi/\pi^*)] + \beta \log Z(x) \\
+&= -\beta \cdot \mathrm{KL}(\pi \,\|\, \pi^*) + \beta \log Z(x)
+\end{aligned}
+$$
 
 `log Z(x)` is independent of `π`, and KL ≥ 0 with equality iff `π = π*`. So the objective is
 maximized exactly at:
 
-```text
-π*(y|x) = (1/Z(x)) π_ref(y|x) exp( r(x,y)/β )      ⟺   π* ∝ π_ref · exp(r/β)
-```
+$$
+\pi^*(y \mid x) = \frac{1}{Z(x)}\, \pi_{\text{ref}}(y \mid x)\, \exp\!\left( r(x,y)/\beta \right) \quad \iff \quad \pi^* \propto \pi_{\text{ref}} \cdot \exp(r/\beta)
+$$
 
 Step 2 — invert for the reward. Take logs and solve for `r`:
 
-```text
-log π* = log π_ref + r/β − log Z(x)
-⇒  r(x,y) = β log( π*(y|x) / π_ref(y|x) ) + β log Z(x)
-```
+$$
+\begin{aligned}
+\log \pi^* &= \log \pi_{\text{ref}} + r/\beta - \log Z(x) \\
+&\Rightarrow r(x,y) = \beta \log\!\left( \frac{\pi^*(y \mid x)}{\pi_{\text{ref}}(y \mid x)} \right) + \beta \log Z(x)
+\end{aligned}
+$$
 
 The implicit reward of any policy is `β·log(π/π_ref)` plus a prompt-dependent constant.
 
 Step 3 — plug into Bradley-Terry and watch `Z` cancel. The preference model is `P(y_w ≻ y_l | x) =
 σ( r(x,y_w) − r(x,y_l) )`. The reward *difference* is:
 
-```text
-r(x,y_w) − r(x,y_l) = β log(π/π_ref)|_{y_w} + β log Z − β log(π/π_ref)|_{y_l} − β log Z
-                    = β [ log(π(y_w|x)/π_ref(y_w|x)) − log(π(y_l|x)/π_ref(y_l|x)) ]
-```
+$$
+\begin{aligned}
+r(x,y_w) - r(x,y_l) &= \beta \log(\pi/\pi_{\text{ref}})\big|_{y_w} + \beta \log Z - \beta \log(\pi/\pi_{\text{ref}})\big|_{y_l} - \beta \log Z \\
+&= \beta \left[ \log\frac{\pi(y_w \mid x)}{\pi_{\text{ref}}(y_w \mid x)} - \log\frac{\pi(y_l \mid x)}{\pi_{\text{ref}}(y_l \mid x)} \right]
+\end{aligned}
+$$
 
 The `β log Z(x)` terms cancel because Bradley-Terry only ever sees differences between two responses
 to the *same* prompt `x` — this is the crux, and it is why DPO never has to compute the intractable
 `Z(x)`. Step 4 — the loss is the negative log-likelihood of the observed preferences under this model:
 
-```text
-L_DPO = − E_{(x,y_w,y_l)} log σ( β [ log(π_θ(y_w|x)/π_ref(y_w|x)) − log(π_θ(y_l|x)/π_ref(y_l|x)) ] )
-```
+$$
+L_{\text{DPO}} = - \mathbb{E}_{(x,y_w,y_l)} \log \sigma\!\left( \beta \left[ \log\frac{\pi_\theta(y_w \mid x)}{\pi_{\text{ref}}(y_w \mid x)} - \log\frac{\pi_\theta(y_l \mid x)}{\pi_{\text{ref}}(y_l \mid x)} \right] \right)
+$$
 
 Read it back: DPO is training the policy so its implicit reward `β log(π/π_ref)` ranks winners above
 losers under Bradley-Terry — the policy *is* the reward model, so no separate RM and no RL loop.
@@ -422,9 +436,9 @@ high-variance and, if always positive, pushes *up* on every sampled response —
 `b` to reinforce only *relative* quality. The key fact: subtracting any baseline that does not depend
 on the action leaves the gradient unbiased, because
 
-```text
-E_{y∼π}[ ∇_θ log π_θ(y) · b ] = b · Σ_y π_θ(y) ∇_θ log π_θ(y) = b · ∇_θ Σ_y π_θ(y) = b · ∇_θ 1 = 0
-```
+$$
+\mathbb{E}_{y \sim \pi}[ \nabla_\theta \log \pi_\theta(y) \cdot b ] = b \sum_y \pi_\theta(y)\, \nabla_\theta \log \pi_\theta(y) = b\, \nabla_\theta \sum_y \pi_\theta(y) = b\, \nabla_\theta 1 = 0
+$$
 
 (using `π ∇log π = ∇π` and `Σ_y π = 1`). So `∇E[R] = E[ ∇log π · (R − b) ]` for any such `b` — the
 baseline changes variance, not the expected gradient. The best baseline is the state value `V(x) =
@@ -434,9 +448,9 @@ GRPO's move: estimate `V(x)` by Monte Carlo from a **group** of `G` responses sa
 prompt, instead of learning it. Sample `{y_1..y_G}`, score `{r_1..r_G}`, and use the group mean as
 the baseline, normalizing by the group std to control scale:
 
-```text
-A_i = ( r_i − mean(r_1..r_G) ) / ( std(r_1..r_G) + ε )
-```
+$$
+A_i = \frac{ r_i - \operatorname{mean}(r_1 \dots r_G) }{ \operatorname{std}(r_1 \dots r_G) + \varepsilon }
+$$
 
 `mean(r_1..r_G)` is exactly a sample estimate of `V(x) = E_y[R]`, so `A_i` is a sample advantage — no
 value network needed, which is what drops PPO's second model and roughly halves the memory. Every
@@ -460,30 +474,32 @@ insight, and it explains both the memory win and the tie/advantage-collapse fail
 
 Fix compute `C = 6ND`, so `D = C/(6N)`. Substitute into the loss to get a function of `N` alone:
 
-```text
-L(N) = E + A N^{−α} + B (C/(6N))^{−β} = E + A N^{−α} + B (6/C)^β N^{β}
-```
+$$
+L(N) = E + A N^{-\alpha} + B\, (C/(6N))^{-\beta} = E + A N^{-\alpha} + B\, (6/C)^\beta N^\beta
+$$
 
 Minimize over `N`: set `dL/dN = 0`:
 
-```text
-dL/dN = −α A N^{−α−1} + β B (6/C)^β N^{β−1} = 0
-⇒ α A N^{−α−1} = β B (6/C)^β N^{β−1}
-⇒ N^{β−1+α+1} = N^{α+β} = (α A) / (β B (6/C)^β)
-⇒ N^{α+β} = (αA)/(βB) · (C/6)^β
-```
+$$
+\begin{aligned}
+\frac{dL}{dN} &= -\alpha A N^{-\alpha-1} + \beta B\, (6/C)^\beta N^{\beta-1} = 0 \\
+&\Rightarrow \alpha A N^{-\alpha-1} = \beta B\, (6/C)^\beta N^{\beta-1} \\
+&\Rightarrow N^{\beta-1+\alpha+1} = N^{\alpha+\beta} = \frac{\alpha A}{\beta B\, (6/C)^\beta} \\
+&\Rightarrow N^{\alpha+\beta} = \frac{\alpha A}{\beta B} \cdot (C/6)^\beta
+\end{aligned}
+$$
 
 Take both sides to the `1/(α+β)`:
 
-```text
-N* = [ (αA)/(βB) ]^{1/(α+β)} · (C/6)^{β/(α+β)}   ∝  C^{ β/(α+β) }
-```
+$$
+N^* = \left[ \frac{\alpha A}{\beta B} \right]^{1/(\alpha+\beta)} \cdot (C/6)^{\beta/(\alpha+\beta)} \;\propto\; C^{\,\beta/(\alpha+\beta)}
+$$
 
 So `N* ∝ C^a` with **`a = β/(α+β)`**. Then from `D = C/(6N*)`:
 
-```text
-D* ∝ C / C^{β/(α+β)} = C^{ 1 − β/(α+β) } = C^{ α/(α+β) }   ⇒  b = α/(α+β)
-```
+$$
+D^* \propto C / C^{\beta/(\alpha+\beta)} = C^{\,1 - \beta/(\alpha+\beta)} = C^{\,\alpha/(\alpha+\beta)} \quad \Rightarrow \quad b = \alpha/(\alpha+\beta)
+$$
 
 Note `a + b = 1`, as it must (`N·D ∝ C`). With Chinchilla's fitted exponents `α ≈ 0.34, β ≈ 0.28`,
 `a = 0.28/0.62 ≈ 0.46` and `b = 0.34/0.62 ≈ 0.54` — both ≈ ½, so **parameters and tokens each scale
@@ -505,15 +521,15 @@ target for a heavily-served model.
 Maximum likelihood for a language model maximizes the probability of the training corpus. For a
 sequence, that factorizes autoregressively:
 
-```text
-P(y_{1:T}) = Π_{t=1}^{T} p_θ(y_t | y_{<t})
-```
+$$
+P(y_{1:T}) = \prod_{t=1}^{T} p_\theta(y_t \mid y_{<t})
+$$
 
 Maximizing the product = maximizing its log = minimizing the negative log, and averaging per token:
 
-```text
-L = − (1/T) Σ_{t=1}^{T} log p_θ(y_t | y_{<t})       (negative log-likelihood, nats/token)
-```
+$$
+L = -\frac{1}{T} \sum_{t=1}^{T} \log p_\theta(y_t \mid y_{<t}) \qquad \text{(negative log-likelihood, nats/token)}
+$$
 
 This *is* cross-entropy: cross-entropy between the empirical one-hot target distribution `q` and the
 model `p` is `H(q,p) = −Σ_i q_i log p_i`, and with `q` one-hot on the true token `y_t` that collapses
@@ -523,9 +539,9 @@ log; base-2 gives bits/token, a factor `log 2` apart).
 
 Perplexity is the exponential of that per-token loss:
 
-```text
-PPL = exp(L) = exp( −(1/T) Σ_t log p_θ(y_t|y_<t) ) = ( Π_t p_θ(y_t|y_<t) )^{−1/T}
-```
+$$
+\text{PPL} = \exp(L) = \exp\!\left( -\frac{1}{T} \sum_t \log p_\theta(y_t \mid y_{<t}) \right) = \left( \prod_t p_\theta(y_t \mid y_{<t}) \right)^{-1/T}
+$$
 
 which is the geometric-mean inverse probability the model assigns to the true next token — the
 "effective branching factor," the number of equally-likely tokens the model is choosing among. A

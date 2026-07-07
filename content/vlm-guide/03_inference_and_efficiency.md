@@ -21,9 +21,9 @@ Serving metrics to know: **TTFT**, **TPOT/ITL**, **throughput (tokens/sec, aggre
 
 During decode, you don't recompute past tokens' Keys and Values — you cache them. The KV cache grows with every generated token:
 
-```text
-KV cache size ≈ 2 × layers × kv_heads × head_dim × seq_len × batch × bytes_per_elem
-```
+$$
+\text{KV cache} \approx 2 \times \text{layers} \times \text{kv heads} \times \text{head dim} \times \text{seq len} \times \text{batch} \times \text{bytes/elem}
+$$
 
 It is usually the **memory bottleneck** at inference (often dwarfing the weights for long contexts / large batches), and reading it is the **bandwidth bottleneck** of decode. Hence:
 
@@ -179,3 +179,17 @@ Running models on phones, laptops, embedded — memory, bandwidth, thermal, and 
 - **Lossless or lossy?** FlashAttention, PagedAttention, speculative decoding are *exact*. Quantization, pruning, KV-eviction, linear-attention are *approximations* — demand the quality numbers and the failure mode.
 - **What's the actual win, on what hardware, at what batch size?** Speedups are regime-dependent (batch size, context length, GPU generation). A 2× that only holds at batch=1 on an H100 is not a 2× for your serving load.
 - **Outliers / sensitivity:** for quant, how are activation outliers and layer sensitivity handled? That's where the quality lives.
+
+---
+
+## You can now
+
+- Split any inference workload into prefill (compute-bound, sets TTFT) and decode (bandwidth-bound, sets TPOT), and predict which phase a given optimization targets.
+- Explain why the KV cache is the memory *and* bandwidth bottleneck, and rank the ways to attack it: architectural (GQA/MLA), quantization (per-channel keys, per-token values), eviction (attention sinks, DuoAttention), and reuse (prefix caching / RadixAttention).
+- Describe what FlashAttention and PagedAttention actually do, and correctly label techniques as exact (FlashAttention, PagedAttention, speculative decoding) versus lossy (quantization, pruning, KV-eviction).
+- Classify a quantization paper by PTQ-vs-QAT, its W/A/KV bit-widths, and its outlier-handling trick (per-channel scaling, SmoothQuant migration, or Hadamard/learned rotations).
+- Judge a claimed speedup by asking "which phase, what hardware, what batch size" — recognising that a batch=1 H100 win may vanish under real serving load.
+
+## Try it
+
+Estimate the KV-cache memory for a model you can look up (say Llama-3-8B: 32 layers, 8 KV heads, head_dim 128) at 32k context, batch 16, in both FP16 and FP8, using the formula above. Then compute how much a switch from MHA (32 KV heads) to GQA (8 KV heads) would have saved, and how much FP8 KV saves on top of that. Compare the total against the model's ~16 GB of FP16 weights to see for yourself when the cache overtakes the weights as the dominant memory cost — the crossover point that motivates most of this chapter.

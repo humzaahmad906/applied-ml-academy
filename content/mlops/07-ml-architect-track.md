@@ -281,45 +281,33 @@ Every F50 ML platform is some variant of this. Differences are tooling per slot.
 
 ### The LLM Platform Reference
 
-```
-[Clients]
-   │
-   ▼
-[Gateway: LiteLLM / custom]
-   │
-   ├──► [Input filters: PII, prompt injection]
-   ├──► [Router: tenant + complexity + cost]
-   ├──► [Retrieval: vector + BM25 → rerank]
-   ├──► [Cache: exact + semantic]
-   ├──► [Prompt registry (versioned)]
-   │
-   ▼
-[Backend models]
- ├── Hosted (OpenAI, Anthropic, Bedrock, Vertex)
- └── Self-hosted (vLLM / TGI / Triton on K8s)
-   │
-   ▼
-[Output filters: schema, safety, hallucination]
-   │
-   ▼
-[Logging: Langfuse / Weave + cost attribution]
+```mermaid
+flowchart TD
+    Clients[Clients] --> Gateway[Gateway: LiteLLM / custom]
+    Gateway --> InputFilters[Input filters: PII, prompt injection]
+    Gateway --> Router[Router: tenant + complexity + cost]
+    Gateway --> Retrieval[Retrieval: vector + BM25 to rerank]
+    Gateway --> Cache[Cache: exact + semantic]
+    Gateway --> PromptRegistry[Prompt registry, versioned]
+    Gateway --> Backend[Backend models]
+    Backend --> Hosted[Hosted: OpenAI, Anthropic, Bedrock, Vertex]
+    Backend --> SelfHosted[Self-hosted: vLLM / TGI / Triton on K8s]
+    Backend --> OutputFilters[Output filters: schema, safety, hallucination]
+    OutputFilters --> Logging[Logging: Langfuse / Weave + cost attribution]
 ```
 
 The "AI Gateway" layer is increasingly its own product (Portkey, Helicone, AWS Bedrock's API, Anthropic's API). Architects decide whether to buy it or build it.
 
 ### The Real-Time ML Reference
 
-```
-Events ─► Kafka ─► Flink (feature engineering) ─► Online store
-                          │
-                          ▼
-                  KServe / Triton (serving)
-                          │
-                          ▼
-                  Predictions → Kafka → downstream consumers
-                          │
-                          ▼
-                  Logs → Iceberg → dbt → BI / monitoring
+```mermaid
+flowchart TD
+    Events[Events] --> Kafka[Kafka]
+    Kafka --> Flink[Flink: feature engineering]
+    Flink --> OnlineStore[Online store]
+    OnlineStore --> Serving[KServe / Triton serving]
+    Serving --> Predictions[Predictions to Kafka to downstream consumers]
+    Predictions --> Logs[Logs to Iceberg to dbt to BI / monitoring]
 ```
 
 Lambda-vs-Kappa choice: in 2026 the trend is "lakehouse as source of truth, with materializations into real-time stores for the hot path."
@@ -1241,3 +1229,18 @@ Work through this seriously over 2–4 years and you have a credible path to sen
 The compound interest on this work is enormous. Most engineers never build this surface area. The ones who do become indispensable.
 
 Now stop reading curricula. Go build the beginner project from the foundations track.
+
+---
+
+## You can now
+
+- Distinguish an architect's output (decisions, ADRs, diagrams, strategy memos) from a senior engineer's, and calibrate how much of your week should stay in code to avoid the ivory-tower trap.
+- Classify a decision as Type 1 (irreversible, heavy process) or Type 2 (reversible, decide fast) and apply the reversibility/cost matrix to allocate your decision-making energy.
+- Write a defensible ADR — context, decision, alternatives with honest trade-offs, consequences, and an implementation plan — and know when a design doc should precede it.
+- Reach for the right reference architecture (modern ML platform, LLM gateway, real-time ML, cost-conscious, federated mesh) and justify build-vs-buy with a TCO model that includes hidden ops cost.
+- Plan an ML platform migration using the strangler-fig and parallel-run patterns with explicit validation and decommission criteria, and model its cost across the overlap period.
+- Recognize the common architect failure modes (architecture astronaut, tool magpie, decision bottleneck, hype surfer) in yourself and apply the corresponding fix.
+
+## Try it
+
+Pick a real architectural decision your team has made informally in the last year — a serving stack, a feature store, an LLM provider, an experiment tracker — and write the ADR that should have existed. Use the standard structure from Phase 3: status, decision-makers, context (with the numbers you can find), the decision, at least two alternatives each with honest pros and cons, positive and negative consequences, and a phased implementation plan. Then classify the decision as Type 1 or Type 2 and note whether the process weight actually matched that classification. Keep it to 1–3 pages, commit it to your repo as `ADR-0001`, and share it with one teammate for the "would this orient a new hire six months from now?" test. This is the single highest-leverage habit on the senior-to-architect path, and doing it once before the title is exactly the kind of architecture-shaped work promotion committees look for.

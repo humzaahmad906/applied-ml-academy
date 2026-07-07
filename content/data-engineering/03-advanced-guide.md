@@ -47,16 +47,12 @@ The interview answer that signals seniority: **"I'd reach for DuckDB or Polars f
 
 ### The Mental Model
 
-```text
-            ┌──────────────┐
-            │   Driver     │   (your script — coordinates everything)
-            └──────┬───────┘
-                   │
-        ┌──────────┼──────────┐
-        ▼          ▼          ▼
-   ┌────────┐ ┌────────┐ ┌────────┐
-   │Executor│ │Executor│ │Executor│   (do the actual work — each one
-   └────────┘ └────────┘ └────────┘    holds some partitions in memory)
+```mermaid
+flowchart TD
+    Driver["Driver — runs your code, builds the plan, schedules work"]
+    Driver --> E1["Executor — holds partitions, runs tasks"]
+    Driver --> E2["Executor — holds partitions, runs tasks"]
+    Driver --> E3["Executor — holds partitions, runs tasks"]
 ```
 
 - **Driver:** runs your code, builds the execution plan, schedules work
@@ -400,12 +396,12 @@ Two flavors exist, and you need to know why one wins:
 
 **Debezium** is the dominant open-source CDC framework. It runs as a Kafka Connect plugin — a connector that reads the source database's replication log and publishes change events to Kafka topics.
 
-```text
-[Postgres WAL] ──► [Debezium Connector (Kafka Connect)] ──► [Kafka topics]
-[MySQL binlog]                                                     │
-                                                                   ▼
-                                                           [Consumers / sinks]
-                                                           (Iceberg, warehouse, etc.)
+```mermaid
+flowchart LR
+    PGWAL["Postgres WAL"] --> DBZ["Debezium Connector (Kafka Connect)"]
+    MYSQL["MySQL binlog"] --> DBZ
+    DBZ --> TOPICS["Kafka topics"]
+    TOPICS --> SINKS["Consumers / sinks (Iceberg, warehouse, etc.)"]
 ```
 
 Each source table gets its own Kafka topic, typically named `<prefix>.<schema>.<table>`. A change event looks like:
@@ -450,8 +446,10 @@ The outbox table is a normal database table. Debezium watches it like any other.
 
 The canonical landing pattern for CDC in a lakehouse uses Iceberg's merge-on-read (MOR) upserts:
 
-```text
-Kafka CDC events ──► [Spark Structured Streaming or Flink] ──► Iceberg table (MOR)
+```mermaid
+flowchart LR
+    CDC["Kafka CDC events"] --> PROC["Spark Structured Streaming or Flink"]
+    PROC --> ICE["Iceberg table (merge-on-read)"]
 ```
 
 Each micro-batch reads CDC events and runs a MERGE:
@@ -650,6 +648,16 @@ This is the big one. Industry-grade. A piece you'll be talking about in intervie
 ### Why This Capstone Matters
 
 It's substantial enough that talking about it for 30 minutes in an interview is natural. It demonstrates batch + streaming + modeling + orchestration + IaC + observability. There's no realistic data engineering job at a Fortune 100 that touches *none* of these. By the time you finish it, you have an answer to every variant of "tell me about a project you're proud of."
+
+---
+
+## You can now
+
+- Reason about Spark execution — driver, executors, partitions, shuffles — locate why a job is slow, and fix it with broadcast joins, early filtering, or AQE skew handling.
+- Decide when a single-node engine (DuckDB, Polars) beats a Spark cluster, and articulate that threshold in an interview.
+- Stand up Kafka, design partitioning for throughput and ordering, manage consumer groups, and evolve schemas safely with Avro + Schema Registry.
+- Build a log-based CDC pipeline with Debezium — including the outbox pattern and the WAL-retention gotcha — and land changes into an Iceberg table via MERGE.
+- Compare table formats (Iceberg/Delta/Hudi) and, more importantly, catalogs (REST spec, Polaris, Unity, Nessie), and explain why the catalog is the sharper 2026 decision.
 
 ---
 

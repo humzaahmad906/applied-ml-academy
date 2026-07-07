@@ -194,3 +194,18 @@ prefix-sharing, TensorRT-LLM for compiled peak throughput, TGI dead, Dynamo for 
 and llama.cpp/MLX/ONNX/CoreML for edge. Quantization: GPTQ/AWQ/SmoothQuant/FP8/TorchAO with layer-
 sensitivity mixed precision. Post-training: SFT then DPO then GRPO/DAPO verifiable-reward RL, run
 in verl or TRL, with the KL-removal trend and the four DAPO tricks as the depth signals.
+
+## You can now
+
+You can now:
+
+- name the current training stack against the problem each piece solves — `torch.compile` as the default fuser, FSDP2/TorchTitan for sharding, FP8 GEMMs for throughput, Muon and muP as the follow-the-literature signals.
+- order the KV-cache-reduction techniques MQA → GQA → MLA by sophistication, and explain FlashAttention's online-softmax tiling and the FA2/FA3/FA4 hardware progression.
+- pick a serving engine from workload shape rather than a feature checklist — vLLM (PagedAttention) as default, SGLang (RadixAttention) for prefix sharing, TensorRT-LLM for compiled peak throughput, and the edge runtimes (llama.cpp/MLX/ONNX/CoreML) — and know TGI is deprecated.
+- frame quantization in interview terms — GPTQ/AWQ weight-only, SmoothQuant and LLM.int8 for activation outliers, FP8 and KV-cache quantization, and layer-sensitivity mixed precision via TorchAO.
+- describe the 2026 post-training recipe (SFT → DPO/variants → verifiable-reward RL), list DAPO's four fixes (Clip-Higher, dynamic sampling, token-level loss, overlong reward shaping), and hold an opinion on "SFT memorizes, RL generalizes."
+- deploy the interview move that signals shipped-not-just-read: answer the concept, then ground it with one current tool and one concrete tradeoff.
+
+## Try it
+
+Pick one concept from an earlier chapter — say "how do you fit a model too big for one GPU" or "how do you attack the KV-cache bottleneck at long context" — and write the three-part answer this chapter is built to produce: the durable concept, one current 2026 tool by name, and one concrete tradeoff that tool imposes. For example: "FSDP2 in TorchTitan, because the model does not fit on one GPU; the cost is the all-gather of each layer's parameters, which overlaps with compute so it is usually hidden but dominates on a slow interconnect." Do this for five different concepts, out loud, in under a minute each. When you can reliably land concept-plus-tool-plus-tradeoff without notes, you have the pattern the interview banks in the next chapters drill.

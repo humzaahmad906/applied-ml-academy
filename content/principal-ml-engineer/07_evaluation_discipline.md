@@ -45,13 +45,11 @@ Most ML orgs run experiments with the statistical sophistication of a 1990s dire
 
 **Power analysis before trusting a delta.** Before a team celebrates "+0.8% CTR," someone must ask whether the experiment could have detected +0.8% in the first place. The back-of-envelope for a proportion metric:
 
-```text
-n_per_arm ≈ 16 × p(1−p) / MDE²        (α=0.05, power=0.8, two-sided)
+$$n_\text{per arm} \approx \frac{16\,p(1-p)}{\text{MDE}^2} \qquad (\alpha=0.05,\ \text{power}=0.8,\ \text{two-sided})$$
 
-Example: baseline CTR p = 0.05, minimum detectable effect = 2% relative
-         → MDE_abs = 0.001
-         n ≈ 16 × 0.0475 / 0.000001 ≈ 760 000 users per arm
-```
+Example: baseline CTR $p = 0.05$, minimum detectable effect = 2% relative, so $\text{MDE}_\text{abs} = 0.001$:
+
+$$n \approx \frac{16 \times 0.0475}{(0.001)^2} = \frac{0.76}{0.000001} \approx 760{,}000 \text{ users per arm}$$
 
 A product surface with 200k weekly actives cannot detect a 2% relative CTR lift in a week, period. Teams in that position must either run longer, use variance reduction (CUPED-style covariate adjustment routinely cuts required n by 30–50%), pick a more sensitive proxy metric, or stop pretending. This is not exotic: a 2024 survey of AI evaluations against human baselines found only about 2% performed a power analysis. The field's default is to be underpowered and not know it — which produces a literature (and an org history) of unreplicable wins. Your standard should require a pre-registered MDE and the implied sample size *before* the experiment starts.
 
@@ -210,6 +208,14 @@ Rung 4 has failure modes that only become visible at org scale, and they are the
 **Interference between concurrent experiments.** Forty experiments a quarter means users sit in many treatments at once. Usually fine (effects are additive to first order), except when experiments share a constrained surface: two ranking experiments on the same slate, two pricing experiments on the same auction, or any experiment pair where treatment A changes the traffic mix that experiment B measures. Standard: a lightweight experiment registry with declared surfaces; same-surface experiments run in orthogonal layers or mutually exclusive slices. Marketplace and social products add a harder version — treatment users deplete shared inventory or shift network behavior, contaminating control (the SUTVA violation) — where cluster- or region-level randomization is the honest, more expensive answer.
 
 **Feedback loops: the model shapes its own future training data.** The deepest one. Today's model decides what gets shown; what gets shown determines what gets clicked; clicks become tomorrow's training data. Consequences: popularity bias compounds; the A/B comparison is unfair to the challenger (trained on data the incumbent's policy generated); and offline backtests systematically favor models similar to the incumbent. Mitigations to mandate as standard: log propensities (or at least a small uniform-random exploration slice, 0.5–1% of traffic, which doubles as unbiased eval data); periodically retrain the incumbent on challenger-collected data before declaring the bake-off done; and treat any "the new model wins offline but keeps losing online to the incumbent" pattern as a possible feedback artifact, not a modeling failure.
+
+## You can now
+
+- Place any evaluation activity on the five-rung hierarchy, state precisely what it proves and cannot prove, and use that framing to diagnose at which rung a given failure should have been caught cheaply.
+- Run a pre-experiment power analysis, size the required sample for a given MDE and baseline rate, and recognize when a surface is too low-traffic to detect the effect being claimed — before the team celebrates the delta.
+- Bootstrap a paired confidence interval on an offline metric delta using the shared-library pattern, and explain why "+0.8% [−0.3%, +1.1%]" and "+0.8% [+0.6%, +1.0%]" are different business situations requiring different decisions.
+- Design and commission an offline-online correlation study with 25–40 launch data points, tag results by intervention type, and make a keep/recalibrate/kill call on a benchmark that teams have roadmaps and promotions built on.
+- Write and enforce a launch gate policy with a filled eval card, three-verdict discipline (ship / ship-with-conditions / not yet), and a standing question list — and calibrate the gate's rigor by tracking first-pass rates toward the 70–85% healthy range.
 
 ## Worked example
 

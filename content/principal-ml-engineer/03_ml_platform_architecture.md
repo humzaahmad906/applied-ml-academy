@@ -22,18 +22,23 @@ Platform work also cycles you through all four of Will Larson's Staff-plus arche
 
 Every ML platform, whatever the company calls it, decomposes into five planes. The planes matter less than the **interfaces** between them — the interfaces are where teams integrate, and therefore where the platform's contract lives.
 
-```text
-┌─────────────────────────────────────────────────────────────┐
-│ 5. Eval & observability plane  (cross-cutting: reads all)   │
-├─────────────┬─────────────┬──────────────┬──────────────────┤
-│ 1. Data /   │ 2. Training │ 3. Registry  │ 4. Serving       │
-│    feature  │    plane    │    + model   │    plane         │
-│    plane    │             │    CI/CD     │                  │
-└─────────────┴─────────────┴──────────────┴──────────────────┘
-  Interface A    Interface B   Interface C    Interface D
-  (datasets,     (job spec,    (model         (deploy spec,
-  features,      artifacts)    artifact +     inference API)
-  point-in-time)               metadata)
+```mermaid
+graph LR
+    P1["1. Data/Feature Plane"]
+    P2["2. Training Plane"]
+    P3["3. Registry + Model CI/CD"]
+    P4["4. Serving Plane"]
+    E5["5. Eval & Observability Plane<br/>(cross-cutting: reads all)"]
+
+    P1 -->|"Interface A<br/>datasets, features,<br/>point-in-time"| P2
+    P2 -->|"Interface B<br/>job spec, artifacts"| P3
+    P3 -->|"Interface C<br/>model artifact + metadata"| P4
+    P4 -->|"Interface D<br/>deploy spec, inference API"| OUT["(endpoints / consumers)"]
+
+    E5 -.->|reads| P1
+    E5 -.->|reads| P2
+    E5 -.->|reads| P3
+    E5 -.->|reads| P4
 ```
 
 **1. Data/feature plane.** Datasets, feature pipelines, labels, lineage. The interface it exports: *named, versioned, point-in-time-correct data assets*. Whether the implementation is a full feature store (Feast, Tecton) or "Parquet in S3 plus a dbt project plus conventions" matters far less than whether a training job can ask for "features X, Y, Z as of event time" and get the same answer the serving path will compute.
@@ -127,7 +132,7 @@ The most common Principal-level platform failure is **premature emulation**: bui
 The discipline:
 
 1. **Inventory the toil.** For each ML team: hours/month lost, to what, at what blast radius. Quantify — "the recs team spends ~30 eng-hours/month hand-rolling training-serving-consistent features" is actionable; "we lack a feature store" is a purchase order.
-2. **Rank by (toil × number of teams affected) ÷ cost to platformize.** This ratio almost never ranks the glamorous component first. In practice the top of the list is usually: model registry + deployment pipeline, cost visibility, a standard training-job launcher, and shared eval tooling. Feature stores and metadata graphs rank high only when many teams share online features — which at most companies means "the two ranking teams," not everyone.
+2. **Rank by $\dfrac{\text{toil} \times \text{teams affected}}{\text{cost to platformize}}$.** This ratio almost never ranks the glamorous component first. In practice the top of the list is usually: model registry + deployment pipeline, cost visibility, a standard training-job launcher, and shared eval tooling. Feature stores and metadata graphs rank high only when many teams share online features — which at most companies means "the two ranking teams," not everyone.
 3. **Build the thinnest version.** Thinnest means: a contract plus the minimum machinery to honor it. A model registry can start as a metadata service wrapping S3, with a CLI and three required fields. It does not start as a build-vs-buy bake-off with a 40-page design doc.
 
 ### Conway's law and team topology
@@ -185,6 +190,14 @@ Each of these has a smell you can detect in a single meeting, and each traces to
 - **The invisible platform.** Solid engineering, zero internal marketing; teams rebuild what already exists because nobody knew. Detect: two teams demo the same capability in the same month. Fix: platform-as-product includes launch notes, office hours, and an onboarding path — communication is roadmap work, not overhead.
 - **Metrics theater.** Adoption at 95% because adoption was defined as "has the SDK installed." Detect: coverage metrics all green while teams still complain in retros. Fix: pair every coverage metric with a health metric (NPS, time-to-first-model, support-ticket volume) and report them together.
 - **Platform team as ticket queue.** The team stops building and becomes a human API for provisioning. Detect: >40% of platform capacity on reactive tickets two quarters running. Fix: self-service is the feature — every recurring ticket class becomes an automation candidate, ranked by the same toil math as everything else.
+
+## You can now
+
+- Decompose any ML platform into the five standard planes and specify the interface contracts between them — the contracts, not the component choices, are the platform's durable and portable artifact
+- Design a multi-tenancy quota policy using the 60–70% guaranteed / burst-pool hybrid, and articulate why pure hard-quota and pure fair-share each fail at org scale
+- Sequence platform investments by $\dfrac{\text{toil} \times \text{teams affected}}{\text{cost to platformize}}$, and produce a "not building yet" list with explicit trigger conditions — making the sequencing decision defensible rather than intuitive
+- Distinguish a paved road from a golden cage by writing escape-hatch contracts that hold the narrow waist mandatory (registry, cost tags, eval gates) while keeping upstream choices free — and explain what concretely breaks when each mandatory item is ignored
+- Size a platform team for a given org scale, choose among central, embedded, and hybrid topologies, and name the failure mode — ivory tower, N half-finished stacks, hollowed-out central team — that each topology requires a structural guard against
 
 ## Worked example
 

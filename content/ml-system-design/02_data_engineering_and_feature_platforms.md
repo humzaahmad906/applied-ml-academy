@@ -319,3 +319,11 @@ AssertionError: Feature skew for 'purchase_count_30d' exceeded tolerance: mean_r
 
 **Q5. Why is deduplication so important for LLM training data?**
 **A.** Duplicates distort training in three ways: they implicitly upweight repeated content (the model overfits to it at the expense of everything else), they inflate memorization and verbatim regurgitation risk (privacy/copyright), and they corrupt evaluation when near-copies of benchmark items hide in training data (contamination → fake capability gains). Exact dedup (hashing) is trivial; the real tool is near-dedup with MinHash-LSH over shingled documents, which scales to billions of docs. In fine-tuning sets the same applies at small scale: fifty paraphrases of one instruction silently dominate the gradient. Empirically, careful dedup+filtering (FineWeb/DCLM lineage) yields models that beat ones trained on several times more unfiltered tokens — data quality buys compute.
+
+## You can now
+
+- Design a multi-tier feature pipeline and select the right freshness tier — batch, micro-batch, or streaming — per feature, citing the order-of-magnitude operating-cost difference between tiers.
+- Implement point-in-time-correct training-set construction using DuckDB ASOF JOIN, and deliberately introduce and quantify the AUC inflation caused by a time-travel leakage bug.
+- Build an offline/online skew monitor that measures mean absolute relative difference between store values, trace a timezone mismatch to a calibration failure, and write a time-travel unit test that catches it in CI.
+- Decide when a feature store earns its complexity — naming the threshold (≥5 teams, ≥50 shared definitions) and the use cases where streaming-first or simple-lookup architectures make it the wrong tool.
+- Curate LLM training data with MinHash near-dedup, classifier-based quality filtering, and decontamination, and articulate the model-collapse risk from recursive self-training on synthetic outputs.

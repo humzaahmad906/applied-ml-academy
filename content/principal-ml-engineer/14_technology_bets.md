@@ -24,32 +24,14 @@ A useful calibration: a healthy 300-engineer ML org runs maybe 8–12 spikes a y
 
 Technologies enter production through five rungs, and the failure mode is rung-skipping — usually straight from conference talk to production commitment. Each promotion has explicit criteria; the criteria are the mechanism.
 
-```text
-WATCH ──► SPIKE ──► PILOT ──► PAVED ROAD ──► STANDARD
-
-WATCH       Named owner tracks it; zero build investment.
-            Promote to SPIKE when: a concrete workload of ours would
-            plausibly benefit AND evaluation cost ≤ 2 eng-weeks.
-
-SPIKE       2 eng-weeks, pre-registered kill criteria (Section 1).
-            Promote to PILOT when: kill criteria all passed on our
-            data AND a lighthouse team wants it for a real deliverable.
-
-PILOT       One team, one real production workload, one quarter.
-            Success criteria set by the PILOT team's metrics, not the
-            platform's enthusiasm. Exit interviews with every engineer
-            who touched it.
-            Promote to PAVED ROAD when: pilot hit its metrics AND
-            total cost of ownership is modeled (Module 09) AND we can
-            staff the support burden.
-
-PAVED ROAD  Supported, documented, default-for-new-work (Module 03).
-            Old tech still permitted. Promote to STANDARD when:
-            >60-70% of applicable workloads adopted voluntarily AND
-            the migration path for the remainder is funded.
-
-STANDARD    Mandated for its category; the old thing has a
-            deprecation date (Section 8) and a migration budget.
+```mermaid
+flowchart TD
+    W["WATCH<br/>Named owner tracks it; zero build investment.<br/>Promote when: concrete workload plausibly benefits<br/>AND eval cost ≤ 2 eng-weeks."]
+    S["SPIKE<br/>2 eng-weeks, pre-registered kill criteria.<br/>Promote when: kill criteria pass on our data<br/>AND lighthouse team wants it for a real deliverable."]
+    P["PILOT<br/>One team, one real production workload, one quarter.<br/>Success criteria set by pilot team's metrics.<br/>Promote when: metrics hit AND TCO modeled AND support burden staffed."]
+    PR["PAVED ROAD<br/>Supported, documented, default for new work.<br/>Old tech still permitted.<br/>Promote when: >60–70% voluntary adoption<br/>AND migration path funded."]
+    ST["STANDARD<br/>Mandated for its category; old thing has<br/>deprecation date and migration budget."]
+    W --> S --> P --> PR --> ST
 ```
 
 Two properties worth making explicit. First, **every rung has a legitimate parking state** — "we spiked it, it lost, re-look in 12 months" is a successful outcome, and recording it prevents the org from re-litigating (or worse, re-spiking) the same tech every time a new enthusiast joins. Second, **the ladder is also a communication device**: when a VP asks "why aren't we using X yet, [competitor] is," the answer "X is at spike; here's the memo and the pilot criteria it hasn't met" is a fundamentally different conversation than a defensive opinion. The ladder converts technology arguments into evidence arguments.
@@ -118,6 +100,14 @@ Killing technologies is the half of the bet lifecycle nobody practices, and orgs
 **A deprecation policy that is boringly procedural.** Announce with ≥2 quarters' notice for anything with real dependents; publish the migration path *and its funding* in the same doc (an unfunded deprecation is a tax on every dependent team, and they will correctly ignore it); freeze the old thing (security fixes only — every feature added to a deprecated system extends its life and its faction); track migration burn-down publicly; and hold the date, because the org learns from the first slipped deprecation that all deprecation dates are fiction.
 
 **The courage to kill your own past bet.** The hardest deprecation is the one where the system's author is you — the 2024 bet that was right in 2024 and is wrong now. This is where Module 13's disagree-and-commit honesty runs in reverse: state publicly that the context changed, what you learned, and why the replacement wins on today's evidence. A principal who kills their own system on the merits buys more credibility than three successful launches; a principal who defends their legacy system against the evidence teaches the whole org that bets here are identity, and every future radar review becomes politics. The Amazon PE tenets phrase the underlying disposition well: *strong convictions, weakly held* — argue hard for the bet, and update in public the moment the evidence turns.
+
+## You can now
+
+- Design a time-boxed spike with pre-registered kill criteria — quality, latency, cost, and security written before results exist — so that a promising-but-failed outcome is a documented finding rather than a sunk-cost trap.
+- Advance or park a technology through the five-rung adoption ladder (watch → spike → pilot → paved road → standard) using its explicit promotion criteria, and record a hold decision with the measurable evidence threshold that would reopen it.
+- Build and defend a 70/20/10 technology portfolio — naming each bet's owner, review date, and exit cost at adoption time — and push back when leadership pressures you to raid the boring 70% for a shiny 10% item mid-quarter.
+- Evaluate a paper or production claim by applying the signal hierarchy (production report from a company at your scale > independent replication > released and running code > ablation stability > benchmark delta) rather than treating leaderboard numbers as evidence about your workload.
+- Kill your own past bet on the merits in public, update the radar with a numeric re-look trigger, and treat the credibility gained from doing so as a portfolio asset that earns trust for the next bet.
 
 ## Worked example — two bets through the protocol in the same quarter
 

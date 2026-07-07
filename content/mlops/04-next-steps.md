@@ -173,9 +173,14 @@ Key concepts:
 
 The pattern almost every enterprise AI app uses:
 
-```
-[User query] → [Embed] → [Vector DB search + keyword search] →
-[Rerank] → [Top K passages] → [LLM with passages as context] → [Response]
+```mermaid
+flowchart LR
+    A["User query"] --> B["Embed"]
+    B --> C["Vector DB search<br/>+ keyword search"]
+    C --> D["Rerank"]
+    D --> E["Top K passages"]
+    E --> F["LLM with passages<br/>as context"]
+    F --> G["Response"]
 ```
 
 What to learn:
@@ -344,10 +349,14 @@ You don't implement these. You configure them and tune recall/latency/memory.
 
 ### The Hybrid Search Pattern
 
-```
-query → [embedding] ──► [vector search top 100]
-              │                                  ├──► [merge / rerank with cross-encoder] ──► top 10
-              └─► [BM25 keyword search top 100] ─┘
+```mermaid
+flowchart LR
+    Q["query"] --> E["embedding"]
+    E --> V["vector search top 100"]
+    Q --> B["BM25 keyword search top 100"]
+    V --> M["merge / rerank<br/>with cross-encoder"]
+    B --> M
+    M --> T["top 10"]
 ```
 
 Lexical and semantic agree more often than not; reranking sharpens the top. Quality typically beats either path alone by 10–30%.
@@ -649,3 +658,14 @@ You should have:
 - A draft answer to at least 4 of the F50 system design prompts above
 
 Now you're ready to build something that lands you the F50 role. Move on to the Fortune 50 portfolio projects chapter.
+
+---
+
+## You can now
+
+- Stand up an end-to-end ML workflow on one managed cloud platform (SageMaker / Vertex / Azure ML / Databricks) and articulate the cost and DX trade-offs versus self-managed.
+- Architect an LLMOps stack — gateway with multi-provider failover, RAG with hybrid retrieval and reranking, eval-as-a-deploy-gate, guardrails, and a LoRA/DPO fine-tuning path — and decide build-vs-FTaaS on unit economics.
+- Choose and tune a vector database (HNSW vs IVF-PQ, dimensionality, hybrid search) against a labeled query set and measure the reranking lift.
+- Build slice-aware production monitoring wired to lineage and root-cause runbooks, and instrument LLM/agent calls with OpenTelemetry GenAI semantic conventions.
+- Map EU AI Act Annex IV requirements to concrete MLOps artifacts (model cards, eval reports, audit logs, evidence packs) and name which regulations apply to a given system.
+- Structure and deliver a 45-minute MLOps or LLMOps system design answer — clarify, architect, drill into 2–3 components, cover failure modes, cost, and org concerns.

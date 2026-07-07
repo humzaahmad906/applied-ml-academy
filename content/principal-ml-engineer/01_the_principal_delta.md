@@ -153,6 +153,14 @@ The mechanics matter because they explain the standard advice — "do the job be
 - levels.fyi's leveling comparisons — useful for calibrating what L7/E7/Principal means at a specific company before an interview loop or offer negotiation; titles are wildly non-portable and this is the exchange-rate table.
 - The decision-journal practice in section 1 descends from forecasting research (Tetlock's *Superforecasting* is the accessible source); the transfer to engineering judgment is direct.
 
+## You can now
+
+- Distinguish principal-level work from senior work by artifact class — decisions, strategy docs, standards, reviews, unblocking — rather than by coding velocity or ticket throughput
+- Use a decision journal to build calibrated confidence deliberately: log positions with explicit confidence percentages and falsifiers before outcomes are knowable, then score monthly as a forecaster would
+- Identify which of the four failure anti-patterns — Architecture Astronaut, Gatekeeper, Ghost, Hero — is your nearest failure mode under pressure, and name the standing structural countermeasure (protected technical time, writing cadence, review rotation) that prevents it
+- Separate scope-gap problems (the role doesn't offer principal-shaped problems) from operating-model problems (the scope exists and you're not taking it), and produce a one-page gap analysis citing specific artifacts and calendar facts — not vibes
+- Explain the promotion mechanics end-to-end: packet evidence, scope as taken not granted, and sponsorship as credibility transfer — and name the specific artifact missing from your current trajectory
+
 ## Worked example
 
 **Setting:** You are the principal MLE at a 400-engineer B2B SaaS company (~60 in ML across six teams: search, recommendations, fraud, support-automation, platform, data). Wednesday of last week, the VP Eng forwarded you a one-line email: *"Support-automation wants to fine-tune and self-host. Fraud says we should stay on the API. Both want budget. Thoughts by planning (next Friday)?"* This is the job: a vague, cross-team, seven-figure decision with a deadline. Here is the week.

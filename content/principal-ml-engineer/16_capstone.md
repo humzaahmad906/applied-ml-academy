@@ -14,16 +14,19 @@ Read this once end to end before touching a deliverable. Everything you need is 
 
 ### The org (ML-relevant)
 
-```
-VP Engineering
-├── Search & Discovery (8 eng)      — query understanding, ranking, autocomplete
-├── Recommendations (7 eng)         — homepage, PDP, cart, email recs
-├── Risk & Fraud (6 eng)            — payment fraud, account takeover
-├── Credit & Lending (5 eng)        — BNPL underwriting, credit-line decisions
-├── Marketing/Growth ML (4 eng)     — LTV, churn, bidding
-├── Trust & Safety (3 eng)          — listing moderation, seller risk
-└── (no platform/infra ML team exists — each team runs its own stack)
-Data Engineering (11 eng, separate org under a different director)
+```mermaid
+graph TD
+    VP["VP Engineering"]
+    VP --> SD["Search & Discovery (8 eng)<br/>query understanding · ranking · autocomplete"]
+    VP --> REC["Recommendations (7 eng)<br/>homepage · PDP · cart · email recs"]
+    VP --> RF["Risk & Fraud (6 eng)<br/>payment fraud · account takeover"]
+    VP --> CL["Credit & Lending (5 eng)<br/>BNPL underwriting · credit-line decisions"]
+    VP --> MG["Marketing/Growth ML (4 eng)<br/>LTV · churn · bidding"]
+    VP --> TS["Trust & Safety (3 eng)<br/>listing moderation · seller risk"]
+    NOTE["no ML platform/infra team — each team runs its own stack"]
+    DE["Data Engineering (11 eng)<br/>separate org · different director"]
+    style NOTE fill:#fff8e1,stroke:#f9a825
+    style DE fill:#e8f4f8,stroke:#0288d1
 ```
 
 ### The current state (what you found in weeks 1–3)

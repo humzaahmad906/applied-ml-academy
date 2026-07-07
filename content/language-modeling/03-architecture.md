@@ -25,10 +25,12 @@ in parallel with a single forward pass while still respecting the left-to-right 
 A modern **pre-norm** decoder block is two sublayers, each wrapped in a residual connection with
 a normalization applied *inside* the branch:
 
-```
-y = x + Attention(RMSNorm(x))
-z = y + FFN(RMSNorm(y))
-```
+$$
+\begin{aligned}
+y &= x + \text{Attention}(\text{RMSNorm}(x))\\
+z &= y + \text{FFN}(\text{RMSNorm}(y))
+\end{aligned}
+$$
 
 Note the norm is inside the residual branch (pre-norm), not after the addition (post-norm). The
 residual stream `x` itself is never normalized as it flows down the stack — each sublayer reads a
@@ -41,9 +43,10 @@ deviation of each vector, then applies a learned scale and bias. The current def
 (Zhang & Sennrich, eq. 4), which drops the mean-subtraction and the bias and just divides by the
 root-mean-square of the vector, then applies a learned per-dimension gain `g`:
 
-```
-RMSNorm(a_i) = a_i / RMS(a) · g_i        where   RMS(a) = sqrt( (1/d) · Σ_i a_i²  +  ε )
-```
+$$
+\text{RMSNorm}(a_i) = \frac{a_i}{\text{RMS}(a)}\, g_i,
+\qquad \text{RMS}(a) = \sqrt{\tfrac{1}{d}\sum_i a_i^2 + \varepsilon}
+$$
 
 `g ∈ ℝ^d` is a learned gain (one parameter per dimension, no bias), and `ε` is a small constant,
 fixed at `1e-5` here. One implementation detail worth insisting on: **upcast the input
@@ -81,17 +84,17 @@ an inner width of `4d`. Modern models make two changes: a smoother activation an
 
 The activation is SiLU (a.k.a. Swish), which is smooth at zero unlike ReLU:
 
-```
-SiLU(x) = x · σ(x) = x / (1 + e^{-x})
-```
+$$
+\text{SiLU}(x) = x\,\sigma(x) = \frac{x}{1 + e^{-x}}
+$$
 
 The gate is a Gated Linear Unit: the elementwise product of one linear projection (passed through
 the activation) with a second, independent linear projection. Putting them together gives SwiGLU,
 which we use with **no bias terms** (following PaLM and LLaMA):
 
-```
-FFN(x) = SwiGLU(x, W1, W2, W3) = W2 ( SiLU(W1 x) ⊙ W3 x )
-```
+$$
+\text{FFN}(x) = \text{SwiGLU}(x, W_1, W_2, W_3) = W_2\big(\text{SiLU}(W_1 x)\odot W_3 x\big)
+$$
 
 with `x ∈ ℝ^d`, `W1, W3 ∈ ℝ^{d_ff × d}`, `W2 ∈ ℝ^{d × d_ff}`, and `⊙` elementwise product. There
 are now **three** weight matrices (up, gate, down) instead of two.
@@ -111,16 +114,16 @@ Attention lets a position pull information from other positions. For each positi
 three projections: a query `q`, a key `k`, and a value `v`. You split these into `h` heads of size
 `d_head = d/h` and, within each head, apply scaled dot-product attention. First the primitive:
 
-```
-softmax(v)_i = exp(v_i - max_j v_j) / Σ_j exp(v_j - max_j v_j)
-```
+$$
+\text{softmax}(v)_i = \frac{\exp(v_i - \max_j v_j)}{\sum_j \exp(v_j - \max_j v_j)}
+$$
 
 Subtracting the max is the numerical-stability trick — without it `exp` of a large score overflows
 to `inf` and `inf/inf` is `NaN`. Then attention itself (Vaswani et al., eq. 11):
 
-```
-Attention(Q, K, V) = softmax( Q Kᵀ / sqrt(d_k) ) V
-```
+$$
+\text{Attention}(Q, K, V) = \text{softmax}\!\left(\frac{Q K^\top}{\sqrt{d_k}}\right) V
+$$
 
 with `Q ∈ ℝ^{n×d_k}`, `K ∈ ℝ^{m×d_k}`, `V ∈ ℝ^{m×d_v}`. The `1/sqrt(d_k)` keeps the dot products
 from growing with dimension and saturating the softmax. In code, per head:
@@ -149,14 +152,13 @@ RoPE treats the `d_k`-dimensional query as `d_k/2` two-dimensional pairs and rot
 For a query `q^(i) = W_q x^(i)` at position `i`, it applies a block-diagonal rotation `R_i`, whose
 `k`-th `2×2` block rotates the pair `(q_{2k-1}, q_{2k})` by angle
 
-```
-θ_{i,k} = i / Θ^{(2k-2)/d}          for k ∈ {1, ..., d/2}
-```
+$$
+\theta_{i,k} = \frac{i}{\Theta^{(2k-2)/d}}, \qquad k \in \{1, \dots, d/2\}
+$$
 
-```
-R_i^k = [ cos θ_{i,k}   -sin θ_{i,k} ]
-        [ sin θ_{i,k}    cos θ_{i,k} ]
-```
+$$
+R_i^k = \begin{bmatrix} \cos\theta_{i,k} & -\sin\theta_{i,k}\\ \sin\theta_{i,k} & \cos\theta_{i,k} \end{bmatrix}
+$$
 
 `Θ` is the base frequency (`rope_theta`, conventionally `10000`). Different pairs `k` rotate at
 geometrically spaced frequencies: low `k` rotate fast (fine-grained position), high `k` rotate
@@ -217,11 +219,13 @@ The architecture pairs with a specific training recipe you should know by name:
 - **Learning-rate schedule: cosine annealing with linear warmup** (the LLaMA schedule). With
   current step `t`, peak `α_max`, floor `α_min`, warmup steps `T_w`, and final step `T_c`:
 
-  ```
-  t < T_w :            α_t = (t / T_w) · α_max                                  # linear warmup
-  T_w ≤ t ≤ T_c :      α_t = α_min + ½(1 + cos(π · (t−T_w)/(T_c−T_w)))·(α_max−α_min)
-  t > T_c :            α_t = α_min                                              # floor
-  ```
+  $$
+  \alpha_t = \begin{cases}
+  \dfrac{t}{T_w}\,\alpha_{\max} & t < T_w \quad\text{(linear warmup)}\\[2ex]
+  \alpha_{\min} + \tfrac12\left(1 + \cos\!\Big(\pi\,\dfrac{t - T_w}{T_c - T_w}\Big)\right)(\alpha_{\max} - \alpha_{\min}) & T_w \le t \le T_c\\[2ex]
+  \alpha_{\min} & t > T_c \quad\text{(floor)}
+  \end{cases}
+  $$
 
   Warmup avoids the early instability of a large LR on a cold model; the cosine decay lets you
   take big steps early and settle into a minimum late. Set `T_c` to your total step count so decay
@@ -259,3 +263,15 @@ i/Θ^{(2k-2)/d}`, no parameters, relative position) over learned absolute; SwiGL
 `12·num_layers·d²` parameters — that is the `N` in the FLOP rules. Shape it with `d_head = 64`, an
 aspect ratio in the low hundreds, and `d_ff` a multiple of 64; train it with AdamW, cosine LR with
 warmup, and gradient clipping. You can now design and price a model to a target size by hand.
+
+## You can now
+
+- walk the forward pass of a modern pre-norm decoder block and write the exact math for each sublayer.
+- justify each modern default over its 2017 predecessor: RMSNorm over LayerNorm, pre-norm over post-norm, SwiGLU over ReLU-4d, RoPE over learned absolute positions, and GQA over MHA.
+- implement RMSNorm (with the fp32 upcast), scaled dot-product attention with a causal mask, and RoPE directly from their equations.
+- compute a model's parameter count as `~12·num_layers·d²` plus embeddings, and shape it (`d`, `num_layers`, `h`, `d_head`, `d_ff`) to hit a target size without a spreadsheet.
+- specify the full training recipe — AdamW betas/weight decay, cosine LR with linear warmup, gradient clipping — with the defaults large models actually use.
+
+## Try it
+
+Pick a target non-embedding parameter budget — say 1.3B — and design a decoder-only config by hand: choose `d` and `num_layers` for an aspect ratio in the low hundreds, set `d_head = 64` (which fixes `h = d/64`), take `d_ff = (8/3)d` rounded to a multiple of 64, and pick a vocabulary size. Verify your choice against `N ≈ 12·num_layers·d²` plus the embedding/head term, and iterate until you land within a few percent of the budget. Then price a single forward pass over a 2048-token sequence using the `2N` rule, and add the `4BL²d` attention-score term to see how much the quadratic part contributes at that context length.

@@ -616,10 +616,12 @@ Triton on KServe is a thing — `predictor.triton` in the InferenceService spec.
 
 Route real prediction requests to the new model *in parallel* with the current model. Return the current model's output to the user. Log both. Compare offline.
 
-```
-[Request] ──► [Current model] ──► [Response]
-       │
-       └──► [Shadow model] ──► [Log only]
+```mermaid
+flowchart LR
+    A["Request"] --> B["Current model"]
+    B --> C["Response"]
+    A --> D["Shadow model"]
+    D --> E["Log only"]
 ```
 
 Lets you validate a new model against real production traffic with zero user impact. Standard pre-promotion check.
@@ -696,11 +698,12 @@ Many real ML problems need *fresh* features. Examples:
 
 The pattern:
 
-```
-[Events]  ──►  [Kafka topic]  ──►  [Flink job]  ──►  [Online feature store]
-                                                              │
-                                                              ▼
-                                                      [Inference service]
+```mermaid
+flowchart LR
+    A["Events"] --> B["Kafka topic"]
+    B --> C["Flink job"]
+    C --> D["Online feature store"]
+    D --> E["Inference service"]
 ```
 
 You'll touch Kafka and Flink at competence level. Deep mastery is covered in the Advanced Topics chapter.
@@ -845,3 +848,14 @@ This is the "skeleton walking" milestone. You've proven the architecture flows. 
 7. You've built a streaming feature pipeline end-to-end, even at toy scale.
 
 When all seven feel solid, move on to the Next Steps chapter to specialize.
+
+---
+
+## You can now
+
+- Account for where GPU memory goes during training (parameters, gradients, optimizer state, activations) and pick DDP, FSDP/ZeRO, TP, or PP for a given model and hardware topology.
+- Launch single-node and multi-node distributed training with `torchrun`, and wrap a model in FSDP with mixed precision for large-model training.
+- Read and write Kubernetes manifests that request GPUs, and run distributed jobs via the Kubeflow Training Operator — plus reason about DRA, Kueue, and topology-aware scheduling for fleet utilization.
+- Deploy production-grade serving with BentoML, KServe, or Triton, and run shadow, canary, A/B, and blue/green rollouts.
+- Build a streaming feature pipeline (Kafka → Flink/consumer → online store) and reason about the online/offline consistency problem and its fixes.
+- Decompose a latency budget across components and apply the right knob — micro-batching, quantization, compilation, or right-sizing hardware — to hit it.

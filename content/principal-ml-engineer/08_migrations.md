@@ -139,13 +139,11 @@ for each remaining consumer:
 
 A migration is an investment with a payback period, and the principal owns the honest math:
 
-```text
-total_cost = build_cost
-           + dual_running_cost × overlap_months     ← the one everyone forgets
-           + divergence_triage_cost                 ← 20–30% of eng time
-           + consumer_migration_cost                ← other teams' time, real money
-payback   = total_cost / monthly_benefit            (infra savings + velocity + risk)
-```
+$$\text{total\_cost} = \text{build\_cost} + \text{dual\_running\_cost} \times \text{overlap\_months} + \text{divergence\_triage\_cost} + \text{consumer\_migration\_cost}$$
+
+$$\text{payback} = \frac{\text{total\_cost}}{\text{monthly\_benefit}} \qquad \text{(infra savings + velocity + risk)}$$
+
+*Dual-running is the term teams most often forget; divergence triage consumes 20–30% of engineering time and belongs on its own line; consumer-migration cost is real money from other teams' budgets.*
 
 Worked instance, spelled out:
 
@@ -199,6 +197,14 @@ COMMS            weekly dashboard link; monthly stakeholder note; escalation pat
 ```
 
 The two lines that earn their place: *definition of done* (cutover is not done; deletion is done) and *leadership commitments* (extracted in writing while enthusiasm is high, spent later when a laggard team escalates).
+
+## You can now
+
+- Identify the characteristic kill zone for the migration type you've been handed and name it on page one of the plan, before any code is written.
+- Design shadow parity gates as pre-registered statistical specs — prediction-level agreement, score distribution PSI, tail-behavior thresholds, and operational SLOs — signed before shadow data arrives so no team can rationalize divergence after the fact.
+- Run the diff court weekly and produce signed written dispositions (bug / improvement / noise) that make the cutover review a presentation of evidence rather than an argument, and put every load-bearing bug decision in writing at the moment it's made.
+- Size migration economics honestly with build cost, dual-running overlap, divergence-triage cost, and consumer-migration cost — then name bankruptcy conditions in advance so a zombie migration cannot form silently.
+- Extract leadership commitments in writing (deprecation date enforcement, old-stack feature freeze, VP air cover for breaking laggards) before engineering starts, and use layered forcing functions to close the tail without relying on goodwill at the deadline.
 
 ## Worked example
 
