@@ -446,10 +446,6 @@ body.focus-lock{overflow:hidden}
   position:fixed;inset:0;z-index:100;background:var(--focus-bg);
   display:none;flex-direction:column;opacity:0;transition:opacity .5s ease}
 #focusOverlay.on{display:flex;opacity:1}
-@media (prefers-color-scheme: dark){
-  #focusOverlay{--focus-bg:#1a1a1e;--focus-ink:#d7d7db;--focus-muted:#6b6b73;
-    --focus-accent:#d4a94e;--focus-line:#2c2c33;--focus-code:#232329}
-}
 
 /* reading column */
 #fReader{flex:1;overflow-y:auto;overscroll-behavior:contain;width:100%;scroll-behavior:smooth}
