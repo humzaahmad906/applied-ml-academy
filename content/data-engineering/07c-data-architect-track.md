@@ -4,229 +4,37 @@ This is part 3 of 4 of the Data Architect Track. Parts 1–2 covered the archite
 
 ## Phase 10 — Stakeholder Management
 
-The skill set most absent from technical training.
+The stakeholder skill set is the one most absent from technical training. Every architect serves the same groups — executive sponsors (outcomes, cost, risk), peer engineering leaders (coordination, dependencies), your own technical teams (being unblocked), business stakeholders (getting answers), compliance/security/legal (risk), vendors, and external auditors/regulators (governance posture) — and each wants something different from you. You communicate *up* by leading with the conclusion in the executive's vocabulary and quantifying trade-offs in dollars and time, *down* by being specific and explaining the why, and *across* by keeping commitments and surfacing dependencies early. The hardest skill is productive pushback: rather than a flat no, surface the underlying problem, offer an alternative, make the trade-off visible, or propose a pilot.
 
-### The Stakeholder Map
-
-Every architect's job involves at least these groups:
-
-- **Executive sponsors** (VP of Data, CTO, sometimes CEO) — care about outcomes, cost, risk
-- **Peer engineering leaders** (eng managers, other architects) — care about coordination, dependencies
-- **Direct technical teams** (DEs, analysts, data scientists) — care about being unblocked
-- **Business stakeholders** (product, marketing, finance) — care about getting answers
-- **Compliance / security / legal** — care about risk
-- **Vendors** — care about your contract size
-- **External (auditors, regulators, sometimes customers)** — care about your governance posture
-
-Different groups want different things from you. Failing to adapt your communication to each is the most common architect failure mode after going-too-deep-on-code.
-
-### Communicating Up
-
-When talking to executives:
-
-- **Lead with the conclusion.** They have 90 seconds.
-- **Use their vocabulary.** "Revenue impact," "compliance risk," "competitive advantage" — not "Iceberg" or "DAG."
-- **Quantify trade-offs.** "Option A: $500K, 6 months, low risk. Option B: $200K, 3 months, moderate vendor risk."
-- **Be honest about uncertainty.** "We don't know" is fine if followed by "and here's how we'll find out."
-- **Never surprise them.** If a problem is coming, they hear about it from you first.
-
-The art of the executive summary deserves its own study. Read the Amazon "narrative" memo culture writing if you can find examples.
-
-### Communicating Down
-
-When talking to engineers on your team:
-
-- **Be specific.** Architects who give vague guidance produce confused implementations.
-- **Explain the why.** Engineers who understand the why make better local decisions than engineers following orders.
-- **Be available for technical depth.** Don't disappear into meetings. Office hours, code reviews, design reviews.
-- **Defend them up.** When leadership pushes for the unrealistic, your job is partly to absorb that.
-
-### Communicating Across
-
-Peer engineering leaders:
-
-- **Make commitments and keep them.** Reliability is the currency.
-- **Surface dependencies early.** "I'll need X from your team by Q3" said in Q1 is fine; in Q2 is bad.
-- **Don't undermine.** Disagree privately, support publicly.
-
-Business stakeholders:
-
-- **Translate.** Their requirements arrive in business language; your team needs them in technical language. You're the translator.
-- **Set expectations on timelines.** Most business stakeholders think pipelines take an hour. Educate gently.
-- **Be the data ambassador.** When their dashboard breaks, you're the face of the platform.
-
-### The Hardest Skill: Pushback
-
-Sometimes a stakeholder is wrong. They want something that would damage the platform, or is technically infeasible, or is the wrong solution to a real problem.
-
-The architect's job is to disagree productively. Patterns that work:
-
-- "Help me understand the underlying problem you're trying to solve" (often reveals a different solution)
-- "Here's what I'd recommend instead, and why" (always have an alternative)
-- "If we do that, here's what we'll have to give up" (make the trade-off visible)
-- "Let's run a small pilot before committing" (de-risk irreversible decisions)
-
-What doesn't work: just saying no. Or just doing it anyway and resenting it.
+This is covered in depth in the MLOps course's ML Architect Track (Phase 10: Stakeholder Management) — the principle is identical across both tracks and the guidance is domain-agnostic; the only data-engineering framing is the vocabulary you speak to executives (revenue and compliance risk, not "Iceberg" or "DAG").
 
 ---
 
 ## Phase 11 — Documentation
 
-A separate skill from writing code or writing strategy. Architects produce a lot of it.
+Documentation is a distinct skill from writing code or strategy, and architects produce a lot of it. Match the document to the audience and cadence — one-pager (execs, monthly), ADR (per decision), design doc (per project), strategy doc (yearly), runbook (per system), architecture overview (quarterly refresh), RFC (per proposal). Good architectural documents lead with the conclusion, state the decision and its rationale explicitly, are honest about trade-offs, date everything, keep diagrams matching the words, prefer specific over abstract ("the customer master pipeline," not "the integration layer"), and are maintained rather than abandoned. Prefer version-controlled, text-based diagram tools (Mermaid, Structurizr, PlantUML/D2) over paid tools you lose access to when you change jobs, and fix under-investment in writing by writing more in low-stakes contexts.
 
-### The Documentation Hierarchy
-
-| Type | Audience | Frequency | Length |
-|------|----------|-----------|--------|
-| One-pager | Execs | Monthly | 1 page |
-| ADR | Team + future architects | Per decision | 1–3 pages |
-| Design doc | Engineers implementing | Per project | 5–30 pages |
-| Strategy doc | Leadership | Yearly | 10–30 pages |
-| Runbook | On-call engineers | Per system | 2–10 pages |
-| Architecture overview | Everyone | Quarterly refresh | 5–15 pages |
-| RFC | Engineers debating | Per proposal | 3–15 pages |
-
-### What Makes Architectural Documents Good
-
-1. **Lead with the conclusion.** Most readers stop after the first paragraph.
-2. **State the decision and its rationale clearly.** Not "we considered many options" — *which* options, *why* this one.
-3. **Be explicit about trade-offs.** The negative consequences. The things you're giving up.
-4. **Date everything.** Future-you needs to know whether this doc reflects current reality.
-5. **Diagrams that match the words.** Don't say "the pipeline goes A to B" if your diagram shows A to C.
-6. **Specific over abstract.** "The customer master pipeline" not "the integration layer."
-7. **Maintained, not abandoned.** Mark deprecated docs as such; don't let stale documents quietly mislead.
-
-### Diagramming Tools Worth Using
-
-- **Mermaid** — text-based, version-controlled, renders in GitHub. The default for diagrams in markdown docs.
-- **Excalidraw** — quick sketches that look hand-drawn. Great for whiteboarding.
-- **Lucidchart / draw.io** — for complex diagrams with detailed shapes.
-- **Structurizr** — C4 model-native, code-generated diagrams.
-- **PlantUML / D2** — text-based, for engineers who want diagram-as-code.
-
-Avoid: anything that requires a paid license you'll lose access to when you change jobs. Avoid: tools that produce screenshots no one else can edit.
-
-### Writing Practice
-
-Most engineers under-invest in writing. The fix is simple: write more, frequently, in low-stakes contexts. A weekly Slack post recapping platform changes. A monthly blog post. A quarterly retrospective. The practice compounds.
-
-Books worth reading: *On Writing Well* (Zinsser), *The Elements of Style* (Strunk & White), and for engineers specifically *Engineers Survival Guide* (Merih Taze) — short, blunt, practical.
+This is covered in depth in the MLOps course's ML Architect Track (Phase 11: Documentation) — the principle is identical across both tracks and the guidance is domain-agnostic; the ML track adds a "model card" document type that has no data-engineering equivalent.
 
 ---
 
 ## Phase 12 — Organizational Design
 
-Architecture and organizational structure are joined at the hip. Architects who don't pay attention to org design produce architectures that fight the organization.
+Architecture and organizational structure are joined at the hip. Conway's Law says a system's structure mirrors the communication structure of the org that built it, so the architect's leverage is the "inverse Conway maneuver" — shape the org to produce the architecture you want rather than just reacting to the one you have. Team Topologies gives four team types (stream-aligned, platform, enabling, complicated-subsystem), and every org sits somewhere on a centralization-vs-federation spectrum: too central creates a bottleneck, too federated creates inconsistency and duplication, and the right balance is contextual and evolves with org maturity.
 
-### Conway's Law
+This is covered in depth in the MLOps course's ML Architect Track (Phase 12: Organizational Design) — the principle is identical; what follows is the data-engineering-specific delta.
 
-> "Any organization that designs a system will produce a design whose structure is a copy of the organization's communication structure."
-
-If your organization has three siloed teams (engineering, analytics, data science) and one platform team, you'll get four data systems with painful integration points. If your teams are organized by domain (commerce, marketing, finance), you'll get domain-aligned data products.
-
-The architect's leverage: shape the organization to produce the architecture you want, not just react to the organization you have. This is "the inverse Conway maneuver."
-
-### Team Topologies (Skelton & Pais)
-
-A useful framework. Four team types:
-
-1. **Stream-aligned teams** — own a value stream end-to-end (domain teams)
-2. **Platform teams** — provide self-serve internal platforms (data platform team)
-3. **Enabling teams** — short-lived, spread expertise (e.g., dbt rollout team)
-4. **Complicated subsystem teams** — own deeply specialized components (e.g., the ML feature store team)
-
-For data:
-
-- A central **data platform team** (warehouse, lake, orchestration, observability)
-- **Stream-aligned data teams** within business domains (commerce data team, marketing data team)
-- **Enabling teams** for major capability rollouts (a 6-month "embedded analytics enablement team")
-- **Complicated subsystem teams** for highly specialized work (real-time ML serving)
-
-The architect's job is to advise on which capability sits where. Putting too much in the central team creates a bottleneck. Decentralizing too much produces inconsistency. The right balance is contextual.
-
-### The Centralization vs Federation Spectrum
-
-```
-Fully Centralized                                     Fully Federated
-─────────────────                                     ───────────────
-One team owns                                         Every domain team
-all data work                                         owns their data
-        │                                                       │
-        ▼                                                       ▼
-Pros: consistency,                                   Pros: speed, autonomy,
-quality, lower cost                                  domain expertise
-        │                                                       │
-        ▼                                                       ▼
-Cons: bottleneck,                                    Cons: inconsistency,
-slow, distant from                                   duplication, governance
-domain context                                       overhead
-```
-
-Most healthy orgs land somewhere in the middle. Central platform team for infrastructure, federated domain teams for transformation and modeling, central governance for standards. The exact split depends on the company's size and stage.
-
-### The Path Through Org Maturity
-
-A common evolution:
-
-1. **Stage 1: Solo DE** — one engineer doing everything, embedded in product engineering
-2. **Stage 2: Small data team** — 2–5 engineers, central team, owns everything
-3. **Stage 3: Platform + analytics split** — platform team for infra, analytics engineers within domains
-4. **Stage 4: Full data org** — platform team, governance team, ML platform team, domain data teams, central analytics team
-
-Architects who try to apply Stage 4 patterns to Stage 2 companies produce overengineering. Architects who try to apply Stage 2 patterns to Stage 4 companies produce chaos. Recognize the stage; design for it.
+**Data-engineering delta — the mapping.** The Team Topologies mapping for data: a central **data platform team** (warehouse, lake, orchestration, observability), **stream-aligned data teams** inside business domains (commerce, marketing), **enabling teams** for capability rollouts (a 6-month dbt or embedded-analytics enablement team), and **complicated-subsystem teams** for specialized work (real-time ML serving). The org-maturity path runs Solo DE → small central data team → platform + analytics-engineer split → full data org (platform, governance, ML-platform, domain-data, and central-analytics teams). Applying Stage-4 patterns to a Stage-2 company is over-engineering; the reverse is chaos.
 
 ---
 
 ## Phase 13 — Vendor Selection and Contracts
 
-A skill no one tells you about until you're doing it.
+Vendor selection is a skill no one warns you about until you're doing it. The process: write a requirements doc *before* talking to vendors (or their salespeople write it for you), cut a long list of 8–10 to a short list of 3 on basic fit, run structured scored demos, run a real-workload proof-of-concept through the top 2 (2–4 weeks each — demos lie), take reference calls with customers you find yourself rather than the ones the vendor picks, then negotiate — 20–50% discounts are normal at F100 scale, and multi-year commits, volume tiers, reference-customer status, competing offers, end-of-quarter timing, and bundling are all leverage. Read contracts for term/renewal, price-escalation caps, termination and data-export rights, data ownership, SLAs, and liability caps; legal owns the review, but you raise the flag when something looks off.
 
-### The Vendor Selection Process
+This is covered in depth in the MLOps course's ML Architect Track (Phase 13: Vendor Selection and Contracts) — the principle is identical; what follows is the data-engineering-specific delta.
 
-When evaluating a major data tool (warehouse, observability platform, catalog):
-
-1. **Requirements doc.** Write what you need *before* talking to vendors. Otherwise their salespeople tell you what you need.
-2. **Long list → short list.** Often 8–10 vendors initially. Cut to 3 based on basic fit.
-3. **Demos with structured scoring.** Don't let demos be unstructured. Score each vendor on the same dimensions.
-4. **Proof of concept.** Run a real workload through the top 2 vendors. 2–4 weeks each. Don't skip this — vendor demos lie.
-5. **Reference calls.** Talk to 3 current customers — *not* the ones the vendor recommends. Find them yourself via LinkedIn or community.
-6. **Contract negotiation.** Real procurement work. Discount of 20–50% is normal at F100 scale.
-
-### Reading Vendor Contracts
-
-You don't need to be a lawyer, but you should know to look for:
-
-- **Term length and renewal.** Auto-renew clauses can be expensive. Multi-year discounts can be a trap.
-- **Price escalation.** Year-over-year increases capped at what?
-- **Termination.** Can you exit cleanly? Data export rights?
-- **Data ownership.** Is your data yours? In what format on exit?
-- **SLAs.** What's promised? What's the penalty if missed?
-- **Liability caps.** If they leak your data, what do you get?
-- **Most-favored-customer clauses.** Rare but valuable.
-
-Legal and procurement own the legal review, but you should be educated enough to raise concerns when something looks off.
-
-### Negotiating Position
-
-Architects often have more leverage than they realize:
-
-- **Multi-year commitments unlock discounts.** Negotiate them aggressively.
-- **Volume tiers.** Get the next tier's price even if you're not quite there.
-- **Reference customer status.** Worth real discount; you'll be on their website.
-- **Competing offers.** Even bluffs work. Often the threat is enough.
-- **End-of-quarter timing.** Salespeople have quotas.
-- **Bundling.** "Storage + compute + support all together."
-
-### The Hidden Vendor Hazard: Lock-In Accumulating
-
-Watch for:
-
-- Vendor-specific SQL extensions (you can't run elsewhere)
-- Proprietary file formats
-- Custom UI tools that bake business logic outside version control
-- Engineering teams who only know this vendor
-
-The architect's defense: explicit periodic exercise of "what would migration look like?" Even if you never migrate, knowing it's possible disciplines your buy decisions.
+**Data-engineering delta — the lock-in signals to watch.** Vendor-specific SQL extensions you can't run elsewhere, proprietary file formats, custom UI tools that bake business logic outside version control, and engineering teams who only know one vendor. The defense is a periodic "what would migration look like?" exercise — even if you never migrate, knowing it's possible disciplines your buy decisions. (The ML track's equivalent hazards center on vendor-specific prompt formats, data-training clauses, and rapid model deprecation.)
 
 
 ---

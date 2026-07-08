@@ -40,30 +40,24 @@ The source table needs an **entity ID column** (here `card`) and, for point-in-t
 
 For online serving you create a **Feature Online Store** and then a **Feature View** synced into it. Serving is **Bigtable-backed**: the online store runs on Bigtable nodes that you either fix or autoscale. (Note the "optimized" online serving option is deprecated as of May 2026 — Bigtable serving is the supported path for new deployments; do not build on optimized.)
 
-```bash
-# Create a Bigtable online store with autoscaling
-gcloud ai feature-online-stores create fraud_online \
-  --region=us-central1 \
-  --min-node-count=1 \
-  --max-node-count=3 \
-  --cpu-utilization-target=60
+```python
+# Create a Bigtable online store, then a feature view that syncs hourly
+fos = feature_store.FeatureOnlineStore.create_bigtable_store("fraud_online")
 
-# Create a feature view that pulls from the feature group and syncs hourly
-gcloud ai feature-views create card_features \
-  --region=us-central1 \
-  --feature-online-store=fraud_online \
-  --feature-groups=fraud_features:txn_count_5m,amount_mean_5m \
-  --cron="0 * * * *"
+fv = fos.create_feature_view(
+    name="card_features",
+    source=feature_store.utils.FeatureViewBigQuerySource(
+        uri="bq://myco-fraud-dev.fraud.card_velocity_5m",
+        entity_id_columns=["card"],
+    ),
+    sync_config="0 * * * *",   # cron: hourly refresh from BigQuery
+)
 
-# Trigger a sync now (rather than waiting for the schedule) and watch it
-gcloud ai feature-views sync card_features \
-  --feature-online-store=fraud_online --region=us-central1
-gcloud ai feature-view-syncs list \
-  --feature-view=card_features --feature-online-store=fraud_online \
-  --region=us-central1
+# Trigger a sync now rather than waiting for the schedule
+fv.sync()
 ```
 
-A feature view can source from **feature groups** (`--feature-groups`, tying serving to the registered offline definitions) or from a registry/BigQuery source directly. The `--cron` schedule controls how often the online store refreshes from BigQuery; for a fraud system you want this frequent, but each sync is a BigQuery read and a Bigtable write, so there is a cost/freshness tradeoff to tune.
+The Bigtable online store's **autoscaling** — `min_node_count`, `max_node_count`, `cpu_utilization_target` — is set on the store's `bigtable.auto_scaling` config; via the SDK's `create_bigtable_store` parameters, or the REST/Terraform `featureOnlineStores` resource if you drive it from a pipeline. A feature view can source from a **feature group** (tying serving to the registered offline definitions) or from a BigQuery source directly, as above. The cron `sync_config` controls how often the online store refreshes from BigQuery; for a fraud system you want this frequent, but each sync is a BigQuery read and a Bigtable write, so there is a cost/freshness tradeoff to tune.
 
 Serving reads a feature vector by entity ID. In Python this is the online serving path that your prediction service calls per request:
 
@@ -82,13 +76,21 @@ resp = client.fetch_feature_values(request=fos.FetchFeatureValuesRequest(
 
 The critical gotcha: **a feature view must be synced before it can serve** — create it, run a sync, then read. And the online store is **always-on Bigtable nodes**, a real fixed cost, so size autoscaling to your actual QPS rather than provisioning for a peak you rarely hit.
 
-The management operations you will actually run:
+The management operations you will actually run, in the SDK:
+
+```python
+fv = fos.get_feature_view("card_features")   # re-open an existing view
+fos.list_feature_views()
+feature_store.FeatureOnlineStore.list()
+fos.delete()                                 # tears down the Bigtable nodes
+```
+
+If you need a genuine command-line path (for CI without a Python runtime), call the REST API with a token from `gcloud auth print-access-token` — every operation above has a `featureOnlineStores` / `featureViews` REST endpoint:
 
 ```bash
-gcloud ai feature-views describe card_features \
-  --feature-online-store=fraud_online --region=us-central1
-gcloud ai feature-online-stores list --region=us-central1
-gcloud ai feature-online-stores delete fraud_online --region=us-central1
+curl -X POST \
+  -H "Authorization: Bearer $(gcloud auth print-access-token)" \
+  "https://us-central1-aiplatform.googleapis.com/v1/projects/myco-fraud-dev/locations/us-central1/featureOnlineStores/fraud_online/featureViews/card_features:sync"
 ```
 
 ## Point-in-time correctness for training data
@@ -167,41 +169,47 @@ These four components are the connective tissue of the MLOps loop from module 12
 
 ## CLI cheat-sheet
 
-```bash
+The BigQuery-backed Feature Store has **no `gcloud` surface** — use the Python SDK (`vertexai.resources.preview.feature_store`) or the REST API. Experiments and lineage use the `aiplatform` SDK.
+
+```python
 # --- Feature groups (offline store = BigQuery) ---
-gcloud ai feature-groups create fraud_features --region=us-central1 \
-  --big-query-source=bq://PROJECT.DATASET.TABLE --entity-id-columns=card
-gcloud ai feature-groups features create txn_count_5m \
-  --feature-group=fraud_features --region=us-central1
-gcloud ai feature-groups list --region=us-central1
-gcloud ai feature-groups describe fraud_features --region=us-central1
+from vertexai.resources.preview import feature_store as fs
+fg = fs.FeatureGroup.create(name="fraud_features",
+        source=fs.utils.FeatureGroupBigQuerySource(
+            uri="bq://PROJECT.DATASET.TABLE", entity_id_columns=["card"]))
+fg.create_feature(name="txn_count_5m")
+fs.FeatureGroup.list()
 
 # --- Online store (Bigtable) + feature views ---
-gcloud ai feature-online-stores create fraud_online --region=us-central1 \
-  --min-node-count=1 --max-node-count=3 --cpu-utilization-target=60
-gcloud ai feature-views create card_features --region=us-central1 \
-  --feature-online-store=fraud_online \
-  --feature-groups=fraud_features:txn_count_5m,amount_mean_5m \
-  --cron="0 * * * *"
-gcloud ai feature-views sync card_features \
-  --feature-online-store=fraud_online --region=us-central1
-gcloud ai feature-view-syncs list --feature-view=card_features \
-  --feature-online-store=fraud_online --region=us-central1
-gcloud ai feature-online-stores list --region=us-central1
+fos = fs.FeatureOnlineStore.create_bigtable_store("fraud_online")
+fv  = fos.create_feature_view(name="card_features",
+        source=fs.utils.FeatureViewBigQuerySource(
+            uri="bq://PROJECT.DATASET.TABLE", entity_id_columns=["card"]),
+        sync_config="0 * * * *")
+fv.sync()                       # trigger a materialization now
+fv.read(["c-42"])               # online read by entity key
+fos.list_feature_views(); fos.delete()
 
-# --- Python: init experiments / log runs / compare ---
+# --- Experiments / lineage / eval (aiplatform SDK) ---
 # aiplatform.init(experiment="fraud-classifier")
 # aiplatform.start_run("run-042"); log_params/log_metrics/log_time_series_metrics; end_run()
 # aiplatform.get_experiment_df("fraud-classifier")
-# Online serving: FeatureOnlineStoreServiceClient.fetch_feature_values(...)
+# Online serving (v1 client): FeatureOnlineStoreServiceClient.fetch_feature_values(...)
+```
+
+```bash
+# REST path for CI without Python — token from gcloud, then call the endpoint
+TOKEN=$(gcloud auth print-access-token)
+curl -X POST -H "Authorization: Bearer $TOKEN" \
+  "https://us-central1-aiplatform.googleapis.com/v1/projects/PROJECT/locations/us-central1/featureOnlineStores/fraud_online/featureViews/card_features:sync"
 ```
 
 ## Try it
 
 Wire feature management and tracking into the fraud pipeline:
 
-1. Point a **feature group** at the `fraud.card_velocity_5m` BigQuery table (from module 16) with `--big-query-source` and `--entity-id-columns=card`, then register two features under it.
-2. Create a **Bigtable online store** with autoscaling, create a **feature view** over the group with an hourly `--cron`, run a **sync**, and read a feature vector for one card with `fetch_feature_values`.
+1. Point a **feature group** at the `fraud.card_velocity_5m` BigQuery table (from module 16) with `FeatureGroup.create(source=FeatureGroupBigQuerySource(uri=..., entity_id_columns=["card"]))`, then register two features under it with `create_feature`.
+2. Create a **Bigtable online store** with `create_bigtable_store`, create a **feature view** over the group with an hourly `sync_config` cron, run `fv.sync()`, and read a feature vector for one card with `fv.read([...])` (or `fetch_feature_values`).
 3. Instrument a training run with **Vertex AI Experiments** — `log_params`, per-epoch `log_time_series_metrics`, final `log_metrics` — then run it twice with different hyperparameters and compare with `get_experiment_df`.
 4. Run the training inside a **Vertex AI Pipeline** and inspect **ML Metadata lineage** to confirm the model version traces back to the BigQuery dataset that produced it.
 5. Run a **Model Evaluation** on the registered version against a frozen eval file, add a **slice** by region, and wire the AUC into the pipeline's `dsl.If` promotion gate.

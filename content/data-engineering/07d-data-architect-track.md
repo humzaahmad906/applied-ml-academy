@@ -4,236 +4,44 @@ This is part 4 of 4 of the Data Architect Track. Parts 1–3 covered the mindset
 
 ## Phase 14 — The Architect's Toolkit
 
-What architects actually use day-to-day.
+The day-to-day toolkit falls in four buckets. **Thinking:** a notes app always open (most architecting is writing), Obsidian/Notion for tracking decisions across years, a spreadsheet for cost models and comparison matrices, and a diagramming tool. **Communicating:** collaborative docs, a presentation tool for execs, a whiteboard (Miro/FigJam/Excalidraw), and proficient async writing in Slack/Teams. **Staying current:** a curated few newsletters, one or two podcasts, conference talks at 1.5x, and a small daily reading habit. **Staying technical:** a working laptop dev environment, a personal lab where your hands stay in code, and a habit of reviewing 5+ PRs a week — because architects who stop touching tools become out-of-touch within two years and the half-life of technical credibility is short.
 
-### Tools for Thinking
-
-- **A second monitor with a notes app open** — most architecting happens by writing
-- **Obsidian or Notion** — for personal knowledge management; track decisions across years
-- **A spreadsheet** — for cost modeling, comparison matrices, capacity planning
-- **A diagramming tool** — Mermaid, Excalidraw, or whatever clicks
-
-### Tools for Communicating
-
-- **Google Docs / Notion** — collaborative writing
-- **A presentation tool** — for executive comms (Slides, Keynote, whatever)
-- **A whiteboard** — physical or virtual (Miro, FigJam, Excalidraw multiplayer)
-- **Slack / Teams** — proficient async writing matters more than you'd think
-
-### Tools for Staying Current
-
-- **Newsletters** (a curated few — not 30)
-- **One or two podcasts** during commute or exercise (the Data Engineering Show, Software Engineering Daily, etc.)
-- **Conference talks** on 1.5x speed
-- **A small reading habit** — 20 pages of a real book a day adds up
-
-### Tools for Staying Technical
-
-- **A laptop dev environment** that actually works (Docker, the major SDKs, a working dbt project)
-- **A personal lab** — a side project where you keep your hands in code
-- **Code review activity** — commit to reviewing 5+ PRs per week even when you're not coding much yourself
-
-The architects who stop touching tools entirely become out-of-touch architects within 2 years. The half-life of technical credibility is short.
+This is covered in depth in the MLOps course's ML Architect Track (Phase 14: The Architect's Toolkit) — the principle is identical across both tracks; the only delta is domain flavor (a working dbt project and data-engineering podcasts like the Data Engineering Show in place of an MLOps project and ML podcasts).
 
 ---
 
 ## Phase 15 — The Path from Senior DE to Architect
 
-Concrete career advice.
+The jump from senior IC to staff/principal/architect is not "more years" — promotion committees look for cross-team impact, long-horizon thinking, strategic decisions that paid off, mentorship, referenced written artifacts, and executive presence; technical depth is required but not sufficient, which is why many strong seniors plateau. The gaps to close are writing, communicating with non-technical stakeholders, strategic thinking, comfort with ambiguity and politics, negotiation, and patience — best learned by doing architecture-shaped work before the title (volunteer for the design doc, propose ADRs, run a cross-team initiative, present, mentor visibly). Promotion is not guaranteed even for strong engineers; if your company has no path, switching companies is the fastest reset.
 
-### What Promotion Committees Look For
+This is covered in depth in the MLOps course's ML Architect Track (Phase 15: Senior → Architect Path) — the principle is identical; what follows is the data-engineering-specific delta.
 
-The shift from senior IC to staff/principal/architect at F100s typically requires evidence of:
-
-1. **Cross-team impact.** Your work affected multiple teams, not just yours.
-2. **Long-horizon thinking.** Evidence you can plan beyond the current quarter.
-3. **Strategic decisions.** Architectural choices that paid off (or that you made well even if outcomes were mixed).
-4. **Mentorship.** People grew because of you.
-5. **Written artifacts.** Design docs, ADRs, strategy memos that are referenced after you wrote them.
-6. **Executive presence.** You can be put in front of a VP without supervision.
-
-Note: depth of technical skill is required but not sufficient. Many strong senior engineers plateau here because they've optimized for individual technical depth without building the rest of the surface area.
-
-### The Skills Gap Audit
-
-For most senior engineers, the gaps from senior to architect are:
-
-- **Writing** (more, longer, more polished, for more audiences)
-- **Communication with non-technical stakeholders**
-- **Strategic thinking** (3+ year horizons)
-- **Comfort with ambiguity** (problems without one right answer)
-- **Comfort with politics** (which is just "people having different goals")
-- **Negotiation** (with vendors, peers, your own leadership)
-- **Patience** (architecture moves slowly compared to coding)
-
-Hard to learn in a course. Best learned by doing — taking on architecture-flavored work even before the title arrives.
-
-### How to Get the Work Before the Title
-
-A pattern that works:
-
-1. **Volunteer to write the design doc** for a project, even if you're not leading it
-2. **Propose ADRs** for decisions your team is making informally
-3. **Run a cross-team initiative** — even small ones (introducing dbt, setting up observability standards)
-4. **Present at internal forums** — architecture reviews, all-hands, brown bags
-5. **Mentor visibly** — formal mentorship programs, code reviews with detailed feedback
-6. **Build a written body of work** — internal blog posts, RFCs, public blog posts
-
-By the time the promotion conversation happens, you've already been doing the work. The title catches up to the reality.
-
-### The Honest Career Math
-
-The promotion to staff/principal/architect at most F100s is *not* a guarantee, even for strong engineers. Some companies have hard pyramid structures (only one staff slot per 4 seniors). Some have inflated titles (everyone is principal-something).
-
-Your options if your current company doesn't have a path:
-
-1. **Switch companies.** The fastest path. Title gets reset based on negotiation, not history.
-2. **Switch teams within company.** Sometimes the bottleneck is your team, not you.
-3. **Build a public body of work.** Conference talks, blog posts, open-source contributions. Makes #1 easier.
-4. **Specialize hard.** Becoming "the X expert" sometimes opens a different door (staff engineer in a specialty).
-
-### The Salary Reality
-
-Approximate F100 ranges in 2026 for data architecture / staff DE / principal DE roles (USD, total comp, US-based):
+**Data-engineering delta — the salary reality.** Approximate F100 total-comp ranges in 2026 (USD, US-based) for data-architecture / staff DE / principal DE roles:
 
 - **Senior DE:** $250K–$400K
 - **Staff DE:** $400K–$600K
 - **Principal DE / Architect:** $500K–$800K
 - **Distinguished / Director-IC:** $800K+
 
-For remote / international, scale by local market — but the gap between mid-senior and architect is often a 1.5–2.5x multiplier wherever you are.
-
-The implication: the architect track is financially meaningful. It's also intellectually meaningful (the work is more interesting to many people). It's also harder (the skills are broader). Choose with intention.
+For remote / international, scale by local market — but the gap between mid-senior and architect is often a 1.5–2.5x multiplier wherever you are. (The ML track's ranges skew higher, especially at frontier labs.) The architect track is financially meaningful, intellectually meaningful, and harder. Choose with intention.
 
 ---
 
 ## Phase 16 — Common Failure Modes
 
-What to watch for in yourself.
+The architect failure modes to watch for in yourself: the **Ivory Tower Architect** (stops touching code, makes decisions that look elegant on paper and fail in practice — fix: keep 15–25% of your week in or close to code), the **Architecture Astronaut** (over-elaborate systems for problems that don't yet exist — fix: YAGNI ruthlessly), the **Tool Magpie** (adopts every new technology — fix: boring-technology default), the **Decision Bottleneck** (every decision routes through you — fix: delegate to the lowest level with enough context), the **Yes-Architect** (agrees to everything — fix: practice saying no), the **Detail-Distant Architect** (too high-altitude to evaluate proposals — fix: keep one deep technical specialty), and the **Politics-Avoidant Architect** (refuses org dynamics — fix: accept that politics is just people with different goals working out trade-offs).
 
-### The Ivory Tower Architect
+This is covered in depth in the MLOps course's ML Architect Track (Phase 16: Common Failure Modes) — the principle is identical; what follows is the data-engineering-specific delta.
 
-Stops touching code, becomes increasingly disconnected from reality, makes decisions that look elegant on paper and fail in practice. Engineers stop bringing real problems because the architect doesn't understand them anymore.
-
-**Fix:** keep 15–25% of your week in code or close-to-code work. Sit in on incident reviews. Pair-program occasionally. Review PRs in depth.
-
-### The Architecture Astronaut
-
-Designs over-elaborate systems for problems that don't yet exist. Loves abstractions for their own sake. Produces architectures that the team can't operate.
-
-**Fix:** apply the YAGNI principle ruthlessly. Build for the problem you have, not the problem you might have. Add complexity only when forced by reality.
-
-### The Tool Magpie
-
-Adopts every new technology. The stack accumulates faster than the team can absorb. Each new tool brings hidden operational cost.
-
-**Fix:** the "boring technology" mindset. Default to keeping the stack stable. Introduce new technology only when an existing tool clearly can't solve the problem, after proof.
-
-### The Decision Bottleneck
-
-Every decision routes through the architect. The team can't move without approval. The architect becomes the rate-limiter for the entire platform.
-
-**Fix:** delegate aggressively. Push decisions to the lowest level that has enough context. Reserve architect involvement for genuinely architectural decisions (those that cross team boundaries, affect long-term shape, or are high-stakes irreversible).
-
-### The Yes-Architect
-
-Agrees to everything. The roadmap grows infinitely. Nothing gets the focus it needs. Cost balloons.
-
-**Fix:** practice saying no. Have a simple framework for evaluating new asks. Be willing to disappoint stakeholders in service of the platform's coherence.
-
-### The Detail-Distant Architect
-
-Operates at such high altitude that they can't actually evaluate proposals. Approves bad designs because they couldn't tell. Loses technical credibility.
-
-**Fix:** depth in some specific area, even as you broaden. Maintain at least one technical specialty where you stay sharp.
-
-### The Politics-Avoidant Architect
-
-Refuses to engage with organizational dynamics. Treats politics as beneath them. Ends up with no influence over the things they need to influence.
-
-**Fix:** accept that "politics" is just "people with different goals working out trade-offs." Engage with it. Build relationships. The architect who can't get budget from finance and headcount from HR is not effective regardless of technical skill.
-
-### The Strategy-Avoidant Architect
-
-Stays in deep technical work. Avoids strategic conversations because they feel too vague. Misses the chance to shape the platform's direction.
-
-**Fix:** force yourself into strategic forums. Write strategy memos even when no one asked. Get comfortable with ambiguity.
+**Data-engineering delta — the Strategy-Avoidant Architect.** Stays in deep technical work and avoids strategic conversations because they feel too vague, missing the chance to shape the platform's direction. **Fix:** force yourself into strategic forums and write strategy memos even when no one asked. (The ML track carries a different extra failure mode in this slot — the "Hype Surfer" who reorients strategy every time a new model drops.)
 
 ---
 
 ## Phase 17 — Interview Preparation for Architect Roles
 
-How architect interviews differ from engineer interviews.
+Architect interviews differ from engineer interviews. A typical F100 loop is an initial screen, a system-design round, an **architecture deep dive**, several behavioral/leadership rounds, an executive interview, and reference checks — coding and single-tool depth are de-emphasized, while storytelling, defending past decisions, and executive presence are added. The most distinctive round is the deep dive: present a system you built (45–60 min) and defend every decision, so prepare 2–3 systems with context, a clean diagram, 3–5 key decisions with explicit trade-offs, what went well and badly, and measurable outcomes (the Fortune 100 portfolio projects are good training for this). Behavioral rounds expect STAR-method answers with named stakeholders, real conflict, specific tactics, and numbers — prepare 6–8 rotatable stories. The common failure modes are being too technical, too vague, defensive about mistakes, having no measurable outcomes, or being unable to communicate with the VP (the exec round often decides).
 
-### What's Tested
-
-A typical F100 architect loop:
-
-1. **Initial screen** — career story, scope of recent work
-2. **System design round** — design a system for a non-trivial problem
-3. **Architecture deep dive** — present a system you've architected. Defend it.
-4. **Behavioral / leadership** — multiple rounds. Conflict, influence, decision-making.
-5. **Executive interview** — VP/director. Strategic thinking, communication style.
-6. **Reference checks** — at this level, references actually matter.
-
-Note what's missing or de-emphasized compared to engineer interviews: coding (often no LeetCode), single-tool depth tests. Note what's added: storytelling, defending past decisions, executive presence.
-
-### The Architecture Deep Dive
-
-The most distinctive round. You present a system you've architected (45–60 minutes). The interviewers probe:
-
-- Why did you make decision X instead of Y?
-- What would you do differently if you started over?
-- What did you not anticipate?
-- How did you handle this constraint?
-- How did you communicate this to stakeholders?
-- How did the team execute?
-- What was the outcome?
-
-Preparation: pick 2–3 systems you can talk about. For each, prepare:
-
-- Context (business problem, scale, team)
-- Architecture (a clean diagram)
-- Key decisions (3–5 with explicit trade-offs)
-- What went well
-- What didn't
-- What you'd do differently
-- Outcomes (measurable)
-
-The Fortune 100 portfolio projects are great training ground for this. Even though they're not "real production systems," you can talk about the decisions you made in them at depth.
-
-### The System Design Round
-
-Similar to senior DE system design but with more emphasis on:
-
-- Multi-year evolution (not just initial design)
-- Team and org structure (not just technical)
-- Cost projection
-- Migration path from a hypothetical existing state
-- Failure modes and recovery
-
-Pattern that works:
-
-1. Clarify requirements aggressively (5–10 minutes; ask about scale, constraints, team, timeline)
-2. Sketch high-level architecture (Context-level C4)
-3. Drill into 2–3 components in detail
-4. Discuss trade-offs explicitly
-5. Cover failure modes, cost, evolution
-6. Discuss organizational/team implications
-
-### Behavioral / Leadership Rounds
-
-The questions are familiar but the bar is higher. "Tell me about a time you had to influence without authority" expects a 5-minute answer with named stakeholders, real conflict, specific tactics, and measurable outcomes.
-
-Preparation: STAR method (Situation, Task, Action, Result) but for 6–8 stories you can rotate through. Tag each story by which themes it covers (influence, conflict, technical decision, mentoring, failure, etc.). Practice them out loud.
-
-### Common Architect Interview Failure Modes
-
-- **Too technical.** Treating the architect interview like a senior engineer interview. Going deep on Kafka internals when you should be talking about org dynamics.
-- **Too vague.** Speaking in abstractions. "We use cloud-native patterns to enable agile delivery." Useless.
-- **Defensive about past mistakes.** Strong candidates own mistakes specifically and articulate the lesson. Weak candidates deflect.
-- **No measurable outcomes.** Strong candidates know the numbers. Cost reductions, latency improvements, team velocity. Weak candidates describe the work without quantifying impact.
-- **Couldn't communicate with the VP.** The exec round is often the one that decides. Tone, brevity, business framing matter more than technical accuracy.
+This is covered in depth in the MLOps course's ML Architect Track (Phase 17: Architect Interview Preparation) — the principle is identical across both tracks; the data-engineering framing is that the system-design round emphasizes multi-year platform evolution, cost projection, org structure, and a migration path from a hypothetical existing state, while the ML track adds a set of LLM-specific interview questions that have no data-engineering equivalent.
 
 ---
 

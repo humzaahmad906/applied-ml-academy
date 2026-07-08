@@ -105,29 +105,11 @@ The buy decision wasn't wrong at the time. But you didn't preserve optionality. 
 
 ## Phase 7 — Migration Strategy
 
-Most architect work, at established companies, is migration work. You're rarely starting greenfield. Mastery of migration patterns is therefore a core architect skill.
+Most architect work at an established company is migration, not greenfield. Migrations fail for predictable reasons — big-bang cutovers with no rollback, no measurable success criteria, underestimating the hard-20% long tail (legacy pipelines, undocumented dependencies, niche use cases), and never committing to deprecating the old system. The durable patterns are the **strangler fig** (stand the new system up beside the old, migrate use cases piece by piece, turn the old one off once it has nothing left to do) and the **parallel run** (run both, compare outputs, cut over only when divergence stays under threshold), and every serious migration deserves its own ADR + design doc with explicit scope, phasing, validation, rollback, decommission criteria, cost model, and timeline. Plan for 1.5–2x your initial estimate and refuse mid-migration scope creep — even good ideas, especially good ideas, wait until after.
 
-### Why Migrations Fail
+This is covered in depth in the MLOps course's ML Architect Track (Phase 7: Migration Strategy) — the principle is identical; what follows is the data-engineering-specific delta.
 
-1. **Big bang cutovers.** Migrating everything at once. The blast radius is the entire platform; the rollback is impossible.
-2. **No measurable success criteria.** Migration "completes" when someone declares victory. Six months later, half the old system is still running.
-3. **Underestimating the long tail.** Migrating the easy 80% is 20% of the work. The hard 20% (legacy pipelines, undocumented dependencies, niche use cases) is 80% of the work.
-4. **Not committing to deprecation.** Two systems run in parallel forever. You now have *more* complexity, not less.
-
-### The Strangler Fig Pattern
-
-Named for the strangler fig vine that gradually replaces the tree it grows on. The canonical migration pattern:
-
-1. New system stands up alongside the old
-2. New use cases go to the new system
-3. Old use cases migrate piece by piece
-4. At some point, the old system has nothing left to do; you turn it off
-
-This works because the blast radius at each step is small. If the new system has a problem, you stop migrating and fix it before continuing.
-
-### Parallel Run Migrations
-
-For warehouse migrations specifically:
+**Data-engineering delta — the warehouse parallel run.** For a warehouse migration the validation gate is concrete:
 
 1. Build the new warehouse alongside the old
 2. Run both pipelines in parallel — same sources, both destinations
@@ -136,25 +118,7 @@ For warehouse migrations specifically:
 5. Keep old running for 1–2 quarters as fallback
 6. Decommission old; reclaim costs
 
-The validation step (#3) is what most teams skip and what makes migrations succeed. Without it, you don't know whether the new warehouse is "correct" until users complain.
-
-### The Migration ADR
-
-Every serious migration deserves its own ADR + design doc combo. The design doc should include:
-
-- **Scope:** what's in, what's out, what's deferred
-- **Phasing:** the sequence of migrations
-- **Validation:** how you'll know each phase succeeded
-- **Rollback:** how to abort if something goes wrong
-- **Decommission criteria:** what conditions allow you to turn off the old system
-- **Cost model:** during overlap and steady-state
-- **Timeline:** with explicit milestones
-
-### The "We're Going to Be Done Soon" Trap
-
-Migrations always run long. Always. Plan for 1.5–2x your initial estimate. Resist the urge to add scope ("while we're migrating, let's also...") — that's how a 6-month migration becomes 18.
-
-Hard discipline: anything that would extend the timeline but isn't critical to migration *waits until after migration*. Even good ideas. Especially good ideas.
+The daily output-comparison step (#3) is the one teams skip and the one that makes the migration succeed — without it you don't learn the new warehouse is "correct" until users complain. (The ML track's parallel-run example instead compares model predictions with a ~0.5% divergence gate.)
 
 ---
 
@@ -222,50 +186,11 @@ The right way: a one-month focused engagement, find the 30%, present a plan, exe
 
 ## Phase 9 — Data Strategy
 
-The art of translating business strategy into data platform strategy.
+Data strategy is the process of translating business outcomes into a data-platform plan: what outcomes we want in 1–3 years, what data capabilities that requires, the current-state gap, the investments and sequencing to close it, and what measurable success looks like. It begins with a **diagnostic** — stakeholder interviews (10–20 people across the business), a system inventory, usage analysis, cost analysis, and an incident review — which produces the 10–20 page document nobody asked for and everybody needs. The output document runs executive summary, current state, future-state vision, a 12–24 month quarterly roadmap, an investment plan, a risk register, and success metrics. The hard part is **saying no**: pick 3–5 themes for the year and park everything else, because a strategy with 47 priorities has none.
 
-### What "Data Strategy" Actually Means
+This is covered in depth in the MLOps course's ML Architect Track (Phase 9: ML Strategy) — the process is identical; what follows is the data-engineering-specific delta.
 
-Not a buzzword. A specific document/process that answers:
-
-- What business outcomes are we trying to enable in the next 1–3 years?
-- What data capabilities does that require?
-- What's the current state, and what's the gap?
-- What investments close the gap?
-- What's the sequencing?
-- What does success look like, measurably?
-
-### The Diagnostic Phase
-
-Before recommending strategy, architects do a diagnosis:
-
-1. **Stakeholder interviews.** 30-min conversations with 10–20 people across the business — execs, product, sales, analysts, scientists, ICs.
-2. **System inventory.** What pipelines exist? What dashboards are watched? Where does data live?
-3. **Usage analysis.** Which datasets get queried most? Which dashboards have actual users? What's used vs what's just running?
-4. **Cost analysis.** Where's the money going? What's the unit economics?
-5. **Incident review.** What broke in the last year and why?
-
-The diagnosis output is usually a 10–20-page document that nobody asked for but everybody desperately needs. It changes the conversation from "we should buy Snowflake" to "the reason our growth team can't self-serve is that the marketing-attribution pipeline has 87 untested transformations on top of a poorly-modeled raw layer."
-
-### Strategy Outputs
-
-A data strategy document typically includes:
-
-1. **Executive summary** (1 page — the only thing most execs read)
-2. **Current state** (a few pages — diagnosis findings)
-3. **Future state vision** (the target architecture)
-4. **Roadmap** (12–24 months, quarterly milestones)
-5. **Investment plan** (people + tooling cost)
-6. **Risk register** (what could go wrong)
-7. **Success metrics** (how we'll know)
-
-Read examples online. The "Modern Data Stack" archetypal strategy doc has been written 1000 times; you can find good public examples on Medium, the dbt blog, and various consulting-firm white papers.
-
-### The Hard Part: Saying No
-
-A strategy document is also a list of things you're *not* doing. Architects who can't say no produce strategies with 47 priorities, which is the same as 0.
-
-The discipline: pick 3–5 themes for the year. Everything else is parked. When new requests come in, they either fit a theme (resourced) or they don't (deferred). This frustrates people in the short term and saves the platform in the long term.
+**Data-engineering delta.** The diagnostic is what earns its keep — it changes the conversation from "we should buy Snowflake" to "the reason our growth team can't self-serve is that the marketing-attribution pipeline has 87 untested transformations on top of a poorly-modeled raw layer." Good public examples of the archetypal "Modern Data Stack" strategy doc are on Medium, the dbt blog, and consulting-firm white papers. (The ML track additionally enumerates the F50 ML-strategy themes for 2026; the equivalent data-platform themes — lakehouse consolidation, self-serve, governance, cost — recur throughout this track.)
 
 
 ---
