@@ -499,6 +499,27 @@ CLOUD = [
         ("Preference tuning", "Beyond SFT: DPO (and a nod to GRPO), preference data, DPOTrainer, when it pays off."),
         ("Evaluation", "Did it actually improve? task evals, LLM-as-judge, regression vs base, avoiding contamination."),
         ("Serving and project", "Merge vs keep adapter, vLLM LoRA serving, quantize-after-FT with a parity check, end-to-end project."))},
+    {"code": "NLPTX", "title": "NLP with Transformers", "slug": "nlp-with-transformers",
+     "tag": "NLP", "accent": "#0d9488", "level": "Intermediate → Advanced", "hours": "40", "order": 12,
+     "certificate": True, "program": "Specialization", "role": "NLP / LLM Engineer",
+     "prereqs": ["pytorch-essentials", "deep-learning-foundations"],
+     "blurb": "Modern NLP from word vectors to reasoning models: tokenization, the transformer, "
+              "pretraining and post-training, PEFT, RAG, evaluation, and interpretability — with "
+              "six Colab labs, three interview banks, and a portfolio capstone.",
+     "outcomes": ["Explain and implement the transformer stack: tokenization, attention, RoPE, pretraining objectives",
+                  "Fine-tune encoders and small LLMs for real tasks — classification, NER, SFT, DPO",
+                  "Build and evaluate RAG systems with golden sets, judges, and regression gates",
+                  "Reason about decoding, test-time compute, and inference cost like a senior engineer",
+                  "Pass NLP/LLM interview loops: concepts, implementation drills, and applied design"],
+     "syllabus": _syl(
+        ("Foundations", "The NLP landscape in 2026, word vectors with the math, and tokenization from BPE to multilinguality."),
+        ("The transformer and pretraining", "Attention from first principles, RoPE, encoder vs decoder, and how modern models are pretrained."),
+        ("Applied NLP tasks", "Classification, NER, QA, summarization — the encoder workflow that still runs production NLP."),
+        ("Post-training and adaptation", "SFT, RLHF, DPO, prompting, and PEFT — with the decision framework between them."),
+        ("RAG, agents, and evaluation", "Retrieval pipelines, tool use, benchmarks, LLM-as-judge, and product eval harnesses."),
+        ("Reasoning and inference", "Chain of thought, GRPO and R1-style training, decoding strategies, KV cache, speculative decoding."),
+        ("Frontier and society", "Interpretability, multimodality, risks and safety, and the 2026 production stack."),
+        ("Labs, interviews, capstone", "Six Colab labs, three interview banks, and a production-grade portfolio capstone."))},
 ]
 
 ALL_COURSES = COURSES + CLOUD + FOUNDATIONS
@@ -514,8 +535,8 @@ CATEGORIES = [
     ("Machine Learning", ["ml-foundations", "deep-learning-foundations", "pytorch-essentials",
                           "computer-vision", "reinforcement-learning", "time-series-forecasting",
                           "experimentation-causal"]),
-    ("LLMs & Systems", ["vlm-guide", "language-modeling", "fine-tuning-llms", "ai-security",
-                        "ml-system-design", "principal-ml-engineer"]),
+    ("LLMs & Systems", ["vlm-guide", "language-modeling", "nlp-with-transformers", "fine-tuning-llms",
+                        "ai-security", "ml-system-design", "principal-ml-engineer"]),
     ("Cloud & Infrastructure",
      ["cloud-linux", "docker-containers", "kubernetes-for-ml", "aws-for-ml", "azure-for-ml",
       "gcp-for-ml", "mlops"]),
