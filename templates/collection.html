@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} — {{ BRAND }}{% endblock %}
+{% block body %}
+
+<div class="wrap" style="padding-top:42px">
+  <section>
+    <div class="sec-head">
+      <div>
+        <div class="eyebrow">{{ eyebrow }}</div>
+        <h2 class="section">{{ title }}</h2>
+        <p class="lead">{{ lead }}</p>
+      </div>
+    </div>
+
+    {% if layout == 'nd' %}
+    <div class="nd-grid">
+      {% for c in courses %}
+      <div class="nd-card" style="--accent:{{ c.accent }}">
+        <div class="nd-head">
+          <span class="nd-badge">Nanodegree</span>
+          <span class="nd-lvl">{{ c.level }}</span>
+        </div>
+        <h3><a href="{{ url_for('course_detail', slug=c.slug) }}">{{ c.title }}</a></h3>
+        <p class="nd-blurb">{{ c.blurb }}</p>
+        {% if c.outcomes %}
+        <ul class="nd-skills">
+          {% for o in c.outcomes[:3] %}<li>{{ o }}</li>{% endfor %}
+        </ul>
+        {% endif %}
+        {% if c.prereqs %}
+        <div class="nd-prereq">
+          <span class="pr-label">Prerequisites</span>
+          <span class="pr-list">
+            {% for p in c.prereqs %}<a href="{{ url_for('course_detail', slug=p.slug) }}"
+               class="pr-chip {{ 'free' if p.foundation else 'paid' }}">{{ p.title }}</a>{% endfor %}
+          </span>
+        </div>
+        {% else %}
+        <div class="nd-prereq"><span class="pr-label">Prerequisites</span>
+          <span class="pr-none">None — a solid starting point.</span></div>
+        {% endif %}
+        <div class="nd-foot">
+          <span class="nd-meta"><b>{{ c.module_count }}</b> modules · <b>{{ c.hours }}</b> hrs</span>
+          <a class="btn sm" href="{{ url_for('course_detail', slug=c.slug) }}">Enroll →</a>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="courses">
+      {% for c in courses %}
+      <a class="course {{ 'found' if c.foundation else '' }}" href="{{ url_for('course_detail', slug=c.slug) }}">
+        <div class="thumb" style="--accent:{{ c.accent }}">
+          <span class="cat">{{ c.tag }}</span>
+          <span class="mono glyph">{{ "%02d"|format(c.order) if c.foundation else c.code }}</span>
+        </div>
+        <div class="body">
+          <h3>{{ c.title }}</h3>
+          <p>{{ c.blurb }}</p>
+          <div class="meta">
+            <span><b>{{ c.module_count }}</b> {{ 'lessons' if c.foundation else 'modules' }}</span>
+            <span><b>{{ c.hours }}</b> hrs</span>
+            <span class="lvl">{{ c.level }}</span>
+          </div>
+        </div>
+        <div class="foot">
+          {% if c.foundation %}<span class="free open">Open</span>
+          {% else %}<span class="free">{{ kind }}</span>{% endif %}
+          <span class="go">View →</span>
+        </div>
+      </a>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </section>
+</div>
+
+{% endblock %}

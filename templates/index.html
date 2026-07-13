@@ -5,14 +5,14 @@
   <div class="wrap hero-grid">
     <div class="hero-copy">
       <div class="pill">Free · practitioner-grade · pass mark {{ PASS_MARK }}%</div>
-      <h1>Become the ML engineer <span>companies hire</span>.</h1>
-      <p>Role-based Nanodegree programs and free foundations, built around what
-         actually breaks in production. Pick your goal, follow the path, and earn a
-         certificate anyone can verify — from your first line of Python to
-         principal-level judgment.</p>
+      <h1>Learn ML by <span>building real things</span>.</h1>
+      <p>Pick something you want to build — your own ChatGPT, a document reader, a
+         self-driving vision system — and follow a focused path of the exact lessons it
+         takes to ship it. Or go deep on a full Nanodegree. Everything's free, and every
+         build earns a certificate you can verify.</p>
       <div class="btns">
-        <a class="btn" href="{{ url_for('roadmaps') }}">Choose your career path →</a>
-        <a class="btn ghost" href="#programs">Browse Nanodegrees</a>
+        <a class="btn" href="{{ url_for('tracks') }}">Choose something to build →</a>
+        <a class="btn ghost" href="{{ url_for('roadmaps') }}">Or pick a career path</a>
       </div>
     </div>
     <div class="hero-stats">
@@ -26,159 +26,69 @@
 
 <div class="wrap">
 
-  <!-- ============================ career paths ============================ -->
-  <section id="paths">
+  <!-- ============================ build tracks =========================== -->
+  <section id="build">
     <div class="sec-head">
       <div>
-        <div class="eyebrow">Start here · goal-first</div>
-        <h2 class="section">What do you want to become?</h2>
-        <p class="lead">Every path is an ordered plan — free foundations first, then the
-           Nanodegree that gets you to the role. Pick the destination; we'll sequence
-           the courses.</p>
+        <div class="eyebrow">Start here · build-first</div>
+        <h2 class="section">What do you want to build?</h2>
+        <p class="lead">Each track is a focused path to shipping one real system — only the
+           lessons it needs, pulled from across our courses, ending in a project you build
+           and a certificate you earn for building it.</p>
       </div>
-      <a class="btn ghost sm" href="{{ url_for('roadmaps') }}">See all paths</a>
+      <a class="btn ghost sm" href="{{ url_for('tracks') }}">See all {{ tracks|length }} builds</a>
     </div>
-    <div class="roadmap-grid">
-      {% for r in roadmaps %}
-      <a class="rm-card" href="{{ url_for('roadmaps') }}#{{ r.key }}" style="--accent:{{ r.accent }}">
-        <div class="rm-top">
-          <span class="rm-become">Become a</span>
-          <h3>{{ r.role }}</h3>
-          <p>{{ r.tagline }}</p>
+    <div class="track-grid">
+      {% for t in tracks[:6] %}
+      <a class="track-card" href="{{ url_for('track_detail', key=t.key) }}" style="--accent:{{ t.accent }}">
+        <div class="track-top">
+          <span class="track-kicker">{{ t.tag }}</span>
+          <h3>{{ t.title }}</h3>
+          <p>{{ t.pitch }}</p>
         </div>
-        <div class="rm-foot">
-          <span>{{ r.n_steps }} courses · ~{{ r.hours }} hrs</span>
-          <span class="go">View path →</span>
+        <div class="track-foot">
+          <span>{{ t.n_lessons }} lessons{% if t.n_labs %} · {{ t.n_labs }} labs{% endif %}</span>
+          <span class="go">Start building →</span>
         </div>
       </a>
       {% endfor %}
     </div>
   </section>
 
-  <!-- ============================ nanodegrees ============================= -->
+  <!-- ========================= three doorways ============================ -->
   <section id="programs">
     <div class="sec-head">
       <div>
-        <div class="eyebrow">Flagship · certificate programs</div>
-        <h2 class="section">Nanodegree programs</h2>
-        <p class="lead">Deep, role-defining programs. Each ends in a verifiable
-           certificate and assumes the prerequisites listed — do those first if you're
-           new.</p>
+        <div class="eyebrow">Prefer structured courses?</div>
+        <h2 class="section">Or learn the traditional way.</h2>
+        <p class="lead">The same lessons, organized as full courses — free foundations to
+           build the basics, Nanodegrees to master a role, and Specializations to go deep
+           on one area.</p>
       </div>
     </div>
-    <div class="nd-grid">
-      {% for c in nanodegrees %}
-      <div class="nd-card" style="--accent:{{ c.accent }}">
-        <div class="nd-head">
-          <span class="nd-badge">Nanodegree</span>
-          <span class="nd-lvl">{{ c.level }}</span>
-        </div>
-        <h3><a href="{{ url_for('course_detail', slug=c.slug) }}">{{ c.title }}</a></h3>
-        <p class="nd-blurb">{{ c.blurb }}</p>
-        {% if c.outcomes %}
-        <ul class="nd-skills">
-          {% for o in c.outcomes[:3] %}<li>{{ o }}</li>{% endfor %}
-        </ul>
-        {% endif %}
-        {% if c.prereqs %}
-        <div class="nd-prereq">
-          <span class="pr-label">Prerequisites</span>
-          <span class="pr-list">
-            {% for p in c.prereqs %}<a href="{{ url_for('course_detail', slug=p.slug) }}"
-               class="pr-chip {{ 'free' if p.foundation else 'paid' }}">{{ p.title }}</a>{% endfor %}
-          </span>
-        </div>
-        {% else %}
-        <div class="nd-prereq"><span class="pr-label">Prerequisites</span>
-          <span class="pr-none">None — a solid starting point.</span></div>
-        {% endif %}
-        <div class="nd-foot">
-          <span class="nd-meta"><b>{{ c.module_count }}</b> modules · <b>{{ c.hours }}</b> hrs</span>
-          <a class="btn sm" href="{{ url_for('course_detail', slug=c.slug) }}">Enroll →</a>
-        </div>
-      </div>
-      {% endfor %}
-    </div>
-  </section>
-
-  <!-- ========================== specializations =========================== -->
-  {% if specializations %}
-  <section id="specializations">
-    <div class="sec-head">
-      <div>
-        <div class="eyebrow">Add-on · focused deep-dives</div>
-        <h2 class="section">Specializations</h2>
-        <p class="lead">Focused, certificate-eligible deep-dives that extend a Nanodegree:
-           each major cloud, Kubernetes, AI security, LLM fine-tuning, and NLP with
-           transformers.</p>
-      </div>
-    </div>
-    <div class="courses">
-      {% for c in specializations %}
-      <a class="course" href="{{ url_for('course_detail', slug=c.slug) }}">
-        <div class="thumb" style="--accent:{{ c.accent }}">
-          <span class="cat">{{ c.tag }}</span>
-          <span class="mono glyph">{{ c.code }}</span>
-        </div>
-        <div class="body">
-          <h3>{{ c.title }}</h3>
-          <p>{{ c.blurb }}</p>
-          <div class="meta">
-            <span><b>{{ c.module_count }}</b> modules</span>
-            <span><b>{{ c.hours }}</b> hrs</span>
-            <span class="lvl">{{ c.level }}</span>
-          </div>
-        </div>
-        <div class="foot"><span class="free">Specialization</span><span class="go">View →</span></div>
+    <div class="doorways">
+      <a class="doorway" href="{{ url_for('nanodegrees_page') }}">
+        <div class="dw-count">{{ nanodegrees|length }}</div>
+        <h3>Nanodegree programs</h3>
+        <p>Deep, role-defining programs that end in a verifiable certificate.</p>
+        <span class="go">Browse Nanodegrees →</span>
       </a>
-      {% endfor %}
-    </div>
-  </section>
-  {% endif %}
-
-  <!-- ============================ foundations ============================= -->
-  <section id="foundations">
-    <div class="sec-head">
-      <div>
-        <div class="eyebrow">Free &amp; open · no certificate</div>
-        <h2 class="section">New to this? Start with the foundations.</h2>
-        <p class="lead">{{ foundations|length }} open courses that build the prerequisites
-           the Nanodegrees assume — programming, math, data, and the ML→deep-learning
-           spine. No exam, no certificate — just the groundwork, in order.</p>
-      </div>
-    </div>
-    <div class="courses">
-      {% for c in foundations %}
-      <a class="course found" href="{{ url_for('course_detail', slug=c.slug) }}">
-        <div class="thumb" style="--accent:{{ c.accent }}">
-          <span class="cat">{{ c.tag }}</span>
-          <span class="mono glyph">{{ "%02d"|format(c.order) }}</span>
-        </div>
-        <div class="body">
-          <h3>{{ c.title }}</h3>
-          <p>{{ c.blurb }}</p>
-          <div class="meta">
-            <span><b>{{ c.module_count }}</b> lessons</span>
-            <span><b>{{ c.hours }}</b> hrs</span>
-            <span class="lvl">{{ c.level }}</span>
-          </div>
-        </div>
-        <div class="foot"><span class="free open">Open</span><span class="go">Start →</span></div>
+      <a class="doorway" href="{{ url_for('specializations_page') }}">
+        <div class="dw-count">{{ specializations|length }}</div>
+        <h3>Specializations</h3>
+        <p>Focused, certificate-eligible deep-dives — each cloud, security, fine-tuning, NLP.</p>
+        <span class="go">Browse Specializations →</span>
       </a>
-      {% endfor %}
+      <a class="doorway" href="{{ url_for('foundations_page') }}">
+        <div class="dw-count">{{ foundations|length }}</div>
+        <h3>Free foundations</h3>
+        <p>Programming, math, data, and the ML spine — the open groundwork, in order.</p>
+        <span class="go">Browse foundations →</span>
+      </a>
     </div>
-  </section>
-
-  <!-- =========================== full catalog CTA ======================== -->
-  <section>
-    <div class="cta-card">
-      <div>
-        <div class="eyebrow">Catalog</div>
-        <h2 class="section" style="margin:6px 0 8px">Looking for a specific topic?</h2>
-        <p class="lead" style="margin:0">Browse all {{ n_courses }} courses grouped by
-           category — math, programming, data, ML, LLMs &amp; NLP, systems, and cloud.</p>
-      </div>
-      <a class="btn" href="{{ url_for('catalog') }}">Browse all courses →</a>
+    <div class="doorway-extra">
+      <a href="{{ url_for('roadmaps') }}">Career paths →</a>
+      <a href="{{ url_for('catalog') }}">Browse all courses by topic →</a>
     </div>
   </section>
 

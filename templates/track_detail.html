@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% block title %}{{ track.title }} — {{ BRAND }}{% endblock %}
+{% block body %}
+
+<section class="track-hero" style="--accent:{{ track.accent }}">
+  <div class="wrap">
+    <a class="rn-back" href="{{ url_for('tracks') }}">← All build tracks</a>
+    <div class="track-kicker">{{ track.tag }} · project track</div>
+    <h1>{{ track.title }}</h1>
+    <p class="track-lead">{{ track.pitch }}</p>
+    <div class="track-meta">
+      <span><b>{{ track.n_lessons }}</b> lessons</span>
+      {% if track.n_labs %}<span><b>{{ track.n_labs }}</b> hands-on labs</span>{% endif %}
+      <span>~{{ track.hours }} hrs</span>
+      <span>{{ track.level }}</span>
+      <span>{{ track.courses_used|length }} courses</span>
+      {% if user and done_count %}<span class="track-progress">{{ done_count }}/{{ track.n_lessons }} done</span>{% endif %}
+    </div>
+  </div>
+</section>
+
+<div class="wrap track-body">
+  <div class="track-main">
+    <div class="track-block">
+      <h2 class="section">What you'll build</h2>
+      <p class="lead">{{ track.artifact }}</p>
+    </div>
+
+    <div class="track-block">
+      <h2 class="section">The path</h2>
+      <p class="lead">Do these in order. Each is a full lesson from one of our courses —
+         only the ones this build actually needs.</p>
+      <ol class="lesson-list">
+        {% for l in track.lessons %}
+        {% set is_done = user and l.module_id in done.get(l.slug, []) %}
+        <li class="lesson-row {{ 'is-done' if is_done else '' }}">
+          <span class="lesson-n">{{ '%02d'|format(loop.index) }}</span>
+          <div class="lesson-info">
+            <a class="lesson-title" href="{{ url_for('module', slug=l.slug, module_id=l.module_id) }}">
+              {{ l.lesson_title }}{% if l.is_lab %} <span class="lab-tag">Lab</span>{% endif %}
+            </a>
+            <div class="lesson-why">{{ l.why }}</div>
+            <div class="lesson-src">from <a href="{{ url_for('course_detail', slug=l.slug) }}">{{ l.course_title }}</a></div>
+          </div>
+          {% if is_done %}<span class="lesson-check" title="Completed">✓</span>{% endif %}
+        </li>
+        {% endfor %}
+      </ol>
+    </div>
+
+    <div class="track-block track-capstone" style="--accent:{{ track.accent }}">
+      <div class="eyebrow">The project · earns your certificate</div>
+      <h2 class="section">Build it</h2>
+      <p class="lead">{{ track.capstone }}</p>
+      <p class="cap-note">Ship the project and submit it to earn a task certificate for this
+         track — proof you didn't just watch, you built.</p>
+    </div>
+
+    {% if track.deep_dive %}
+    <div class="track-block">
+      <h2 class="section">Go deeper (optional)</h2>
+      <p class="lead">Not required to build the project — read these when you want to
+         understand a piece more deeply.</p>
+      <ul class="deepdive-list">
+        {% for l in track.deep_dive %}
+        <li>
+          <a href="{{ url_for('module', slug=l.slug, module_id=l.module_id) }}">{{ l.lesson_title }}</a>
+          <span class="dd-src">· {{ l.course_title }}</span>
+          {% if l.why %}<div class="dd-why">{{ l.why }}</div>{% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+    </div>
+    {% endif %}
+  </div>
+
+  <aside class="track-side">
+    <div class="side-card" style="--accent:{{ track.accent }}">
+      <h3>Courses drawn from</h3>
+      <ul class="side-courses">
+        {% for c in track.courses_used %}<li>{{ c }}</li>{% endfor %}
+      </ul>
+      {% set first = track.lessons[0] %}
+      <a class="btn" href="{{ url_for('module', slug=first.slug, module_id=first.module_id) }}">Start the first lesson →</a>
+    </div>
+  </aside>
+</div>
+
+{% endblock %}

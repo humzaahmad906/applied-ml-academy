@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}Build something real — {{ BRAND }}{% endblock %}
+{% block body %}
+
+<div class="wrap" style="padding-top:42px">
+  <section>
+    <div class="sec-head">
+      <div>
+        <div class="eyebrow">Project tracks · {{ n_tracks }} builds</div>
+        <h2 class="section">Build something real.</h2>
+        <p class="lead">Each track is a guided path to shipping one real system — the exact
+           lessons you need, pulled from across our courses, ending in a project you build
+           and a certificate you earn for building it. No filler; just the necessary steps.</p>
+      </div>
+    </div>
+    <div class="track-grid">
+      {% for t in tracks %}
+      <a class="track-card" href="{{ url_for('track_detail', key=t.key) }}" style="--accent:{{ t.accent }}">
+        <div class="track-top">
+          <span class="track-kicker">{{ t.tag }}</span>
+          <h3>{{ t.title }}</h3>
+          <p>{{ t.pitch }}</p>
+        </div>
+        <div class="track-foot">
+          <span>{{ t.n_lessons }} lessons{% if t.n_labs %} · {{ t.n_labs }} labs{% endif %} · ~{{ t.hours }} hrs · {{ t.level }}</span>
+          <span class="go">Start building →</span>
+        </div>
+      </a>
+      {% endfor %}
+    </div>
+  </section>
+</div>
+
+{% endblock %}

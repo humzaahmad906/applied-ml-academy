@@ -652,3 +652,82 @@ body.focus-lock{overflow:hidden}
 
 .cat-nav{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0 30px}
 .cat-nav .pr-chip{color:var(--ink);background:var(--paper,#fff);border:1px solid var(--line,#e5e7eb)}
+
+/* ===================== build tracks ===================== */
+.track-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:18px}
+.track-card{display:flex;flex-direction:column;justify-content:space-between;
+  border:1px solid var(--line);border-radius:16px;padding:22px 20px 16px;background:#fff;
+  box-shadow:var(--shadow);position:relative;overflow:hidden;transition:.16s}
+.track-card::before{content:"";position:absolute;top:0;left:0;right:0;height:4px;background:var(--accent)}
+.track-card:hover{transform:translateY(-3px);box-shadow:var(--shadow-lg);border-color:var(--accent)}
+.track-kicker{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.09em;
+  text-transform:uppercase;color:var(--accent);margin-bottom:8px}
+.track-card h3{font-size:20px;font-weight:700;color:var(--ink);letter-spacing:-.01em;margin:0 0 6px}
+.track-card p{color:var(--muted);font-size:14px;line-height:1.5;margin:0}
+.track-skills{display:flex;flex-wrap:wrap;gap:6px;margin:14px 0 4px}
+.track-chip{font-size:11.5px;font-weight:500;color:var(--txt);background:var(--bg2);
+  border:1px solid var(--line2);border-radius:20px;padding:3px 10px}
+.track-foot{display:flex;justify-content:space-between;align-items:center;margin-top:16px;
+  padding-top:13px;border-top:1px solid var(--line2);font-size:13px;color:var(--muted)}
+.track-foot .go{color:var(--accent);font-weight:600}
+
+/* ===================== three doorways ===================== */
+.doorways{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px}
+.doorway{border:1px solid var(--line);border-radius:14px;padding:22px;background:#fff;
+  box-shadow:var(--shadow);transition:.16s;display:block}
+.doorway:hover{transform:translateY(-2px);box-shadow:var(--shadow-lg);border-color:var(--faint)}
+.dw-count{font-size:30px;font-weight:800;color:var(--ink);letter-spacing:-.02em;line-height:1}
+.doorway h3{font-size:17px;font-weight:700;color:var(--ink);margin:8px 0 6px}
+.doorway p{font-size:13.5px;color:var(--muted);line-height:1.5;margin:0 0 12px}
+.doorway .go{font-size:13.5px;font-weight:600;color:var(--ink)}
+.doorway-extra{display:flex;gap:22px;flex-wrap:wrap;margin-top:16px}
+.doorway-extra a{font-size:14px;font-weight:600;color:var(--muted)}
+.doorway-extra a:hover{color:var(--ink)}
+
+/* ===================== track detail ===================== */
+.track-hero{background:linear-gradient(180deg,var(--bg2),#fff);border-bottom:1px solid var(--line);
+  padding:26px 0 30px}
+.track-hero .track-kicker{color:var(--accent)}
+.track-hero h1{font-size:38px;font-weight:800;color:var(--ink);letter-spacing:-.02em;margin:4px 0 8px}
+.track-lead{font-size:17px;color:var(--txt);max-width:60ch;margin:0 0 16px}
+.track-meta{display:flex;flex-wrap:wrap;gap:18px;font-size:13.5px;color:var(--muted)}
+.track-meta b{color:var(--ink)}
+.track-progress{color:var(--accent);font-weight:700}
+.track-body{display:grid;grid-template-columns:1fr 300px;gap:38px;align-items:start;padding:34px 0 60px}
+.track-block{margin-bottom:34px}
+.lesson-list{list-style:none;padding:0;margin:12px 0 0;counter-reset:none}
+.lesson-row{display:flex;gap:14px;align-items:flex-start;padding:14px 0;border-bottom:1px solid var(--line2)}
+.lesson-n{font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:600;color:var(--faint);
+  min-width:26px;padding-top:2px}
+.lesson-info{flex:1}
+.lesson-title{font-size:16px;font-weight:600;color:var(--ink);display:inline-block}
+.lesson-title:hover{color:var(--accent)}
+.lab-tag{font-size:10.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;
+  background:var(--accent);color:#fff;border-radius:5px;padding:1px 6px;vertical-align:middle;margin-left:4px}
+.lesson-why{font-size:14px;color:var(--txt);margin-top:3px;line-height:1.5}
+.lesson-src{font-size:12.5px;color:var(--faint);margin-top:3px}
+.lesson-src a{color:var(--muted)}
+.lesson-src a:hover{color:var(--ink)}
+.lesson-row.is-done .lesson-title{color:var(--muted)}
+.lesson-check{color:#12a150;font-weight:700;font-size:17px;padding-top:2px}
+.track-capstone{border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:12px;
+  padding:22px 24px;background:var(--bg2)}
+.track-capstone .eyebrow{color:var(--accent)}
+.cap-note{font-size:13.5px;color:var(--muted);margin:12px 0 0;font-style:italic}
+.deepdive-list{list-style:none;padding:0;margin:12px 0 0}
+.deepdive-list li{padding:10px 0;border-bottom:1px solid var(--line2)}
+.deepdive-list a{font-weight:600;color:var(--ink)}
+.deepdive-list a:hover{color:var(--accent)}
+.dd-src{font-size:12.5px;color:var(--faint)}
+.dd-why{font-size:13.5px;color:var(--muted);margin-top:3px}
+.track-side{position:sticky;top:80px}
+.side-card{border:1px solid var(--line);border-top:4px solid var(--accent);border-radius:12px;
+  padding:20px;background:#fff;box-shadow:var(--shadow)}
+.side-card h3{font-size:13px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;
+  color:var(--muted);margin:0 0 8px}
+.side-card h3:not(:first-child){margin-top:18px}
+.side-card ul{list-style:none;padding:0;margin:0}
+.side-card li{font-size:14px;color:var(--txt);padding:4px 0;border-bottom:1px solid var(--line2)}
+.side-card .btn{margin-top:18px;width:100%;text-align:center}
+@media(max-width:820px){.track-body{grid-template-columns:1fr}.track-side{position:static}
+  .track-hero h1{font-size:30px}}

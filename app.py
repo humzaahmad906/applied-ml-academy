@@ -725,6 +725,287 @@ def roadmap_view(r):
     return v
 
 
+def _lesson_ref(l):
+    """Resolve a track step {slug, module, why} to a linkable, titled ref."""
+    module_id = l.get("module") or l.get("module_id")
+    course = COURSE_BY_SLUG.get(l["slug"])
+    mods = MODULES.get(l["slug"], [])
+    m = next((x for x in mods if x["id"] == module_id), None)
+    if not course or not m:
+        return None
+    # strip a leading "NN — " / "Module NN — " numbering from the lesson title
+    title = re.sub(r"^(Module\s+)?\d+[a-z]*\s+—\s+", "", m["title"]).strip()
+    return {"slug": l["slug"], "module_id": module_id, "why": l.get("why", ""),
+            "lesson_title": title, "course_title": course["title"],
+            "is_lab": "lab" in module_id.lower() or "lab" in title.lower()}
+
+
+def track_view(t):
+    """Track dict with steps resolved to linkable refs and derived counts."""
+    lessons = [r for r in (_lesson_ref(l) for l in t.get("steps", [])) if r]
+    deep = [r for r in (_lesson_ref(l) for l in t.get("deeper", [])) if r]
+    courses_used = []
+    for r in lessons:
+        if r["course_title"] not in courses_used:
+            courses_used.append(r["course_title"])
+    v = dict(t)
+    v["lessons"] = lessons
+    v["deep_dive"] = deep
+    v["n_lessons"] = len(lessons)
+    v["n_labs"] = sum(1 for r in lessons if r["is_lab"])
+    v["courses_used"] = courses_used
+    return v
+
+
+# ---------------------------------------------------------------- build tracks
+# Outcome-first "How to build X" tracks: curated sequences of EXISTING lessons
+# across courses, ending in a buildable artifact. Courses stay untouched; a track
+# is a view. `steps` = the necessary lessons only, in order, each with a why.
+# `deeper` = optional lessons for going further. All refs are validated at import.
+def _t(slug, module_id, why=""):
+    return {"slug": slug, "module": module_id, "why": why}
+
+
+TRACKS = [
+    {"key": "build-your-own-chatgpt", "title": "How to build your own ChatGPT",
+     "tag": "LLMs", "accent": "#8b5cf6", "hours": 22, "level": "Advanced",
+     "artifact": "A small language model you pretrained, instruction-tuned, aligned with DPO, and serve behind a chat API.",
+     "pitch": "The full pipeline behind every chat assistant — tokenizer, transformer, pretraining, "
+              "SFT, preference tuning, and serving — on hardware you actually have.",
+     "steps": [
+        _t("language-modeling", "01-tokenization", "Every model starts here: turn text into tokens with BPE."),
+        _t("nlp-with-transformers", "04-transformer-architecture", "The decoder architecture you are about to train, derived piece by piece."),
+        _t("nlp-with-transformers", "18-lab-transformer-from-scratch", "Build and train a tiny decoder LM in a Colab — your base model."),
+        _t("nlp-with-transformers", "05-pretraining", "What pretraining data, objectives, and compute actually look like."),
+        _t("nlp-with-transformers", "07-post-training", "How a base model becomes an assistant: SFT, RLHF, DPO."),
+        _t("fine-tuning-llms", "02-data-preparation", "Chat templates and instruction data — the part that decides your result."),
+        _t("fine-tuning-llms", "04-the-training-run", "A real SFT run with TRL, end to end."),
+        _t("fine-tuning-llms", "05-preference-tuning", "DPO: make it helpful, not just fluent."),
+        _t("nlp-with-transformers", "20-lab-sft-dpo", "Do it in a Colab: SFT then DPO on a small model."),
+        _t("language-modeling", "09-inference", "KV cache, batching, quantization — serve it cheaply."),
+        _t("vlm-guide", "16_lab_capstone", "Put the model behind an API with streaming responses.")],
+     "deeper": [_t("language-modeling", "08-scaling-laws"), _t("language-modeling", "12-alignment"),
+                _t("nlp-with-transformers", "11-reasoning"), _t("language-modeling", "07-parallelism")],
+     "capstone": "Ship a working chat assistant: a small model you pretrained on TinyStories-scale data, "
+                 "SFT-tuned on instructions, DPO-aligned, quantized, and served behind a streaming chat API "
+                 "with a simple web UI. Deliverables: repo, eval report (before/after each stage), demo video."},
+
+    {"key": "chat-with-your-documents", "title": "How to build a “chat with your PDFs” assistant",
+     "tag": "RAG", "accent": "#0ea5e9", "hours": 12, "level": "Intermediate",
+     "artifact": "A grounded question-answering assistant over your own documents, with retrieval, reranking, and an eval harness.",
+     "pitch": "RAG is the most-shipped LLM pattern in industry. Build one that actually answers from "
+              "your documents — and prove it with an eval harness.",
+     "steps": [
+        _t("vlm-guide", "05_rag", "The full RAG pattern: chunking, embeddings, retrieval, and its failure modes."),
+        _t("nlp-with-transformers", "09-rag-agents", "Sparse vs dense retrieval, reranking, and context assembly done right."),
+        _t("vlm-guide", "14_lab_rag", "Build the pipeline end to end in a Colab."),
+        _t("nlp-with-transformers", "21-lab-rag-eval", "Add the part most people skip: golden set, hit@k, judged faithfulness, regression gate."),
+        _t("nlp-with-transformers", "10-evaluation", "How to measure an LLM product so improvements are real."),
+        _t("apis-web-services", "07-serving-an-ml-model", "Wrap it in an API your app can call."),
+        _t("vlm-guide", "16_lab_capstone", "Serve the full RAG agent behind an endpoint.")],
+     "deeper": [_t("ai-security", "02-prompt-injection"), _t("ml-system-design", "06_retrieval_and_rag_systems"),
+                _t("nlp-with-transformers", "02-word-vectors")],
+     "capstone": "A document assistant over a real corpus (your notes, a product's docs, or contracts): hybrid "
+                 "retrieval + reranker + grounded generation with citations, a 20-question golden set with "
+                 "regression gate, and one documented failure mode you found and fixed."},
+
+    {"key": "ai-document-reader", "title": "How to build an AI document reader",
+     "tag": "Document AI", "accent": "#f59e0b", "hours": 14, "level": "Intermediate",
+     "artifact": "A pipeline that turns invoices or contracts into clean, validated JSON — classification, extraction, and QA.",
+     "pitch": "Document AI runs back offices everywhere: invoices, receipts, contracts, forms. Build the "
+              "extraction pipeline companies pay real money for.",
+     "steps": [
+        _t("nlp-with-transformers", "06-transfer-learning-tasks", "Classification and NER with encoders — the workhorse of extraction."),
+        _t("nlp-with-transformers", "19-lab-finetune-encoder", "Fine-tune an encoder for classification and NER in a Colab."),
+        _t("computer-vision", "05-training-and-transfer-learning", "Transfer learning on images, for the scanned-document side."),
+        _t("nlp-with-transformers", "14-multimodality", "OCR-free document understanding and where VLMs fit."),
+        _t("vlm-guide", "04_vlms", "How vision-language models read documents end to end."),
+        _t("apis-web-services", "07-serving-an-ml-model", "Serve the pipeline as an API with validation."),
+        _t("nlp-with-transformers", "10-evaluation", "Field-level accuracy, error escapes, and when to route to a human.")],
+     "deeper": [_t("computer-vision", "15-vision-and-language"), _t("ml-system-design", "14_domain_variations"),
+                _t("ai-security", "04-data-privacy-and-leakage")],
+     "capstone": "An invoice/receipt reader: document-type classifier, field extraction (vendor, date, totals, "
+                 "line items) via fine-tuned NER or a small VLM, schema validation with deterministic checks, "
+                 "and an eval report of field-level F1 plus measured error-escape rate."},
+
+    {"key": "self-driving-vision", "title": "How to build an autonomous car's vision system",
+     "tag": "Vision", "accent": "#14b8a6", "hours": 16, "level": "Advanced",
+     "artifact": "A driving-scene perception stack: detection, segmentation, depth, and motion on real dashcam data.",
+     "pitch": "Perception is the eyes of every autonomous system. Build the stack that finds lanes, cars, "
+              "and pedestrians — and knows how far away they are.",
+     "steps": [
+        _t("computer-vision", "03-building-a-cnn", "The conv backbone everything else sits on."),
+        _t("computer-vision", "05-training-and-transfer-learning", "Train it properly: augmentation and pretrained backbones."),
+        _t("computer-vision", "06-detection-and-segmentation", "Boxes, IoU, NMS, and per-pixel masks — the core of perception."),
+        _t("computer-vision", "10-video-understanding", "Video is the real input: temporal models and the compute reality."),
+        _t("computer-vision", "14-3d-vision", "Depth and 3D: from monocular depth to point clouds."),
+        _t("computer-vision", "09-visualizing-and-attacking-cnns", "Adversarial examples and why safety-critical vision must care."),
+        _t("computer-vision", "16-scale-and-frontier", "Training at scale and the world-model frontier.")],
+     "deeper": [_t("ml-system-design", "14_domain_variations"), _t("computer-vision", "11-self-supervised-learning"),
+                _t("computer-vision", "07-vision-transformers")],
+     "capstone": "A perception demo on a public driving dataset (BDD100K/KITTI subset): detect vehicles and "
+                 "pedestrians, segment the road, estimate monocular depth, and overlay everything on video — "
+                 "with a written failure analysis (night, rain, occlusion) and honest metrics per class."},
+
+    {"key": "ai-image-generator", "title": "How to build your own AI image generator",
+     "tag": "Generative", "accent": "#ec4899", "hours": 10, "level": "Advanced",
+     "artifact": "A custom image generator: diffusion from first principles, then a style-tuned model you can prompt.",
+     "pitch": "From the ELBO to Stable Diffusion: understand exactly how images come out of noise, then "
+              "tune a generator to your own style.",
+     "steps": [
+        _t("computer-vision", "12-generative-models-vae-gan", "VAEs and GANs first — the ideas diffusion builds on."),
+        _t("computer-vision", "13-diffusion-models", "Denoising, latent diffusion, and classifier-free guidance."),
+        _t("computer-vision", "15-vision-and-language", "CLIP: how text steers image generation."),
+        _t("computer-vision", "07-vision-transformers", "The backbone modern generators are moving to."),
+        _t("fine-tuning-llms", "03-lora-and-qlora", "LoRA — the same trick that fine-tunes image models cheaply.")],
+     "deeper": [_t("computer-vision", "11-self-supervised-learning"), _t("language-modeling", "09b-distillation")],
+     "capstone": "Train a tiny diffusion model on a small dataset from scratch (MNIST/CIFAR-scale) to prove the "
+                 "mechanics, then LoRA-tune an open Stable Diffusion checkpoint to a consistent custom style and "
+                 "ship a prompt-to-image demo with a short model card."},
+
+    {"key": "fine-tune-your-own-llama", "title": "How to fine-tune Llama on your own data",
+     "tag": "LLMs", "accent": "#a855f7", "hours": 12, "level": "Intermediate",
+     "artifact": "An open model adapted to your domain with LoRA, honestly evaluated, and served with vLLM.",
+     "pitch": "The most-requested LLM skill in job posts: take an open model, teach it your domain, prove "
+              "it improved, and serve it.",
+     "steps": [
+        _t("fine-tuning-llms", "01-when-to-fine-tune", "First decide: fine-tune vs prompt vs RAG."),
+        _t("fine-tuning-llms", "02-data-preparation", "Formats, chat templates, and data quality."),
+        _t("fine-tuning-llms", "03-lora-and-qlora", "The memory math that fits a 7B model on one GPU."),
+        _t("fine-tuning-llms", "04-the-training-run", "Run real SFT with TRL and read the curves."),
+        _t("fine-tuning-llms", "05-preference-tuning", "DPO when SFT is not enough."),
+        _t("fine-tuning-llms", "06-evaluation", "Prove the improvement — task evals and regression vs base."),
+        _t("fine-tuning-llms", "07-serving-and-project", "Merge or keep the adapter, quantize with a parity check, serve on vLLM.")],
+     "deeper": [_t("nlp-with-transformers", "08-prompting-peft"), _t("nlp-with-transformers", "20-lab-sft-dpo"),
+                _t("language-modeling", "12-alignment")],
+     "capstone": "Pick a real domain (support replies, legal summaries, your codebase's style), build a 1-5k example "
+                 "dataset, LoRA-tune an open 3-8B model, beat the base model on a task eval you designed, and serve "
+                 "it on vLLM with the adapter hot-swappable."},
+
+    {"key": "semantic-search-engine", "title": "How to build a semantic search engine",
+     "tag": "Search", "accent": "#0d9488", "hours": 10, "level": "Intermediate",
+     "artifact": "A hybrid search engine — embeddings + keywords + reranking — with measured relevance.",
+     "pitch": "Search that understands meaning, not just keywords. The same stack behind modern site "
+              "search, e-commerce discovery, and every RAG system.",
+     "steps": [
+        _t("nlp-with-transformers", "02-word-vectors", "Embeddings: how meaning becomes geometry."),
+        _t("nlp-with-transformers", "06-transfer-learning-tasks", "Bi-encoders vs cross-encoders — retrieval vs reranking."),
+        _t("nlp-with-transformers", "17-lab-embeddings-tokenizers", "Train embeddings yourself to demystify them."),
+        _t("ml-system-design", "06_retrieval_and_rag_systems", "Retrieval as a production system: indexes, hybrid search, latency."),
+        _t("nlp-with-transformers", "21-lab-rag-eval", "Measure it: hit@k, MRR, and a regression harness.")],
+     "deeper": [_t("aws-for-ml", "08b-vector-search"), _t("sql-databases", "06-indexing-and-performance")],
+     "capstone": "A search engine over 10k+ real documents (Wikipedia subset, product catalog, or your docs): "
+                 "BM25 + dense retrieval + cross-encoder reranking, evaluated on a 50-query golden set with "
+                 "hit@k/MRR, plus an A/B comparison table of lexical vs hybrid vs reranked."},
+
+    {"key": "fraud-detection-system", "title": "How to build a fraud detection system",
+     "tag": "Classic ML", "accent": "#dc2626", "hours": 12, "level": "Intermediate",
+     "artifact": "A transaction-fraud model with a threshold policy, cost analysis, and monitoring plan.",
+     "pitch": "Fraud is where classic ML still earns its keep: extreme class imbalance, adversaries, and "
+              "real dollars on every threshold decision.",
+     "steps": [
+        _t("ml-foundations", "02-data-splits-and-leakage", "Leakage is the #1 way fraud models lie to you."),
+        _t("ml-foundations", "02b-feature-engineering", "Behavioral features are the model — engineer them."),
+        _t("ml-foundations", "04-trees-and-ensembles", "Gradient-boosted trees: still the fraud workhorse."),
+        _t("ml-foundations", "05b-regression-metrics-and-class-imbalance", "1-in-1000 positives changes everything about evaluation."),
+        _t("ml-foundations", "05-evaluation-metrics", "Precision/recall tradeoffs as business decisions."),
+        _t("ml-system-design", "08_classic_ml_systems_recsys_search_fraud", "Fraud as a production system: features, latency, feedback loops."),
+        _t("mlops", "01-beginner-guide", "Ship it: monitoring, retraining, and drift.")],
+     "deeper": [_t("experimentation-causal", "02-designing-an-ab-test"), _t("data-engineering", "06f-realtime-feature-pipelines")],
+     "capstone": "A fraud detector on a public transactions dataset (IEEE-CIS or PaySim): engineered behavioral "
+                 "features, gradient-boosted model, PR-AUC evaluation, a threshold chosen from an explicit "
+                 "cost matrix, and a one-page monitoring plan (drift signals, retrain triggers)."},
+
+    {"key": "demand-forecaster", "title": "How to forecast demand like a retailer",
+     "tag": "Time Series", "accent": "#f97316", "hours": 10, "level": "Intermediate",
+     "artifact": "A backtested demand forecaster for thousands of products, with honest error bars.",
+     "pitch": "Every retailer, airline, and grid operator runs on forecasts. Learn the methods that win "
+              "in practice — and the backtesting discipline that keeps them honest.",
+     "steps": [
+        _t("time-series-forecasting", "01-time-series-fundamentals", "Trend, seasonality, and why time breaks normal ML habits."),
+        _t("pandas-analysis", "06b-datetime-and-timeseries", "The pandas machinery for time-indexed data."),
+        _t("time-series-forecasting", "02-classical-methods", "Baselines that are embarrassingly hard to beat."),
+        _t("time-series-forecasting", "03-feature-engineering-for-time-series", "Lags, windows, and calendar features."),
+        _t("time-series-forecasting", "04-ml-for-forecasting", "Gradient boosting across thousands of series."),
+        _t("time-series-forecasting", "06-evaluation-and-backtesting", "Backtesting without fooling yourself."),
+        _t("time-series-forecasting", "07-project", "The full retail-demand project.")],
+     "deeper": [_t("time-series-forecasting", "05-deep-learning-for-time-series"), _t("mlops", "01-beginner-guide")],
+     "capstone": "Forecast daily demand on a public retail dataset (M5/Favorita subset): classical baseline, "
+                 "feature-based GBM, rolling-origin backtest comparing both, and a short write-up on where "
+                 "the ML model wins, where it loses, and what that costs in stockouts."},
+
+    {"key": "netflix-style-recommender", "title": "How to build a Netflix-style recommender",
+     "tag": "RecSys", "accent": "#e11d48", "hours": 10, "level": "Intermediate",
+     "artifact": "A two-stage recommender — candidate retrieval plus ranking — on real ratings data.",
+     "pitch": "Recommenders drive most of what you watch, buy, and read. Build the two-stage architecture "
+              "the big platforms actually use.",
+     "steps": [
+        _t("ml-foundations", "07b-unsupervised-and-knn", "Similarity and neighbors — the seed of collaborative filtering."),
+        _t("nlp-with-transformers", "02-word-vectors", "Embeddings: items as vectors (the same math as word2vec)."),
+        _t("ml-system-design", "08_classic_ml_systems_recsys_search_fraud", "The two-stage retrieval + ranking architecture."),
+        _t("ml-system-design", "02_data_engineering_and_feature_platforms", "Features and training data without leakage."),
+        _t("experimentation-causal", "02-designing-an-ab-test", "The only metric that counts is the online one.")],
+     "deeper": [_t("sql-databases", "04b-window-functions"), _t("ml-system-design", "09_evaluation_observability_mlops")],
+     "capstone": "A MovieLens recommender: matrix-factorization or item2vec embeddings for candidate retrieval, "
+                 "a GBM ranker with user/item features on top, offline recall@k and NDCG, and a written A/B test "
+                 "design for how you would ship and measure it."},
+
+    {"key": "ship-model-to-production", "title": "How to ship a model to production",
+     "tag": "MLOps", "accent": "#ec4899", "hours": 12, "level": "Intermediate",
+     "artifact": "A containerized model API with CI/CD, monitoring, and a canary rollout — the full production loop.",
+     "pitch": "A model in a notebook earns nothing. Learn the serving, packaging, and monitoring loop that "
+              "turns models into products that survive contact with users.",
+     "steps": [
+        _t("apis-web-services", "07-serving-an-ml-model", "Put the model behind a real endpoint."),
+        _t("docker-containers", "06-packaging-an-ml-model", "Package it so it runs anywhere."),
+        _t("software-engineering-practices", "11-ci-cd-github-actions", "Tests and deploys on every push."),
+        _t("mlops", "01-beginner-guide", "The production loop: versioning, monitoring, retraining."),
+        _t("kubernetes-for-ml", "06-serving-models", "Scale it: autoscaling GPU inference and canary rollouts."),
+        _t("mlops", "06g-shadow-and-progressive-delivery", "Shadow deploys and progressive delivery.")],
+     "deeper": [_t("kubernetes-for-ml", "08-project-train-and-serve-on-k8s"), _t("apis-web-services", "08-auth-and-security"),
+                _t("docker-containers", "06b-gpu-containers-and-image-size")],
+     "capstone": "Take any model you've built in another track and ship it: FastAPI service, Docker image, "
+                 "GitHub Actions CI/CD, latency/error dashboards, and a documented canary rollout with an "
+                 "explicit rollback trigger. The repo is the certificate."},
+
+    {"key": "game-playing-ai", "title": "How to teach an AI to play games",
+     "tag": "RL", "accent": "#10b981", "hours": 9, "level": "Intermediate",
+     "artifact": "An agent trained from scratch with DQN and PPO that beats a game you gave it.",
+     "pitch": "Reinforcement learning from the Bellman equation to PPO — the same algorithm family that "
+              "tunes ChatGPT — taught by making an agent win games.",
+     "steps": [
+        _t("reinforcement-learning", "01-the-rl-problem", "States, actions, rewards — the loop everything shares."),
+        _t("reinforcement-learning", "02-value-functions-and-bellman", "The equation under every RL method."),
+        _t("reinforcement-learning", "03-q-learning-and-dqn", "Your first deep agent."),
+        _t("reinforcement-learning", "04-policy-gradients", "Learn the policy directly."),
+        _t("reinforcement-learning", "05-actor-critic-and-ppo", "PPO — the industry default."),
+        _t("reinforcement-learning", "07-project", "Train an agent from scratch, end to end.")],
+     "deeper": [_t("reinforcement-learning", "06-rl-for-llms"), _t("nlp-with-transformers", "11-reasoning")],
+     "capstone": "Train agents on two Gymnasium environments (one discrete, one continuous): DQN on the first, "
+                 "PPO on both, learning-curve plots with seeds, and a comparison write-up of sample efficiency "
+                 "and stability — plus a short section connecting PPO to how LLMs get aligned."},
+
+    {"key": "hack-and-defend-llms", "title": "How to hack (and defend) an AI chatbot",
+     "tag": "Security", "accent": "#b91c1c", "hours": 8, "level": "Intermediate",
+     "artifact": "A red-team report on a real LLM app plus the layered guardrail stack that stops your own attacks.",
+     "pitch": "Prompt injection is the new SQL injection. Learn to break LLM apps the way attackers do — "
+              "then build the defenses that actually hold.",
+     "steps": [
+        _t("ai-security", "01-the-ai-threat-landscape", "The attack surface map: OWASP LLM Top 10."),
+        _t("ai-security", "02-prompt-injection", "The unsolved vulnerability every LLM app has."),
+        _t("ai-security", "03-jailbreaks-and-model-abuse", "Jailbreaks vs injection, and the abuse taxonomy."),
+        _t("ai-security", "05-guardrails-and-defenses", "Layered defenses and when they fail."),
+        _t("ai-security", "06-securing-agents-and-tools", "Least privilege for agents and tools."),
+        _t("ai-security", "07-red-teaming-and-governance", "Red-team like a professional: PyRIT, garak, and reporting.")],
+     "deeper": [_t("nlp-with-transformers", "15-risks-and-safety"), _t("vlm-guide", "06b_agent_safety_and_guardrails")],
+     "capstone": "Take an LLM app (build a tiny one or use an open example): red-team it for direct and "
+                 "indirect prompt injection, jailbreaks, and data leakage; then add a layered guardrail stack "
+                 "(input/output filters, least-privilege tools) and re-run your attacks to prove what now holds. "
+                 "Deliver the red-team report with reproductions and a before/after defense summary."},
+]
+TRACK_BY_KEY = {t["key"]: t for t in TRACKS}
+
+
 # ---------------------------------------------------------------- gamification
 # Milestone badges. Kept professional (skills/mastery), not childish. Criteria are
 # recomputed from live state on each completion; ids are stored on the user doc.
@@ -827,10 +1108,11 @@ def index():
     foundations = sorted((course_view(c["slug"]) for c in FOUNDATIONS),
                          key=lambda c: c["order"])
     roadmaps = [roadmap_view(r) for r in ROADMAPS]
+    tracks = [track_view(t) for t in TRACKS]
     total_modules = sum(len(MODULES.get(c["slug"], [])) for c in ALL_COURSES)
     return render_template("index.html", courses=nanodegrees, nanodegrees=nanodegrees,
                            specializations=specializations, foundations=foundations,
-                           roadmaps=roadmaps,
+                           roadmaps=roadmaps, tracks=tracks,
                            n_courses=len(ALL_COURSES), total_modules=total_modules)
 
 
@@ -844,6 +1126,63 @@ def roadmaps():
 def catalog():
     grouped = [(name, [course_view(s) for s in slugs]) for name, slugs in CATEGORIES]
     return render_template("catalog.html", grouped=grouped, n_courses=len(ALL_COURSES))
+
+
+@app.route("/build")
+def tracks():
+    views = sorted((track_view(t) for t in TRACKS), key=lambda v: v["title"])
+    return render_template("tracks.html", tracks=views, n_tracks=len(TRACKS))
+
+
+@app.route("/build/<key>")
+def track_detail(key):
+    t = TRACK_BY_KEY.get(key)
+    if not t:
+        abort(404)
+    v = track_view(t)
+    user = current_user()
+    done = {}   # slug -> set of completed module ids
+    if user:
+        slugs = {r["slug"] for r in v["lessons"] + v["deep_dive"]}
+        for slug in slugs:
+            if data.get_enrollment(user.id, slug):
+                done[slug] = data.completed_modules(user.id, slug) or set()
+    done_count = sum(1 for r in v["lessons"]
+                     if r["module_id"] in done.get(r["slug"], set()))
+    return render_template("track_detail.html", track=v, done=done,
+                           done_count=done_count)
+
+
+@app.route("/nanodegrees")
+def nanodegrees_page():
+    items = sorted((course_view(c["slug"]) for c in COURSES), key=lambda c: c["order"])
+    return render_template("collection.html", kind="Nanodegree", title="Nanodegree programs",
+                           eyebrow="Flagship · certificate programs",
+                           lead="Deep, role-defining programs. Each ends in a verifiable "
+                                "certificate and assumes the prerequisites listed.",
+                           courses=items, layout="nd")
+
+
+@app.route("/specializations")
+def specializations_page():
+    items = sorted((course_view(c["slug"]) for c in CLOUD), key=lambda c: c["order"])
+    return render_template("collection.html", kind="Specialization", title="Specializations",
+                           eyebrow="Add-on · focused deep-dives",
+                           lead="Focused, certificate-eligible deep-dives that extend a "
+                                "Nanodegree — each major cloud, Kubernetes, AI security, LLM "
+                                "fine-tuning, and NLP with transformers.",
+                           courses=items, layout="course")
+
+
+@app.route("/foundations")
+def foundations_page():
+    items = sorted((course_view(c["slug"]) for c in FOUNDATIONS), key=lambda c: c["order"])
+    return render_template("collection.html", kind="Open", title="Free foundations",
+                           eyebrow="Free & open · no certificate",
+                           lead="Open courses that build the prerequisites the Nanodegrees "
+                                "assume — programming, math, data, and the ML → deep-learning "
+                                "spine. No exam, no certificate — just the groundwork, in order.",
+                           courses=items, layout="course")
 
 
 @app.route("/course/<slug>")
