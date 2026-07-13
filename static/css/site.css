@@ -649,3 +649,6 @@ body.focus-lock{overflow:hidden}
   .nd-grid{grid-template-columns:1fr}
   .rm-cap{margin-left:0}
 }
+
+.cat-nav{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0 30px}
+.cat-nav .pr-chip{color:var(--ink);background:var(--paper,#fff);border:1px solid var(--line,#e5e7eb)}

@@ -463,7 +463,7 @@ CLOUD = [
         ("Storage, data, and observability", "PVCs/CSI, datasets from object storage, secrets, Prometheus/Grafana + DCGM."),
         ("Project: train and serve on k8s", "Capstone: a queued fine-tune to an autoscaling, canaried endpoint."))},
     {"code": "AISEC", "title": "AI Security & Guardrails", "slug": "ai-security",
-     "tag": "Cloud", "accent": "#b91c1c", "level": "Intermediate → Advanced", "hours": "10", "order": 10,
+     "tag": "Security", "accent": "#b91c1c", "level": "Intermediate → Advanced", "hours": "10", "order": 10,
      "certificate": True, "program": "Specialization", "role": "AI Security Engineer",
      "prereqs": ["vlm-guide", "apis-web-services"],
      "blurb": "Secure the ML systems everyone else just ships. Prompt injection, jailbreaks, data "
@@ -482,7 +482,7 @@ CLOUD = [
         ("Securing agents and tools", "Least privilege, sandboxing, human-in-the-loop, MCP security, and dual-LLM/CaMeL isolation patterns."),
         ("Red-teaming and governance", "PyRIT/garak, safety evals, NIST AI RMF, EU AI Act, and a shipping checklist."))},
     {"code": "FT", "title": "Fine-Tuning LLMs in Practice", "slug": "fine-tuning-llms",
-     "tag": "Cloud", "accent": "#a855f7", "level": "Intermediate → Advanced", "hours": "12", "order": 11,
+     "tag": "LLMs", "accent": "#a855f7", "level": "Intermediate → Advanced", "hours": "12", "order": 11,
      "certificate": True, "program": "Specialization", "role": "LLM Fine-Tuning Engineer",
      "prereqs": ["pytorch-essentials", "vlm-guide"],
      "blurb": "Adapt open LLMs to your task, hands-on: LoRA/QLoRA on one GPU, a real TRL SFT run, DPO "
@@ -535,11 +535,12 @@ CATEGORIES = [
     ("Machine Learning", ["ml-foundations", "deep-learning-foundations", "pytorch-essentials",
                           "computer-vision", "reinforcement-learning", "time-series-forecasting",
                           "experimentation-causal"]),
-    ("LLMs & Systems", ["vlm-guide", "language-modeling", "nlp-with-transformers", "fine-tuning-llms",
-                        "ai-security", "ml-system-design", "principal-ml-engineer"]),
+    ("LLMs & NLP", ["vlm-guide", "nlp-with-transformers", "language-modeling",
+                    "fine-tuning-llms", "ai-security"]),
+    ("ML Systems & Career", ["ml-system-design", "mlops", "principal-ml-engineer"]),
     ("Cloud & Infrastructure",
      ["cloud-linux", "docker-containers", "kubernetes-for-ml", "aws-for-ml", "azure-for-ml",
-      "gcp-for-ml", "mlops"]),
+      "gcp-for-ml"]),
 ]
 # ---------------------------------------------------------------- roadmaps
 # Goal-oriented career paths. Each ordered step points at a course slug with a
@@ -817,12 +818,11 @@ def index():
                              key=lambda c: c["order"])
     foundations = sorted((course_view(c["slug"]) for c in FOUNDATIONS),
                          key=lambda c: c["order"])
-    grouped = [(name, [course_view(s) for s in slugs]) for name, slugs in CATEGORIES]
     roadmaps = [roadmap_view(r) for r in ROADMAPS]
     total_modules = sum(len(MODULES.get(c["slug"], [])) for c in ALL_COURSES)
     return render_template("index.html", courses=nanodegrees, nanodegrees=nanodegrees,
                            specializations=specializations, foundations=foundations,
-                           roadmaps=roadmaps, grouped=grouped,
+                           roadmaps=roadmaps,
                            n_courses=len(ALL_COURSES), total_modules=total_modules)
 
 
@@ -830,6 +830,12 @@ def index():
 def roadmaps():
     views = [roadmap_view(r) for r in ROADMAPS]
     return render_template("roadmaps.html", roadmaps=views)
+
+
+@app.route("/courses")
+def catalog():
+    grouped = [(name, [course_view(s) for s in slugs]) for name, slugs in CATEGORIES]
+    return render_template("catalog.html", grouped=grouped, n_courses=len(ALL_COURSES))
 
 
 @app.route("/course/<slug>")

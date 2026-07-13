@@ -106,10 +106,11 @@
   <section id="specializations">
     <div class="sec-head">
       <div>
-        <div class="eyebrow">Add-on · cloud specializations</div>
-        <h2 class="section">Cloud specializations</h2>
-        <p class="lead">Take your ML skills to a specific cloud, end to end. Pairs well
-           with the MLOps and ML Systems Architect Nanodegrees.</p>
+        <div class="eyebrow">Add-on · focused deep-dives</div>
+        <h2 class="section">Specializations</h2>
+        <p class="lead">Focused, certificate-eligible deep-dives that extend a Nanodegree:
+           each major cloud, Kubernetes, AI security, LLM fine-tuning, and NLP with
+           transformers.</p>
       </div>
     </div>
     <div class="courses">
@@ -168,41 +169,17 @@
     </div>
   </section>
 
-  <!-- =========================== browse by cat =========================== -->
-  <section id="courses">
-    <h2 class="section">Browse by category</h2>
-    <p class="lead">Every course, grouped by topic — from math and programming to data,
-       machine learning, and each major cloud. Free and self-paced.</p>
-    {% for name, group in grouped %}
-    <div class="cat-group" id="cat-{{ loop.index }}">
-      <h3 class="cat-title">{{ name }} <span class="cat-count">{{ group|length }} courses</span></h3>
-      <div class="courses">
-        {% for c in group %}
-        <a class="course" href="{{ url_for('course_detail', slug=c.slug) }}">
-          <div class="thumb" style="--accent:{{ c.accent }}">
-            <span class="cat">{{ c.tag }}</span>
-            <span class="mono glyph">{{ "%02d"|format(c.order) if c.foundation else c.code }}</span>
-          </div>
-          <div class="body">
-            <h3>{{ c.title }}</h3>
-            <p>{{ c.blurb }}</p>
-            <div class="meta">
-              <span><b>{{ c.module_count }}</b> {{ 'lessons' if c.foundation else 'modules' }}</span>
-              <span><b>{{ c.hours }}</b> hrs</span>
-              <span class="lvl">{{ c.level }}</span>
-            </div>
-          </div>
-          <div class="foot">
-            {% if c.foundation %}<span class="free open">Open</span>
-            {% elif c.program == 'Nanodegree' %}<span class="free nd">Nanodegree</span>
-            {% else %}<span class="free">Certificate</span>{% endif %}
-            <span class="go">View →</span>
-          </div>
-        </a>
-        {% endfor %}
+  <!-- =========================== full catalog CTA ======================== -->
+  <section>
+    <div class="cta-card">
+      <div>
+        <div class="eyebrow">Catalog</div>
+        <h2 class="section" style="margin:6px 0 8px">Looking for a specific topic?</h2>
+        <p class="lead" style="margin:0">Browse all {{ n_courses }} courses grouped by
+           category — math, programming, data, ML, LLMs &amp; NLP, systems, and cloud.</p>
       </div>
+      <a class="btn" href="{{ url_for('catalog') }}">Browse all courses →</a>
     </div>
-    {% endfor %}
   </section>
 
   <section class="how">

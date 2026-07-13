@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}All courses — {{ BRAND }}{% endblock %}
+{% block body %}
+
+<div class="wrap" style="padding-top:42px">
+
+  <section id="courses">
+    <div class="sec-head">
+      <div>
+        <div class="eyebrow">Catalog · {{ n_courses }} courses</div>
+        <h2 class="section">Browse by category</h2>
+        <p class="lead">Every course, grouped by topic — free foundations, Nanodegrees,
+           and Specializations side by side. The badge on each card tells you which
+           kind it is.</p>
+      </div>
+    </div>
+    <div class="cat-nav">
+      {% for name, group in grouped %}
+      <a class="pr-chip" href="#cat-{{ loop.index }}">{{ name }}</a>
+      {% endfor %}
+    </div>
+    {% for name, group in grouped %}
+    <div class="cat-group" id="cat-{{ loop.index }}">
+      <h3 class="cat-title">{{ name }} <span class="cat-count">{{ group|length }} courses</span></h3>
+      <div class="courses">
+        {% for c in group %}
+        <a class="course" href="{{ url_for('course_detail', slug=c.slug) }}">
+          <div class="thumb" style="--accent:{{ c.accent }}">
+            <span class="cat">{{ c.tag }}</span>
+            <span class="mono glyph">{{ "%02d"|format(c.order) if c.foundation else c.code }}</span>
+          </div>
+          <div class="body">
+            <h3>{{ c.title }}</h3>
+            <p>{{ c.blurb }}</p>
+            <div class="meta">
+              <span><b>{{ c.module_count }}</b> {{ 'lessons' if c.foundation else 'modules' }}</span>
+              <span><b>{{ c.hours }}</b> hrs</span>
+              <span class="lvl">{{ c.level }}</span>
+            </div>
+          </div>
+          <div class="foot">
+            {% if c.foundation %}<span class="free open">Open</span>
+            {% elif c.program == 'Nanodegree' %}<span class="free nd">Nanodegree</span>
+            {% else %}<span class="free">Specialization</span>{% endif %}
+            <span class="go">View →</span>
+          </div>
+        </a>
+        {% endfor %}
+      </div>
+    </div>
+    {% endfor %}
+  </section>
+</div>
+
+{% endblock %}
