@@ -2,8 +2,8 @@
 
 This is the breadth bank: the conceptual questions asked across the whole surface of a modern NLP/LLM
 interview, from word vectors to RLHF to KV caches. Companions are
-[24-interview-implementation.md](24-interview-implementation.md) (coding drills) and
-[25-interview-applied-design.md](25-interview-applied-design.md) (system design); use this one for the
+[Interview Bank: Implementation Drills](24-interview-implementation.md) (coding drills) and
+[Interview Bank: Applied NLP System Design](25-interview-applied-design.md) (system design); use this one for the
 "explain X" and "why X over Y" rounds that dominate the phone screen and first onsite panel.
 
 Every answer is written to *pass a real loop*: it names the mechanism, states the tradeoff, and puts a
@@ -17,7 +17,7 @@ GPT-4o and the o-series, Claude, Gemini) are current, and each section links to 
 
 ## NLP fundamentals and word vectors
 
-See [01-nlp-landscape.md](01-nlp-landscape.md) and [02-word-vectors.md](02-word-vectors.md).
+See [The NLP Landscape in 2026](01-nlp-landscape.md) and [Word Vectors: The Representation That Started It All](02-word-vectors.md).
 
 **Q1. What is the distributional hypothesis and why does it matter?** "Know a word by the company it
 keeps" (Firth): words in similar contexts have similar meaning. It matters because it turns semantics into
@@ -53,7 +53,7 @@ Measurement is easy; removal is not.
 
 ## Tokenization
 
-See [03-tokenization.md](03-tokenization.md).
+See [Tokenization: Turning Text into Model Inputs](03-tokenization.md).
 
 **Q6. Walk through BPE.** Start from bytes/characters, count adjacent symbol pairs, merge the most frequent
 into a new token, add to vocab, repeat to the target size (50k–256k); at inference apply merges in learned
@@ -88,7 +88,7 @@ can't reason."
 
 ## Transformer architecture
 
-See [04-transformer-architecture.md](04-transformer-architecture.md).
+See [The Transformer Architecture](04-transformer-architecture.md).
 
 **Q11. Explain scaled dot-product attention and the scaling factor.** Soft dictionary lookup:
 `softmax(QKᵀ/√d_k)V` — queries score keys by dot product, softmax weights, weighted sum of values. The `√d_k`
@@ -128,7 +128,7 @@ retrieval, encoder-decoder narrowly for seq2seq.
 
 ## Pretraining
 
-See [05-pretraining.md](05-pretraining.md).
+See [Pretraining: Objectives, Data, and Compute](05-pretraining.md).
 
 **Q17. Causal vs masked vs span-corruption LM — what survived?** Causal (GPT) predicts next token L→R;
 masked (BERT) predicts ~15% masked tokens bidirectionally; span corruption (T5) generates masked spans. MLM
@@ -157,7 +157,7 @@ data → decoder LLM. Senior move: quote the cost delta and note many "LLM" prob
 
 ## Applied tasks and transfer learning
 
-See [06-transfer-learning-tasks.md](06-transfer-learning-tasks.md).
+See [Transfer Learning: The Applied-NLP Workhorse](06-transfer-learning-tasks.md).
 
 **Q21. NER as token classification — the subword gotcha?** Per-token BIO tagging (`B-PER`/`I-PER`/`O`) with a
 linear head on encoder representations. Gotcha: the tokenizer splits words into subwords, so align word labels
@@ -192,7 +192,7 @@ access/logits. Sequence-level distillation (train on teacher generations) is the
 
 ## Post-training: SFT, RLHF, DPO
 
-See [07-post-training.md](07-post-training.md).
+See [Post-Training: Turning a Base Model into an Assistant](07-post-training.md).
 
 **Q26. Base model vs assistant — what does SFT do?** A base model is a next-token predictor; it continues
 your prompt, it doesn't obey it. SFT trains on `(instruction, response)` pairs in a chat template, teaching
@@ -227,7 +227,7 @@ ones. Capabilities come from pretraining; post-training elicits them.
 
 ## Prompting and PEFT
 
-See [08-prompting-peft.md](08-prompting-peft.md).
+See [Adaptation: Prompting and Parameter-Efficient Fine-Tuning](08-prompting-peft.md).
 
 **Q31. What is in-context learning, mechanistically?** Few-shot examples let the model perform an untrained
 task with no weight updates. Mechanistically it's implicit task inference — demonstrations locate the task in
@@ -262,7 +262,7 @@ fine-tuning to inject facts — that's RAG's job.
 
 ## RAG and agents
 
-See [09-rag-agents.md](09-rag-agents.md).
+See [RAG and Agents: Grounding Models in the World](09-rag-agents.md).
 
 **Q36. Why RAG instead of fine-tuning knowledge in?** Three reasons: knowledge cutoff (can't know
 post-training events), grounding (retrieved passages let you cite and cut hallucination), and private/changing
@@ -298,7 +298,7 @@ of exposing tools to a model.
 
 ## Evaluation and benchmarking
 
-See [10-evaluation.md](10-evaluation.md).
+See [Evaluation: The Skill That Gets You Hired](10-evaluation.md).
 
 **Q41. Define perplexity; what it does and doesn't track.** Exponentiated average negative log-likelihood per
 token: `exp(−(1/N)Σ log p(x_i))` — the model's average branching factor, how surprised it is by held-out text
@@ -334,7 +334,7 @@ fine, removing/rebalancing invalidates history. Eval-driven development is the h
 
 ## Reasoning models
 
-See [11-reasoning.md](11-reasoning.md).
+See [Reasoning Models: CoT, Verifiers, and RL with Verifiable Rewards](11-reasoning.md).
 
 **Q46. Why does chain-of-thought improve accuracy?** CoT gives serial compute and externalized working
 memory: a single forward pass has fixed depth, but generating intermediate steps as tokens spreads a
@@ -369,7 +369,7 @@ reasoning tokens only when the task needs multi-step verification.
 
 ## Inference and decoding
 
-See [12-inference-decoding.md](12-inference-decoding.md).
+See [Inference and Decoding: Sampling, KV Cache, and Speculative Decoding](12-inference-decoding.md).
 
 **Q51. Greedy, beam, temperature, top-k, top-p, min-p.** Greedy takes the argmax — deterministic, fine short,
 repetitive open-ended. Beam keeps b sequences — good for MT, collapses to generic/repetitive on open-ended and
@@ -405,7 +405,7 @@ memory-bound decode with concurrent requests to raise throughput.
 
 ## Interpretability
 
-See [13-interpretability.md](13-interpretability.md).
+See [Interpretability: Reading What the Model Is Doing](13-interpretability.md).
 
 **Q56. Is attention an explanation?** No — attention shows *where* information was read, not *why* an output
 was produced, and Jain & Wallace (2019) found different attention distributions giving the same prediction, so
@@ -434,7 +434,7 @@ layers aren't really in the output basis, so early readings are unreliable; the 
 
 ## Multimodality
 
-See [14-multimodality.md](14-multimodality.md).
+See [Multimodality: When the Model Also Sees and Hears](14-multimodality.md).
 
 **Q60. How does a LLaVA-style VLM connect vision to an LLM?** Late fusion via a projector: a frozen vision
 encoder (CLIP/SigLIP ViT) makes patch embeddings, a small trained MLP maps them into the LLM's token embedding
@@ -458,7 +458,7 @@ real-world mess. See [vlm-guide](../vlm-guide/) for engineering depth.
 
 ## Risks and safety
 
-See [15-risks-and-safety.md](15-risks-and-safety.md).
+See [Risks and Safety: What Can Go Wrong and Who Owns It](15-risks-and-safety.md).
 
 **Q63. Why do models hallucinate, and what reduces it?** They're trained to produce fluent, probable
 continuations, not to know what they don't know, and the objective rewards a confident guess over abstention —

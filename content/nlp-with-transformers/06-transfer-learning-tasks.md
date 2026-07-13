@@ -5,7 +5,7 @@ queues a support ticket belongs to, a tagger pulling company names out of
 filings, a retriever ranking documents, a model that has to answer in under 30
 milliseconds on a CPU for a tenth of a cent. All of that runs on the same durable
 pattern: take a model pretrained with the objectives from
-[05-pretraining.md](05-pretraining.md), add a small task-specific head, fine-tune
+[Pretraining: Objectives, Data, and Compute](05-pretraining.md), add a small task-specific head, fine-tune
 on a few thousand labeled examples. This chapter is that workflow end to end —
 classification, NER, extractive QA, seq2seq generation and its metrics, sentence
 embeddings, and the economics of when a 100M-parameter encoder beats an API LLM.
@@ -20,13 +20,13 @@ boundary. A few thousand labels and ten minutes on one GPU produce a 100M-param
 model that runs on cheap hardware, has predictable latency, keeps your data
 in-house, and gives you *calibrated probabilities* you can threshold — none of
 which a prompted API LLM offers cleanly. The generate-vs-represent rule from
-[05-pretraining.md](05-pretraining.md) decides the family: **fixed-input
+[Pretraining: Objectives, Data, and Compute](05-pretraining.md) decides the family: **fixed-input
 understanding → encoder.**
 
 ## Text classification, end to end
 
 The canonical pipeline. Load data, tokenize
-([03-tokenization.md](03-tokenization.md)), attach a classification head over the
+([Tokenization: Turning Text into Model Inputs](03-tokenization.md)), attach a classification head over the
 pooled `[CLS]`/first-token representation, fine-tune, measure.
 
 ```python
@@ -133,7 +133,7 @@ overlapping chunks with a `doc_stride`, and each chunk gets a "no answer" option
 (the `[CLS]` position) so the model can abstain when the passage doesn't contain
 the answer — the SQuAD 2.0 change that made the task honest. Extractive QA is the
 grounded, non-hallucinating core underneath a lot of RAG
-([09-rag-agents.md](09-rag-agents.md)): when you must guarantee the answer is a
+([RAG and Agents: Grounding Models in the World](09-rag-agents.md)): when you must guarantee the answer is a
 verbatim substring of a source document, a span head beats a generative model.
 
 ## Summarization and translation — and metric lies
@@ -159,7 +159,7 @@ metrics are systematically misleading.
 The honest 2026 practice: use ROUGE/BLEU/chrF as cheap regression signals during
 development, but judge real quality with a learned metric (**BERTScore**,
 **COMET** for MT, which correlate far better with humans) or an LLM-as-judge
-rubric ([10-evaluation.md](10-evaluation.md)), and confirm factuality separately.
+rubric ([Evaluation: The Skill That Gets You Hired](10-evaluation.md)), and confirm factuality separately.
 Never ship a summarizer whose only evidence is a ROUGE number — that's the mistake
 that reads as junior in an interview.
 
@@ -191,7 +191,7 @@ document token. Far more accurate, but you can't precompute anything: scoring
 against N documents is N forward passes. So the production pattern is a **two-stage
 retrieve-then-rerank**: the bi-encoder cheaply pulls the top ~100 candidates from
 millions, the cross-encoder re-scores just those 100 for precision. This is the
-backbone of every serious RAG system ([09-rag-agents.md](09-rag-agents.md)).
+backbone of every serious RAG system ([RAG and Agents: Grounding Models in the World](09-rag-agents.md)).
 
 ## When a 100M encoder beats an API LLM
 

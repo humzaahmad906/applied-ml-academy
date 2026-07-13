@@ -665,7 +665,10 @@ def render_markdown(slug, module_id):
     path = CONTENT_DIR / slug / f"{module_id}.md"
     if not path.is_file():
         return None
-    return md.markdown(path.read_text(encoding="utf-8"), extensions=MD_EXT)
+    html = md.markdown(path.read_text(encoding="utf-8"), extensions=MD_EXT)
+    # Cross-links in content point at sibling .md files; module URLs have no
+    # extension, so strip it (relative hrefs then resolve to the module route).
+    return re.sub(r'href="(?!https?://)([^"]+)\.md(#[^"]*)?"', r'href="\1\2"', html)
 
 
 def course_view(slug):

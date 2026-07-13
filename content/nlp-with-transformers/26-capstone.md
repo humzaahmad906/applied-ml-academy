@@ -84,7 +84,7 @@ Fine-tune the encoder to route tickets into a fixed label set (e.g. `bug_report`
 `billing`, `feature_request`, `account`, `other`). Use `banking77` or a synthetic support set if you
 have no real data. This is [Lab 3](19-lab-finetune-encoder.md) skills applied end to end: HF
 `datasets` → tokenizer → `Trainer` → confusion matrix → calibration check. The transfer-learning
-mechanics behind this live in [06-transfer-learning-tasks.md](06-transfer-learning-tasks.md).
+mechanics behind this live in [Transfer Learning: The Applied-NLP Workhorse](06-transfer-learning-tasks.md).
 
 - **Deliverable:** a trained checkpoint, a confusion matrix, and a reliability diagram.
 - **Acceptance:** macro-F1 ≥ 0.85 on a held-out split, and **calibrated** — you report expected
@@ -109,7 +109,7 @@ Build the doc-grounded answer path over a small product-docs corpus (20–200 ch
 chunk → embed with MiniLM → FAISS → **rerank the top-k with the cross-encoder** → assemble context →
 answer with the small instruct model. This is [Lab 5](21-lab-rag-eval.md) end to end, and the
 mechanisms (hybrid search, lost-in-the-middle, why the reranker earns its latency) are in
-[09-rag-agents.md](09-rag-agents.md).
+[RAG and Agents: Grounding Models in the World](09-rag-agents.md).
 
 - **Deliverable:** a `answer(query, entities) -> {answer, citations}` function that returns the answer
   *with the chunk IDs it used*. Citations are non-negotiable — an answer with no traceable source is
@@ -133,7 +133,7 @@ coverage, retrieval quality, and risk flags, then picks a path:
 Keep the policy as explicit thresholds, not a learned meta-model — you want to defend every decision
 in the interview, and a rules-first router with logged reasons is far more debuggable. The escalation
 path is what makes this production-grade rather than a demo: knowing when the system should refuse is
-the safety point from [15-risks-and-safety.md](15-risks-and-safety.md).
+the safety point from [Risks and Safety: What Can Go Wrong and Who Owns It](15-risks-and-safety.md).
 
 - **Deliverable:** `route(ticket) -> {path, reason, payload}` with the deciding signal logged.
 - **Acceptance:** on a labeled routing golden set, **escalation recall ≥ 0.95** for tickets marked
@@ -142,7 +142,7 @@ the safety point from [15-risks-and-safety.md](15-risks-and-safety.md).
 
 ### Milestone 5 — Eval harness, budget, and model card
 
-Turn the whole thing into something you can defend and re-run. This is where [10-evaluation.md](10-evaluation.md)
+Turn the whole thing into something you can defend and re-run. This is where [Evaluation: The Skill That Gets You Hired](10-evaluation.md)
 becomes the product.
 
 Build a golden set (50–200 tickets with gold intent, entities, routing decision, and reference
@@ -207,7 +207,7 @@ backbone at ~20–50 ms and near-zero marginal cost, versus ~1–3 s and per-tok
 call. And a fine-tuned classifier gives me a *calibrated* confidence I can threshold the router on —
 an LLM's stated confidence is not reliable in the same way. When the input distribution is stable and
 the label set is fixed, the small model wins on every axis that matters. (See
-[06-transfer-learning-tasks.md](06-transfer-learning-tasks.md).)
+[Transfer Learning: The Applied-NLP Workhorse](06-transfer-learning-tasks.md).)
 
 **"How do you know the RAG answers aren't hallucinated?"**
 I separate the two failure modes. Retrieval quality is measured with hit@k on a golden set — if hit@k
@@ -245,7 +245,7 @@ role.
 
 **Multilingual variant.** Take the same ticket system but serve a multilingual user base. Swap the
 encoder for a multilingual backbone (mDeBERTa or XLM-R small), and confront the tokenizer fertility
-and low-resource penalty from [03-tokenization.md](03-tokenization.md) head-on: measure per-language
+and low-resource penalty from [Tokenization: Turning Text into Model Inputs](03-tokenization.md) head-on: measure per-language
 F1 and show the gap. Add language ID as a routing signal and a cross-lingual retrieval eval (query in
 one language, docs in another). The interview story is fairness across languages and where the cheap
 model's coverage runs out — a hot topic for any global product.
@@ -253,7 +253,7 @@ model's coverage runs out — a hot topic for any global product.
 **Document-AI variant.** Replace free-text tickets with scanned documents — invoices, forms,
 contracts. The classifier becomes a document-type router, NER becomes key-value extraction over OCR'd
 text (with layout as a feature), and RAG grounds answers in the document itself. This leans on the
-document-AI material in [14-multimodality.md](14-multimodality.md); the killer differentiator is
+document-AI material in [Multimodality: When the Model Also Sees and Hears](14-multimodality.md); the killer differentiator is
 OCR-free layout understanding and reporting extraction F1 against a field-level gold set. This is the
 single most in-demand applied variant in 2026 — enterprise document processing is where the budgets
 are.
@@ -261,13 +261,13 @@ are.
 **Reasoning-agent variant.** Turn the router into a multi-step agent for tickets that need tool use
 (look up an order status, check a system, compute a refund). Build a ReAct loop with the small
 instruct model, add tools behind a schema, and confront agent failure compounding — per-step error
-rates multiplying over a chain — from [09-rag-agents.md](09-rag-agents.md). Layer in self-consistency
+rates multiplying over a chain — from [RAG and Agents: Grounding Models in the World](09-rag-agents.md). Layer in self-consistency
 or a verifier prompt for the decision steps using the test-time-compute techniques from
-[11-reasoning.md](11-reasoning.md) and [Lab 6](22-lab-reasoning-decoding.md). The story here is
+[Reasoning Models: CoT, Verifiers, and RL with Verifiable Rewards](11-reasoning.md) and [Lab 6](22-lab-reasoning-decoding.md). The story here is
 reliability engineering: how you cap the loop, checkpoint, and decide when a small reasoning model
 earns its extra tokens.
 
 Whichever you build, the through-line is the same: assemble the pieces, put a number on every claim,
 gate regressions, and be ready to defend each tradeoff. That is the job. For the design-round framing
-that mirrors these systems, revisit [25-interview-applied-design.md](25-interview-applied-design.md);
-for the production stack that ships them, [16-modern-stack.md](16-modern-stack.md).
+that mirrors these systems, revisit [Interview Bank: Applied NLP System Design](25-interview-applied-design.md);
+for the production stack that ships them, [The Modern NLP Stack: Tools, Models, and a 90-Day Plan](16-modern-stack.md).

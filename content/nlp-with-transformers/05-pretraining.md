@@ -3,7 +3,7 @@
 Everything useful a language model knows — grammar, facts, code, the shape of an
 argument — arrives during pretraining, the self-supervised phase where the model
 predicts held-out text over trillions of tokens. Fine-tuning and post-training
-(module [07-post-training.md](07-post-training.md)) only steer a capability that
+(module [Post-Training: Turning a Base Model into an Assistant](07-post-training.md)) only steer a capability that
 pretraining already installed; they cannot conjure one that isn't there. So the
 questions that decide whether a model is any good are pretraining questions: what
 do you make it predict, what do you feed it, and how much compute do you spend.
@@ -30,7 +30,7 @@ $$
 $$
 
 Attention is causally masked (module
-[04-transformer-architecture.md](04-transformer-architecture.md)), so position
+[The Transformer Architecture](04-transformer-architecture.md)), so position
 `t` sees only positions `< t`. The crucial property: **every token is a training
 signal**. A sequence of length `T` gives you `T` prediction problems in one
 forward pass. That density is why CLM is so compute-efficient.
@@ -75,11 +75,11 @@ common interview probe.
 - **One model, all tasks, no head-swapping.** A decoder generates, so
   classification, extraction, translation, and dialogue all reduce to "produce
   the right continuation." In-context learning
-  ([08-prompting-peft.md](08-prompting-peft.md)) falls out for free — you never
+  ([Adaptation: Prompting and Parameter-Efficient Fine-Tuning](08-prompting-peft.md)) falls out for free — you never
   needed a task-specific head. Encoder-decoder can do this too, but at ~2× the
   parameters for the same capability, since it maintains two stacks.
 - **Scaling and inference.** A single stack with a KV cache
-  ([12-inference-decoding.md](12-inference-decoding.md)) is simpler to scale,
+  ([Inference and Decoding: Sampling, KV Cache, and Speculative Decoding](12-inference-decoding.md)) is simpler to scale,
   shard, and serve than a split encoder-decoder. The engineering ecosystem
   compounded around it.
 
@@ -88,7 +88,7 @@ understanding tasks at fixed input — classification, NER, retrieval embeddings
 a 100M-parameter DeBERTa still beats a decoder LM of the same size, because
 bidirectional context is genuinely more informative when you don't need to
 generate. That decision — encoder vs decoder at work — is the whole point of
-module [06-transfer-learning-tasks.md](06-transfer-learning-tasks.md). The rule
+module [Transfer Learning: The Applied-NLP Workhorse](06-transfer-learning-tasks.md). The rule
 of thumb: **generate → decoder; represent → encoder.**
 
 ## What pretraining data actually is
@@ -105,7 +105,7 @@ large majority of bytes:
 1. **Extraction and language ID.** Strip HTML to text; keep documents in your
    target languages. Multilingual mixes are deliberate — token budget per
    language is a design choice, and low-resource languages pay a fertility
-   penalty (module [03-tokenization.md](03-tokenization.md)).
+   penalty (module [Tokenization: Turning Text into Model Inputs](03-tokenization.md)).
 2. **Quality filtering.** Heuristics (line-length, symbol ratios, boilerplate
    removal à la C4) plus model-based classifiers that score "does this look like
    the kind of text we want." Modern pipelines (FineWeb-Edu, DCLM) lean heavily
@@ -114,7 +114,7 @@ large majority of bytes:
 3. **Deduplication.** Near-duplicate documents (MinHash/LSH) and exact
    substring dedup. Duplicated data wastes compute and worsens memorization and
    test-set contamination — the model regurgitates and leaks eval data
-   ([10-evaluation.md](10-evaluation.md)).
+   ([Evaluation: The Skill That Gets You Hired](10-evaluation.md)).
 4. **Decontamination.** Explicitly remove documents overlapping known benchmark
    test sets, or your eval numbers are fiction.
 5. **Mixture weighting.** Upweight high-value domains (code, math) beyond their
@@ -207,12 +207,12 @@ multi-stage pretraining shape:
    matter disproportionately.
 3. **Long-context extension.** A dedicated stage that continues training on long
    documents while scaling the RoPE base frequency (position interpolation /
-   YaRN, module [12-inference-decoding.md](12-inference-decoding.md)) to stretch
+   YaRN, module [Inference and Decoding: Sampling, KV Cache, and Speculative Decoding](12-inference-decoding.md)) to stretch
    the usable context from 8K to 128K+. Done late and briefly because long-context
    data is scarce and the `O(T²)` attention cost is punishing.
 
 Only after all of this does post-training (SFT, preference optimization;
-[07-post-training.md](07-post-training.md)) turn the base model into an
+[Post-Training: Turning a Base Model into an Assistant](07-post-training.md)) turn the base model into an
 assistant.
 
 ## Which do I use at work?
@@ -224,7 +224,7 @@ decision is which *pretrained* family to adapt:
   classification, NER, retrieval embeddings, rerankers. A 100M-param DeBERTa-v3
   fine-tune beats calling an API LLM on latency, cost, and often accuracy for a
   narrow task. This is still most production NLP —
-  [06-transfer-learning-tasks.md](06-transfer-learning-tasks.md).
+  [Transfer Learning: The Applied-NLP Workhorse](06-transfer-learning-tasks.md).
 - **Decoder (Llama/Qwen/GPT/Claude).** Anything generative, few-shot, or
   open-ended: chat, summarization, extraction with reasoning, tool use.
 - **Encoder-decoder (T5/BART).** Still a fine, cheap choice for constrained

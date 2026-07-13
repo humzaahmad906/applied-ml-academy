@@ -157,7 +157,7 @@ names attached to a mechanism read as understanding.
 ## A 90-day portfolio plan
 
 Ninety days, working alongside a job, turns this course into evidence you can point at. The
-capstone ([26-capstone.md](26-capstone.md)) is the centerpiece; the rest is scaffolding.
+capstone ([Capstone: Production Support Intelligence System](26-capstone.md)) is the centerpiece; the rest is scaffolding.
 
 **Days 1–30 — foundations and first artifacts.** Work modules 01–06 and do
 [lab 17](17-lab-embeddings-tokenizers.md) and [lab 18](18-lab-transformer-from-scratch.md).
